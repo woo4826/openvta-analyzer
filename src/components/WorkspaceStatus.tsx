@@ -1,5 +1,5 @@
 import type { ActiveSegment, SourceVisibility, TransformMode } from "../domain/types";
-import { Panel, ToolbarButton } from "./ui";
+import { Panel, SegmentedControl, ToolbarButton } from "./ui";
 
 interface WorkspaceStatusProps {
   sourceVisibility: SourceVisibility;
@@ -59,19 +59,13 @@ export function WorkspaceStatus({
 
         <div>
           <span className="panel-eyebrow">Transform</span>
-          <div className="segmented" aria-label="Transform mode">
-            {transformOptions.map((option) => (
-              <button
-                type="button"
-                key={option.value}
-                aria-pressed={option.value === transformMode}
-                className={option.value === transformMode ? "active" : undefined}
-                onClick={() => onTransformMode(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="Transform mode"
+            options={transformOptions}
+            value={transformMode}
+            onChange={(value) => onTransformMode(value as TransformMode)}
+            selectionRole="button"
+          />
         </div>
 
         <div className="metric">

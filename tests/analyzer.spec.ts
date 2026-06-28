@@ -9,11 +9,29 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(analysisMain.getByRole("heading", { name: "OpenVTA_sample.Vta" })).toBeVisible();
   await expect(analysisMain.getByText("modern-openvta")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+  const fileTray = page.locator(".file-rail");
+  await expect(fileTray.getByRole("heading", { name: "OpenVTA_sample.Vta" })).toBeVisible();
+  await expect(fileTray.getByText("modern-openvta")).toBeVisible();
   await expect(page.getByText("GPS 37")).toBeVisible();
   await expect(page.getByText("Enhanced 35")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Raw GPS" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: "Enhanced" })).toHaveAttribute("aria-pressed", "true");
+  await expect(fileTray.getByText("Sensor 185")).toBeVisible();
+  await expect(fileTray.getByText("Warnings 0")).toBeVisible();
+  await expect(fileTray.getByText("Active")).toBeVisible();
+  await expect(fileTray.getByRole("button", { name: "Selected" })).toHaveAttribute("aria-pressed", "true");
+  await expect(fileTray.getByRole("button", { name: "Remove OpenVTA_sample.Vta" })).toBeVisible();
+  const rawGpsButton = page.getByRole("button", { name: "Raw GPS" });
+  const enhancedButton = page.getByRole("button", { name: "Enhanced" });
+  await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
+  await expect(enhancedButton).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Compare" })).toBeVisible();
+
+  await enhancedButton.click();
+  await expect(enhancedButton).toHaveAttribute("aria-pressed", "false");
+  await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
+  await rawGpsButton.click();
+  await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
+  await expect(enhancedButton).toHaveAttribute("aria-pressed", "false");
+
   await expect(page.getByText("Distance")).toBeVisible();
   await expect(page.getByLabel("Speed-colored route plot")).toBeVisible();
 

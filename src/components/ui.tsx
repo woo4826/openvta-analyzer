@@ -145,17 +145,28 @@ export interface SegmentedControlProps {
   onChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
+  selectionRole?: "radio" | "button";
 }
 
-export function SegmentedControl({ options, value, onChange, ariaLabel, className }: SegmentedControlProps) {
+export function SegmentedControl({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+  className,
+  selectionRole = "radio",
+}: SegmentedControlProps) {
+  const isRadioGroup = selectionRole === "radio";
+
   return (
-    <div className={cx("segmented", className)} role="radiogroup" aria-label={ariaLabel}>
+    <div className={cx("segmented", className)} role={isRadioGroup ? "radiogroup" : undefined} aria-label={ariaLabel}>
       {options.map((option) => (
         <button
           type="button"
           key={option.value}
-          role="radio"
-          aria-checked={option.value === value}
+          role={isRadioGroup ? "radio" : undefined}
+          aria-checked={isRadioGroup ? option.value === value : undefined}
+          aria-pressed={!isRadioGroup ? option.value === value : undefined}
           className={option.value === value ? "active" : undefined}
           disabled={option.disabled}
           onClick={() => onChange(option.value)}

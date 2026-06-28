@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileUp, Gauge, Settings, TestTube2 } from "lucide-react";
 import { sampleCalibrationName, sampleCalibrationText, sampleVtaName, sampleVtaText } from "./sampleData";
 import { displayGpsPointsWithSources } from "../domain/analysis";
@@ -48,9 +48,13 @@ export function App() {
   const [loadError, setLoadError] = useState<string | undefined>();
 
   const activeFile = files[activeIndex];
-  const visibleGpsPoints = useMemo(
-    () => (activeFile ? displayGpsPointsWithSources(activeFile, sourceVisibility) : []),
+  const effectiveSourceVisibility = useMemo(
+    () => (activeFile ? normalizeSourceVisibility(activeFile, sourceVisibility) : sourceVisibility),
     [activeFile, sourceVisibility],
+  );
+  const visibleGpsPoints = useMemo(
+    () => (activeFile ? displayGpsPointsWithSources(activeFile, effectiveSourceVisibility) : []),
+    [activeFile, effectiveSourceVisibility],
   );
   const calibratedSensors = useMemo(
     () => applyCalibration(activeFile?.sensorPoints ?? [], calibration),
@@ -62,6 +66,20 @@ export function App() {
   );
   const transformedSensors = filterResult.sensors;
   const stats = useMemo(() => (activeFile ? summarizeVta(activeFile) : undefined), [activeFile]);
+
+  useEffect(() => {
+    if (!activeFile) {
+      return;
+    }
+    const normalized = normalizeSourceVisibility(activeFile, sourceVisibility);
+    if (!isSameSourceVisibility(normalized, sourceVisibility)) {
+      setSourceVisibility(normalized);
+    }
+  }, [activeFile, sourceVisibility]);
+
+  useEffect(() => {
+    setSelectedPointIndex((index) => clampSelectedPointIndex(index, visibleGpsPoints.length));
+  }, [visibleGpsPoints.length]);
 
   async function loadFiles(inputFiles: File[]) {
     setLoadError(undefined);
@@ -141,6 +159,13 @@ export function App() {
     if (removedIndex < activeIndex) {
       setActiveIndex(activeIndex - 1);
     }
+  }
+
+  function updateSourceVisibility(nextVisibility: SourceVisibility) {
+    const normalized = activeFile ? normalizeSourceVisibility(activeFile, nextVisibility) : nextVisibility;
+    setSourceVisibility(normalized);
+    setSelectedPointIndex(0);
+    setActiveSegment(undefined);
   }
 
   return (
@@ -242,10 +267,13 @@ export function App() {
                   sensors={transformedSensors}
                   selectedPointIndex={selectedPointIndex}
                   onSelectedPointIndex={setSelectedPointIndex}
+                  visiblePoints={visibleGpsPoints}
                 />
               ) : null}
 
-              {activeTab === "tables" ? <Tables file={activeFile} sensors={transformedSensors} /> : null}
+              {activeTab === "tables" ? (
+                <Tables file={activeFile} sensors={transformedSensors} visiblePoints={visibleGpsPoints} />
+              ) : null}
 
               {activeTab === "calibration" ? (
                 <CalibrationPanel
@@ -263,14 +291,14 @@ export function App() {
               ) : null}
 
               {activeTab === "export" && stats ? (
-                <ExportPanel file={activeFile} sensors={transformedSensors} stats={stats} />
+                <ExportPanel file={activeFile} sensors={transformedSensors} stats={stats} visiblePoints={visibleGpsPoints} />
               ) : null}
             </section>
 
             <aside className="analysis-inspector">
               <WorkspaceStatus
-                sourceVisibility={sourceVisibility}
-                onSourceVisibility={setSourceVisibility}
+                sourceVisibility={effectiveSourceVisibility}
+                onSourceVisibility={updateSourceVisibility}
                 transformMode={transformMode}
                 onTransformMode={setTransformMode}
                 activeSegment={activeSegment}
@@ -296,4 +324,40 @@ function toWorkspaceFile(file: VtaFile, index: number): VtaWorkspaceFile {
     id: `${file.sourceName}-${loadedAt}-${index}`,
     loadedAt,
   };
+}
+
+function normalizeSourceVisibility(file: VtaFile, visibility: SourceVisibility): SourceVisibility {
+  const visibleCount =
+    (visibility.rawGps ? file.gpsPoints.length : 0) +
+    (visibility.enhancedGps ? file.enhancedPoints.length : 0);
+
+  if (visibleCount > 0) {
+    return visibility;
+  }
+
+  const hasRawGps = file.gpsPoints.length > 0;
+  const hasEnhancedGps = file.enhancedPoints.length > 0;
+
+  if (hasRawGps && hasEnhancedGps) {
+    return { rawGps: true, enhancedGps: true };
+  }
+  if (hasRawGps) {
+    return { rawGps: true, enhancedGps: false };
+  }
+  if (hasEnhancedGps) {
+    return { rawGps: false, enhancedGps: true };
+  }
+  return visibility.rawGps || visibility.enhancedGps ? visibility : { rawGps: true, enhancedGps: true };
+}
+
+function isSameSourceVisibility(left: SourceVisibility, right: SourceVisibility): boolean {
+  return left.rawGps === right.rawGps && left.enhancedGps === right.enhancedGps;
+}
+
+function clampSelectedPointIndex(index: number, pointCount: number): number {
+  if (pointCount <= 0) {
+    return 0;
+  }
+  const safeIndex = Number.isFinite(index) ? Math.trunc(index) : 0;
+  return Math.min(pointCount - 1, Math.max(0, safeIndex));
 }

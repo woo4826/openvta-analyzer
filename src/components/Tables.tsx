@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
-import type { SensorPoint, VtaFile } from "../domain/types";
+import type { GpsPoint, SensorPoint, VtaFile } from "../domain/types";
 import { displayGpsPoints } from "../domain/statistics";
 
 interface TablesProps {
   file: VtaFile;
   sensors: SensorPoint[];
+  visiblePoints?: GpsPoint[];
 }
 
-export function Tables({ file, sensors }: TablesProps) {
+export function Tables({ file, sensors, visiblePoints }: TablesProps) {
   const [query, setQuery] = useState("");
-  const points = useMemo(() => displayGpsPoints(file), [file]);
+  const points = useMemo(() => visiblePoints ?? displayGpsPoints(file), [file, visiblePoints]);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredGps = points.filter((point) =>
     [point.source, point.date, point.time, point.provider ?? ""].join(" ").toLowerCase().includes(normalizedQuery),
@@ -113,4 +114,3 @@ function DataPanel({ title, children }: { title: string; children: React.ReactNo
     </div>
   );
 }
-

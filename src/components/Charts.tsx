@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption } from "echarts";
-import type { SensorPoint, VtaFile } from "../domain/types";
+import type { GpsPoint, SensorPoint, VtaFile } from "../domain/types";
 import { GRAVITY_MPS2 } from "../domain/types";
 import { displayGpsPoints } from "../domain/statistics";
 
@@ -10,10 +10,11 @@ interface ChartsProps {
   sensors: SensorPoint[];
   selectedPointIndex: number;
   onSelectedPointIndex: (index: number) => void;
+  visiblePoints?: GpsPoint[];
 }
 
-export function Charts({ file, sensors, selectedPointIndex, onSelectedPointIndex }: ChartsProps) {
-  const points = displayGpsPoints(file);
+export function Charts({ file, sensors, selectedPointIndex, onSelectedPointIndex, visiblePoints }: ChartsProps) {
+  const points = visiblePoints ?? displayGpsPoints(file);
   const velocity = points.map((point, index) => [index, point.speedKmh]);
   const altitude = points.map((point, index) => [index, point.altitudeMeters]);
   const accuracy = points
