@@ -52,6 +52,24 @@ describe("i18n language helpers", () => {
     ).toBe("en");
   });
 
+  it("falls back without crashing when browser localStorage access is blocked", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get: () => {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
+
+    try {
+      expect(detectInitialLanguage({ navigatorLanguages: ["ko-KR"] })).toBe("ko");
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(window, "localStorage", descriptor);
+      }
+    }
+  });
+
   it("interpolates values and renders missing values as empty strings", () => {
     expect(interpolate("Current language: {language}", { language: "Korean" })).toBe("Current language: Korean");
     expect(interpolate("Current language: {language}")).toBe("Current language: ");

@@ -316,7 +316,11 @@ function getBrowserStorage(): Pick<Storage, "getItem"> | null {
     return null;
   }
 
-  return window.localStorage;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function getLanguageCandidates(sources: LanguageDetectionSources): readonly string[] {
