@@ -1,28 +1,89 @@
-import { useMemo, useState } from "react";
-import type { GpsPoint, SensorPoint, SummaryStats, VtaFile } from "../domain/types";
+import { useMemo } from "react";
+import type {
+  ActiveSegment,
+  CalibrationOffsets,
+  FilterSettings,
+  GpsPoint,
+  SensorPoint,
+  SummaryStats,
+  TransformMode,
+  VtaFile,
+} from "../domain/types";
+import { buildValidationRows, normalizeSegment } from "../domain/analysis";
 import { displayGpsPoints, routeDistanceKm } from "../domain/statistics";
-import { downloadText, exportVisibleSegmentVta, genericCsv, sensorCsv, summaryJson } from "../domain/export";
+import {
+  downloadText,
+  exportTransformedVisibleSegmentVta,
+  exportVisibleSegmentVta,
+  gpsPointsCsv,
+  sensorCsv,
+  summaryJson,
+  validationCsv,
+  withLineEndings,
+  type LineEnding,
+} from "../domain/export";
 
 interface ExportPanelProps {
   file: VtaFile;
   sensors: SensorPoint[];
   stats: SummaryStats;
   visiblePoints?: GpsPoint[];
+  activeSegment?: ActiveSegment;
+  onActiveSegment: (segment?: ActiveSegment) => void;
+  lineEnding: LineEnding;
+  onLineEnding: (lineEnding: LineEnding) => void;
+  transformMode: TransformMode;
+  calibration?: CalibrationOffsets;
+  filterSettings: FilterSettings;
 }
 
-export function ExportPanel({ file, sensors, stats, visiblePoints }: ExportPanelProps) {
+export function ExportPanel({
+  file,
+  sensors,
+  stats,
+  visiblePoints,
+  activeSegment,
+  onActiveSegment,
+  lineEnding,
+  onLineEnding,
+  transformMode,
+  calibration,
+  filterSettings,
+}: ExportPanelProps) {
   const points = useMemo(() => visiblePoints ?? displayGpsPoints(file), [file, visiblePoints]);
-  const exportStats = useMemo(
-    () => (visiblePoints ? summarizeVisiblePoints(file, points) : stats),
-    [file, points, stats, visiblePoints],
+  const normalizedSegment = useMemo(() => {
+    if (!points.length) {
+      return undefined;
+    }
+    return activeSegment
+      ? normalizeSegment(activeSegment, points.length)
+      : { startIndex: 0, endIndex: points.length - 1, source: "manual" as const };
+  }, [activeSegment, points.length]);
+  const start = normalizedSegment?.startIndex ?? 0;
+  const end = normalizedSegment?.endIndex ?? 0;
+  const selectedPoints = useMemo(() => (points.length ? points.slice(start, end + 1) : []), [end, points, start]);
+  const selectedSensors = useMemo(
+    () => (activeSegment ? sensorsInPointRange(sensors, selectedPoints) : sensors),
+    [activeSegment, selectedPoints, sensors],
   );
-  const [startIndex, setStartIndex] = useState(0);
-  const [endIndex, setEndIndex] = useState(Math.max(0, points.length - 1));
-  const boundedStart = clamp(startIndex, 0, Math.max(0, points.length - 1));
-  const boundedEnd = clamp(endIndex, 0, Math.max(0, points.length - 1));
-  const start = Math.min(boundedStart, boundedEnd);
-  const end = Math.max(boundedStart, boundedEnd);
+  const exportStats = useMemo(
+    () => (activeSegment || visiblePoints ? summarizeVisiblePoints(file, selectedPoints) : stats),
+    [activeSegment, file, selectedPoints, stats, visiblePoints],
+  );
   const count = points.length ? end - start + 1 : 0;
+  const validationRows = useMemo(() => buildValidationRows(selectedPoints), [selectedPoints]);
+
+  function updateSegmentBoundary(key: "startIndex" | "endIndex", value: number) {
+    if (!points.length) {
+      return;
+    }
+    const nextValue = clamp(Number.isFinite(value) ? Math.trunc(value) : 0, 0, points.length - 1);
+    onActiveSegment({
+      startIndex: key === "startIndex" ? nextValue : start,
+      endIndex: key === "endIndex" ? nextValue : end,
+      source: "manual",
+    });
+  }
 
   return (
     <section className="content-band">
@@ -38,8 +99,8 @@ export function ExportPanel({ file, sensors, stats, visiblePoints }: ExportPanel
                 type="number"
                 min="0"
                 max={Math.max(0, points.length - 1)}
-                value={startIndex}
-                onChange={(event) => setStartIndex(Number(event.target.value) || 0)}
+                value={start}
+                onChange={(event) => updateSegmentBoundary("startIndex", Number(event.target.value))}
               />
             </label>
             <label className="field">
@@ -48,9 +109,16 @@ export function ExportPanel({ file, sensors, stats, visiblePoints }: ExportPanel
                 type="number"
                 min="0"
                 max={Math.max(0, points.length - 1)}
-                value={endIndex}
-                onChange={(event) => setEndIndex(Number(event.target.value) || 0)}
+                value={end}
+                onChange={(event) => updateSegmentBoundary("endIndex", Number(event.target.value))}
               />
+            </label>
+            <label className="field">
+              <span>Line endings</span>
+              <select value={lineEnding} onChange={(event) => onLineEnding(event.target.value as LineEnding)}>
+                <option value="lf">LF</option>
+                <option value="crlf">CRLF</option>
+              </select>
             </label>
             <div className="metric">
               <span>Selected points</span>
@@ -65,28 +133,62 @@ export function ExportPanel({ file, sensors, stats, visiblePoints }: ExportPanel
               onClick={() =>
                 downloadText(
                   segmentFilename(file.sourceName),
-                  exportVisibleSegmentVta(file, points, { startIndex: start, endIndex: end }),
+                  withLineEndings(exportVisibleSegmentVta(file, points, { startIndex: start, endIndex: end }), lineEnding),
                   "text/plain",
                 )
               }
               disabled={!points.length}
             >
-              Export segment .Vta
+              Export original segment .Vta
             </button>
-            <button type="button" className="button" onClick={() => downloadText("gps-points.csv", gpsCsv(points), "text/csv")}>
+            <button
+              type="button"
+              className="button"
+              onClick={() =>
+                downloadText(
+                  transformedSegmentFilename(file.sourceName),
+                  withLineEndings(
+                    exportTransformedVisibleSegmentVta(file, points, { startIndex: start, endIndex: end }, sensors, {
+                      transformMode,
+                      calibration,
+                      filterSettings,
+                    }),
+                    lineEnding,
+                  ),
+                  "text/plain",
+                )
+              }
+              disabled={!points.length}
+            >
+              Export transformed segment .Vta
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => downloadText("gps-points.csv", gpsPointsCsv(selectedPoints, lineEnding), "text/csv")}
+            >
               Export GPS CSV
             </button>
             <button
               type="button"
               className="button"
-              onClick={() => downloadText("sensor-points.csv", sensorCsv(sensors), "text/csv")}
+              onClick={() => downloadText("sensor-points.csv", sensorCsv(selectedSensors, lineEnding), "text/csv")}
             >
               Export Sensor CSV
             </button>
             <button
               type="button"
               className="button"
-              onClick={() => downloadText("summary.json", summaryJson(file, exportStats), "application/json")}
+              onClick={() => downloadText("validation.csv", validationCsv(validationRows, lineEnding), "text/csv")}
+            >
+              Export validation CSV
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() =>
+                downloadText("summary.json", withLineEndings(summaryJson(file, exportStats), lineEnding), "application/json")
+              }
             >
               Export Summary JSON
             </button>
@@ -103,6 +205,7 @@ export function ExportPanel({ file, sensors, stats, visiblePoints }: ExportPanel
           <Metric label="Format" value={file.detectedFormat} />
           <Metric label="Start" value={points[start] ? `${points[start].date} ${points[start].time}` : "n/a"} />
           <Metric label="End" value={points[end] ? `${points[end].date} ${points[end].time}` : "n/a"} />
+          <Metric label="Transform" value={transformMode} />
         </div>
       </div>
     </section>
@@ -120,38 +223,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function gpsCsv(points: GpsPoint[]): string {
-  const rows = points.map((point) => [
-    point.index,
-    point.source,
-    point.date,
-    point.time,
-    point.latitude,
-    point.longitude,
-    point.altitudeMeters,
-    point.speedKmh,
-    point.bearingDegrees,
-    point.satelliteCount,
-    point.accuracyMeters ?? "",
-  ]);
-  return genericCsv(
-    [
-      "index",
-      "source",
-      "date",
-      "time",
-      "latitude",
-      "longitude",
-      "altitudeMeters",
-      "speedKmh",
-      "bearingDegrees",
-      "satelliteCount",
-      "accuracyMeters",
-    ],
-    rows,
-  );
 }
 
 function summarizeVisiblePoints(file: VtaFile, points: GpsPoint[]): SummaryStats {
@@ -203,4 +274,18 @@ function lastDefined(values: Array<number | undefined>): number | undefined {
 
 function segmentFilename(sourceName: string): string {
   return sourceName.replace(/\.vta$/i, "") + "_segment.Vta";
+}
+
+function transformedSegmentFilename(sourceName: string): string {
+  return sourceName.replace(/\.vta$/i, "") + "_transformed_segment.Vta";
+}
+
+function sensorsInPointRange(sensors: SensorPoint[], points: GpsPoint[]): SensorPoint[] {
+  if (!points.length) {
+    return [];
+  }
+  const lineNumbers = points.map((point) => point.lineNumber);
+  const minLine = Math.min(...lineNumbers);
+  const maxLine = Math.max(...lineNumbers);
+  return sensors.filter((sensor) => sensor.lineNumber >= minLine && sensor.lineNumber <= maxLine);
 }

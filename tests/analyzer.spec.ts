@@ -91,7 +91,15 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await page.getByRole("button", { name: "Use visible velocity range as segment" }).click();
   await expect(metricValue(workspace, "Segment")).toHaveText(`0-${rawGpsCount - 1}`);
   await expect(metricValue(panelByHeading(analysisMain, "Averages"), "Selected points")).toHaveText(String(rawGpsCount));
-  await page.getByRole("button", { name: "Export" }).click();
+
+  await page.getByRole("button", { name: "Calibration" }).click();
+  await page.getByLabel("Preset name").fill("Static pad");
+  await page.getByRole("button", { name: "Save preset" }).click();
+  await expect(page.getByText("Static pad")).toBeVisible();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByLabel("Line endings").selectOption("crlf");
+  await expect(page.getByRole("button", { name: "Export validation CSV" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export transformed segment .Vta" })).toBeVisible();
   await expect(page.getByText("Selected points")).toBeVisible();
 
   await page.getByRole("button", { name: "Tables" }).click();
@@ -142,7 +150,7 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   await page.getByLabel("Low-pass filter").selectOption("on");
   await expect(page.getByLabel("Cutoff Hz")).toBeVisible();
 
-  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Export" })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export Summary JSON" }).click();

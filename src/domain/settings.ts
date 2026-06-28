@@ -2,6 +2,8 @@ import type { CalibrationPreset } from "./types";
 
 type JsonStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
+export const CALIBRATION_PRESETS_STORAGE_KEY = "openvta.calibrationPresets.v1";
+
 export function loadJsonSetting<T>(key: string, fallback: T, storage: JsonStorage = defaultStorage()): T {
   try {
     const raw = storage.getItem(key);
@@ -18,6 +20,17 @@ export function saveJsonSetting<T>(key: string, value: T, storage: JsonStorage =
   storage.setItem(key, JSON.stringify(value));
 }
 
+export function loadCalibrationPresets(storage: JsonStorage = defaultStorage()): CalibrationPreset[] {
+  return coerceCalibrationPresets(loadJsonSetting<unknown>(CALIBRATION_PRESETS_STORAGE_KEY, [], storage));
+}
+
+export function saveCalibrationPresets(
+  presets: CalibrationPreset[],
+  storage: JsonStorage = defaultStorage(),
+): void {
+  saveJsonSetting(CALIBRATION_PRESETS_STORAGE_KEY, presets, storage);
+}
+
 export function upsertCalibrationPreset(
   presets: CalibrationPreset[],
   preset: CalibrationPreset,
@@ -31,6 +44,17 @@ export function upsertCalibrationPreset(
 
 export function removeCalibrationPreset(presets: CalibrationPreset[], id: string): CalibrationPreset[] {
   return presets.filter((preset) => preset.id !== id);
+}
+
+export function mergeImportedCalibrationPresets(
+  presets: CalibrationPreset[],
+  text: string,
+): CalibrationPreset[] {
+  const imported = importCalibrationPresets(text);
+  if (!imported.length) {
+    return presets;
+  }
+  return imported.reduce(upsertCalibrationPreset, presets);
 }
 
 export function exportCalibrationPresets(presets: CalibrationPreset[]): string {
@@ -49,6 +73,13 @@ export function importCalibrationPresets(text: string): CalibrationPreset[] {
   } catch {
     return [];
   }
+}
+
+function coerceCalibrationPresets(value: unknown): CalibrationPreset[] {
+  if (Array.isArray(value)) {
+    return value.filter(isCalibrationPreset);
+  }
+  return [];
 }
 
 function defaultStorage(): JsonStorage {

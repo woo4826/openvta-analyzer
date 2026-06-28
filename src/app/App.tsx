@@ -7,6 +7,7 @@ import { defaultFilterSettings, applyAccelerationFilter } from "../domain/filter
 import { parseVtaText } from "../domain/parser";
 import { summarizeVta } from "../domain/statistics";
 import { loadTextFilesFromInput } from "../domain/zip";
+import type { LineEnding } from "../domain/export";
 import type {
   ActiveSegment,
   AxisAlignedRegion,
@@ -56,6 +57,7 @@ export function App() {
   const [activeSegment, setActiveSegment] = useState<ActiveSegment | undefined>();
   const [region, setRegion] = useState<AxisAlignedRegion | undefined>();
   const [transformMode, setTransformMode] = useState<TransformMode>("raw");
+  const [lineEnding, setLineEnding] = useState<LineEnding>("lf");
   const [loadError, setLoadError] = useState<string | undefined>();
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
 
@@ -117,6 +119,7 @@ export function App() {
       setActiveSegment(undefined);
       setRegion(undefined);
       setTransformMode("raw");
+      setLineEnding("lf");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Unable to load selected file.");
     }
@@ -133,6 +136,7 @@ export function App() {
     setActiveSegment(undefined);
     setRegion(undefined);
     setTransformMode("raw");
+    setLineEnding("lf");
     setLoadError(undefined);
   }
 
@@ -324,11 +328,25 @@ export function App() {
                   onFilterSettings={setFilterSettings}
                   filterWarning={filterResult.warning}
                   sampleRateHz={filterResult.sampleRateHz}
+                  transformMode={transformMode}
+                  onTransformMode={setTransformMode}
                 />
               ) : null}
 
               {activeTab === "export" && stats ? (
-                <ExportPanel file={activeFile} sensors={transformedSensors} stats={stats} visiblePoints={visibleGpsPoints} />
+                <ExportPanel
+                  file={activeFile}
+                  sensors={transformedSensors}
+                  stats={stats}
+                  visiblePoints={visibleGpsPoints}
+                  activeSegment={activeSegment}
+                  onActiveSegment={setActiveSegment}
+                  lineEnding={lineEnding}
+                  onLineEnding={setLineEnding}
+                  transformMode={transformMode}
+                  calibration={calibration}
+                  filterSettings={filterSettings}
+                />
               ) : null}
             </section>
 

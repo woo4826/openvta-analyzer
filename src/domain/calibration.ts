@@ -5,11 +5,15 @@ export function estimateCalibrationOffsets(
   window: CalibrationWindow = {},
   sourceName?: string,
 ): CalibrationOffsets | undefined {
+  const normalizedWindow = normalizeCalibrationWindow(window);
   const selected = sensors.filter((sensor) => {
-    if (window.startElapsedSeconds !== undefined && sensor.elapsedSeconds < window.startElapsedSeconds) {
+    if (
+      normalizedWindow.startElapsedSeconds !== undefined &&
+      sensor.elapsedSeconds < normalizedWindow.startElapsedSeconds
+    ) {
       return false;
     }
-    if (window.endElapsedSeconds !== undefined && sensor.elapsedSeconds > window.endElapsedSeconds) {
+    if (normalizedWindow.endElapsedSeconds !== undefined && sensor.elapsedSeconds > normalizedWindow.endElapsedSeconds) {
       return false;
     }
     return true;
@@ -48,7 +52,28 @@ export function applyCalibration(sensors: SensorPoint[], offsets?: CalibrationOf
   });
 }
 
+export function normalizeCalibrationWindow(window: CalibrationWindow = {}): CalibrationWindow {
+  const start = finiteOrUndefined(window.startElapsedSeconds);
+  const end = finiteOrUndefined(window.endElapsedSeconds);
+  if (start === undefined && end === undefined) {
+    return {};
+  }
+  if (start === undefined) {
+    return { endElapsedSeconds: end };
+  }
+  if (end === undefined) {
+    return { startElapsedSeconds: start };
+  }
+  return {
+    startElapsedSeconds: Math.min(start, end),
+    endElapsedSeconds: Math.max(start, end),
+  };
+}
+
 function average(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function finiteOrUndefined(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isFinite(value) ? value : undefined;
+}

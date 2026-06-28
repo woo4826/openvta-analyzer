@@ -3,7 +3,7 @@ import { parseVtaText } from "../parser";
 import { displayGpsPointsWithSources } from "../analysis";
 import { applyCalibration, estimateCalibrationOffsets } from "../calibration";
 import { applyAccelerationFilter } from "../filtering";
-import { exportSegmentVta, exportVisibleSegmentVta, validationCsv } from "../export";
+import { exportSegmentVta, exportTransformedVisibleSegmentVta, exportVisibleSegmentVta, validationCsv } from "../export";
 import { summarizeVta } from "../statistics";
 
 describe("parseVtaText", () => {
@@ -101,6 +101,41 @@ describe("statistics, calibration, filtering, export", () => {
     expect(exported).toContain("#1,0.000");
     expect(exported).toContain("#2,1.000");
     expect(exported).not.toContain("@17062026,152259");
+  });
+
+  it("exports transformed VTA segments with metadata and transformed sensor rows", () => {
+    const trace = parseVtaText(
+      "transformed-segment.Vta",
+      [
+        "%% VTALogger Kotlin Version: 0.0.3",
+        "$17062026,152258,-33.875000000,151.224998333,12,26,0,6",
+        "#1,0.000,0,0,0,0,0.1,0.2,9.7",
+        "$17062026,152259,-33.876000000,151.225998333,13,31,0,6",
+        "#2,1.000,0,0,0,0,0.2,0.3,9.8",
+      ].join("\n"),
+    );
+    const transformedSensors = trace.sensorPoints.map((sensor) => ({
+      ...sensor,
+      accelX: sensor.accelX + 1,
+    }));
+    const exported = exportTransformedVisibleSegmentVta(
+      trace,
+      displayGpsPointsWithSources(trace, { rawGps: true, enhancedGps: false }),
+      { startIndex: 0, endIndex: 1 },
+      transformedSensors,
+      {
+        transformMode: "filtered",
+        calibration: { x: 0.1, y: 0.2, z: 0.3, unit: "mps2", sampleCount: 2, sourceName: "cal.Vta" },
+        filterSettings: { enabled: true, cutoffHz: 3, channels: { x: true, y: true, z: false } },
+      },
+    );
+
+    expect(exported).toContain("OpenVTA Analyzer Transformed Segment Export");
+    expect(exported).toContain("TransformMode: filtered");
+    expect(exported).toContain("Calibration: unit=mps2; samples=2; x=0.1; y=0.2; z=0.3; source=cal.Vta");
+    expect(exported).toContain("Filter: enabled=true; cutoffHz=3; channels=XY");
+    expect(exported).toContain("#1,0,0,0,0,0,1.1,0.2,9.7");
+    expect(exported).not.toContain("#1,0.000,0,0,0,0,0.1,0.2,9.7");
   });
 
   it("estimates and applies calibration offsets", () => {

@@ -1,9 +1,12 @@
 import type {
+  CalibrationOffsets,
+  FilterSettings,
   GpsPoint,
   ParseWarning,
   SegmentSelection,
   SensorPoint,
   SummaryStats,
+  TransformMode,
   ValidationRow,
   VtaFile,
 } from "./types";
@@ -16,6 +19,12 @@ export interface SummaryCsvRow {
   detail?: string | number;
 }
 
+export interface TransformedSegmentExportMetadata {
+  transformMode: TransformMode;
+  calibration?: CalibrationOffsets;
+  filterSettings?: FilterSettings;
+}
+
 export function exportSegmentVta(file: VtaFile, selection: SegmentSelection): string {
   return exportVisibleSegmentVta(file, displayGpsPoints(file), selection);
 }
@@ -24,27 +33,54 @@ export function exportVisibleSegmentVta(file: VtaFile, points: GpsPoint[], selec
   if (!points.length) {
     return [...file.headers, "%% End"].join("\n");
   }
-  const start = Math.max(0, Math.min(selection.startIndex, selection.endIndex));
-  const end = Math.min(points.length - 1, Math.max(selection.startIndex, selection.endIndex));
-  const firstLine = points[start]?.lineNumber ?? 1;
-  const lastLine = points[end]?.lineNumber ?? file.rawLines.length;
-  const minLine = Math.min(firstLine, lastLine);
-  const maxLine = Math.max(firstLine, lastLine);
-  const selectedPointLineNumbers = new Set(points.slice(start, end + 1).map((point) => point.lineNumber));
-  const sensorLineNumbers = new Set(
-    file.sensorPoints
-      .filter((sensor) => sensor.lineNumber >= minLine && sensor.lineNumber <= maxLine)
-      .map((sensor) => sensor.lineNumber),
-  );
-  const body = file.rawLines
-    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
-    .filter(({ line, lineNumber }) => line && lineNumber >= minLine && lineNumber <= maxLine)
-    .filter(({ lineNumber }) => selectedPointLineNumbers.has(lineNumber) || sensorLineNumbers.has(lineNumber))
-    .map(({ line }) => line);
+  const segment = buildVisibleSegmentContext(file, points, selection);
+  if (!segment) {
+    return [...file.headers, "%% End"].join("\n");
+  }
   return [
     "%% OpenVTA Analyzer Segment Export",
     `%% Source: ${file.sourceName}`,
-    `%% SegmentPointIndexes: ${start}-${end}`,
+    `%% SegmentPointIndexes: ${segment.start}-${segment.end}`,
+    ...file.headers.filter((line) => !line.startsWith("%% End")),
+    ...segment.bodyRows.map(({ line }) => line),
+    "%% End",
+  ].join("\n");
+}
+
+export function exportTransformedSegmentVta(
+  file: VtaFile,
+  selection: SegmentSelection,
+  transformedSensors: SensorPoint[],
+  metadata: TransformedSegmentExportMetadata,
+): string {
+  return exportTransformedVisibleSegmentVta(file, displayGpsPoints(file), selection, transformedSensors, metadata);
+}
+
+export function exportTransformedVisibleSegmentVta(
+  file: VtaFile,
+  points: GpsPoint[],
+  selection: SegmentSelection,
+  transformedSensors: SensorPoint[],
+  metadata: TransformedSegmentExportMetadata,
+): string {
+  const segment = buildVisibleSegmentContext(file, points, selection);
+  const transformedByLineNumber = new Map(
+    transformedSensors
+      .filter((sensor) => !segment || (sensor.lineNumber >= segment.minLine && sensor.lineNumber <= segment.maxLine))
+      .map((sensor) => [sensor.lineNumber, sensor]),
+  );
+  const body = segment
+    ? segment.bodyRows.map(({ line, lineNumber }) => {
+        const transformedSensor = transformedByLineNumber.get(lineNumber);
+        return line.startsWith("#") && transformedSensor ? serializeSensorLine(file, transformedSensor) : line;
+      })
+    : [];
+
+  return [
+    "%% OpenVTA Analyzer Transformed Segment Export",
+    `%% Source: ${file.sourceName}`,
+    `%% SegmentPointIndexes: ${segment ? `${segment.start}-${segment.end}` : "none"}`,
+    ...transformMetadataLines(metadata),
     ...file.headers.filter((line) => !line.startsWith("%% End")),
     ...body,
     "%% End",
@@ -187,4 +223,135 @@ export function summaryRowsCsv(rows: SummaryCsvRow[], lineEnding: LineEnding = "
 function escapeCsv(value: string | number): string {
   const text = String(value);
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+interface VisibleSegmentContext {
+  start: number;
+  end: number;
+  minLine: number;
+  maxLine: number;
+  bodyRows: Array<{ line: string; lineNumber: number }>;
+}
+
+function buildVisibleSegmentContext(
+  file: VtaFile,
+  points: GpsPoint[],
+  selection: SegmentSelection,
+): VisibleSegmentContext | undefined {
+  if (!points.length) {
+    return undefined;
+  }
+
+  const firstIndex = clampIndex(Math.min(selection.startIndex, selection.endIndex), points.length);
+  const lastIndex = clampIndex(Math.max(selection.startIndex, selection.endIndex), points.length);
+  const start = Math.min(firstIndex, lastIndex);
+  const end = Math.max(firstIndex, lastIndex);
+  const firstLine = points[start]?.lineNumber ?? 1;
+  const lastLine = points[end]?.lineNumber ?? file.rawLines.length;
+  const minLine = Math.min(firstLine, lastLine);
+  const maxLine = Math.max(firstLine, lastLine);
+  const selectedPointLineNumbers = new Set(points.slice(start, end + 1).map((point) => point.lineNumber));
+  const sensorLineNumbers = new Set(
+    file.sensorPoints
+      .filter((sensor) => sensor.lineNumber >= minLine && sensor.lineNumber <= maxLine)
+      .map((sensor) => sensor.lineNumber),
+  );
+  const bodyRows = file.rawLines
+    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
+    .filter(({ line, lineNumber }) => line && lineNumber >= minLine && lineNumber <= maxLine)
+    .filter(({ lineNumber }) => selectedPointLineNumbers.has(lineNumber) || sensorLineNumbers.has(lineNumber));
+
+  return { start, end, minLine, maxLine, bodyRows };
+}
+
+function transformMetadataLines(metadata: TransformedSegmentExportMetadata): string[] {
+  const lines = [`%% TransformMode: ${metadata.transformMode}`];
+  if (metadata.calibration) {
+    lines.push(
+      [
+        "%% Calibration:",
+        `unit=${metadata.calibration.unit};`,
+        `samples=${metadata.calibration.sampleCount};`,
+        `x=${formatNumber(metadata.calibration.x)};`,
+        `y=${formatNumber(metadata.calibration.y)};`,
+        `z=${formatNumber(metadata.calibration.z)};`,
+        `source=${metadata.calibration.sourceName ?? "manual"}`,
+      ].join(" "),
+    );
+  } else {
+    lines.push("%% Calibration: none");
+  }
+
+  if (metadata.filterSettings) {
+    const channels = Object.entries(metadata.filterSettings.channels)
+      .filter(([, enabled]) => enabled)
+      .map(([channel]) => channel.toUpperCase())
+      .join("");
+    lines.push(
+      `%% Filter: enabled=${metadata.filterSettings.enabled}; cutoffHz=${formatNumber(
+        metadata.filterSettings.cutoffHz,
+      )}; channels=${channels || "none"}`,
+    );
+  } else {
+    lines.push("%% Filter: none");
+  }
+  return lines;
+}
+
+function serializeSensorLine(file: VtaFile, sensor: SensorPoint): string {
+  if (file.detectedFormat === "legacy-imu-box") {
+    return `#${[
+      formatNumber(sensor.elapsedSeconds),
+      String(sensor.eventCode),
+      optionalNumber(sensor.orientationXDegrees),
+      optionalNumber(sensor.orientationYDegrees),
+      optionalNumber(sensor.orientationZDegrees),
+      formatNumber(sensor.accelX),
+      formatNumber(sensor.accelY),
+      formatNumber(sensor.accelZ),
+    ].join(",")}`;
+  }
+
+  const parts = [
+    String(sensor.index),
+    formatNumber(sensor.elapsedSeconds),
+    String(sensor.eventCode),
+    optionalNumber(sensor.orientationXDegrees),
+    optionalNumber(sensor.orientationYDegrees),
+    optionalNumber(sensor.orientationZDegrees),
+    formatNumber(sensor.accelX),
+    formatNumber(sensor.accelY),
+    formatNumber(sensor.accelZ),
+    optionalNumber(sensor.timestampNanos),
+    optionalNumber(sensor.accuracy),
+    optionalNumber(sensor.gyroX),
+    optionalNumber(sensor.gyroY),
+    optionalNumber(sensor.gyroZ),
+    optionalNumber(sensor.rotationAzimuth),
+    optionalNumber(sensor.rotationPitch),
+    optionalNumber(sensor.rotationRoll),
+  ];
+  while (parts[parts.length - 1] === "") {
+    parts.pop();
+  }
+  return `#${parts.join(",")}`;
+}
+
+function optionalNumber(value: number | undefined): string {
+  return value === undefined ? "" : formatNumber(value);
+}
+
+function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return String(Number(value.toFixed(6)));
+}
+
+function clampIndex(value: number, pointCount: number): number {
+  const index = Number.isFinite(value) ? Math.trunc(value) : 0;
+  return Math.min(pointCount - 1, Math.max(0, index));
 }
