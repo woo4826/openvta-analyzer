@@ -6,6 +6,7 @@ import {
   normalizeSegment,
   routeDistanceSeries,
   summarizeAxisAlignedRegion,
+  summarizePointRange,
   summarizeSegment,
 } from "../analysis";
 import type { GpsPoint } from "../types";
@@ -86,6 +87,43 @@ describe("analysis helpers", () => {
     expect(summary.pointCount).toBe(2);
     expect(summary.distanceKm).toBe(0);
   });
+
+  it("summarizes an empty point range", () => {
+    expect(summarizePointRange([])).toEqual({
+      startIndex: 0,
+      endIndex: 0,
+      pointCount: 0,
+      distanceKm: 0,
+      averageSpeedKmh: 0,
+      maxSpeedKmh: 0,
+      maxDerivedAccelMps2: 0,
+    });
+  });
+
+  it("uses the full point range by default", () => {
+    const summary = summarizePointRange(pointRange());
+
+    expect(summary.startIndex).toBe(0);
+    expect(summary.endIndex).toBe(2);
+    expect(summary.pointCount).toBe(3);
+  });
+
+  it("normalizes reversed and out-of-bounds point range segments", () => {
+    const summary = summarizePointRange(pointRange(), { startIndex: 10, endIndex: -2, source: "chart" });
+
+    expect(summary.startIndex).toBe(0);
+    expect(summary.endIndex).toBe(2);
+    expect(summary.pointCount).toBe(3);
+  });
+
+  it("summarizes point range speed, distance, and derived acceleration", () => {
+    const summary = summarizePointRange(pointRange());
+
+    expect(summary.averageSpeedKmh).toBe(12);
+    expect(summary.maxSpeedKmh).toBe(36);
+    expect(summary.distanceKm).toBeGreaterThan(0);
+    expect(summary.maxDerivedAccelMps2).toBeCloseTo(10);
+  });
 });
 
 function gpsPoint(overrides: Partial<GpsPoint>): GpsPoint {
@@ -105,4 +143,30 @@ function gpsPoint(overrides: Partial<GpsPoint>): GpsPoint {
     confidence: 1,
     ...overrides,
   };
+}
+
+function pointRange(): GpsPoint[] {
+  return [
+    gpsPoint({
+      index: 0,
+      latitude: 0,
+      longitude: 0,
+      speedKmh: 0,
+      elapsedRealtimeNanos: 0,
+    }),
+    gpsPoint({
+      index: 1,
+      latitude: 0,
+      longitude: 0.001,
+      speedKmh: 36,
+      elapsedRealtimeNanos: 2_000_000_000,
+    }),
+    gpsPoint({
+      index: 2,
+      latitude: 0,
+      longitude: 0.002,
+      speedKmh: 0,
+      elapsedRealtimeNanos: 3_000_000_000,
+    }),
+  ];
 }

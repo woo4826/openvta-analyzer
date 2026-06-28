@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from "react";
 import type { EChartsOption } from "echarts";
 import type { ActiveSegment, GpsPoint, SensorPoint, TransformMode, VtaFile } from "../domain/types";
 import { GRAVITY_MPS2 } from "../domain/types";
@@ -27,51 +28,143 @@ export function Charts({
   transformMode = "raw",
   visiblePoints,
 }: ChartsProps) {
-  const points = visiblePoints ?? displayGpsPoints(file);
-  const velocity = points.map((point, index) => [index, point.speedKmh]);
-  const altitude = points.map((point, index) => [index, point.altitudeMeters]);
-  const accuracy = points
-    .map((point, index) => (point.accuracyMeters === undefined ? undefined : [index, point.accuracyMeters]))
-    .filter((value): value is number[] => value !== undefined);
-  const distanceRows = routeDistanceSeries(points);
-  const distance = distanceRows.map((row) => [row.elapsedSeconds, row.distanceKm]);
-  const validationRows = buildValidationRows(points);
-  const velocityDerivedAcceleration = validationRows.map((row) => [row.elapsedSeconds, row.derivedAccelMps2]);
-  const accelX = sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelX)]);
-  const accelY = sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelY)]);
-  const accelZ = sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelZ)]);
-  const orientation = sensors
-    .filter((sensor) => sensor.orientationXDegrees !== undefined || sensor.orientationYDegrees !== undefined)
-    .map((sensor) => [
-      sensor.elapsedSeconds,
-      sensor.orientationXDegrees ?? 0,
-      sensor.orientationYDegrees ?? 0,
-      sensor.orientationZDegrees ?? 0,
-    ]);
-  const friction = sensors.map((sensor) => [toG(sensor, sensor.accelY), toG(sensor, sensor.accelX)]);
+  const points = useMemo(() => visiblePoints ?? displayGpsPoints(file), [file, visiblePoints]);
+  const velocity = useMemo(() => points.map((point, index) => [index, point.speedKmh]), [points]);
+  const altitude = useMemo(() => points.map((point, index) => [index, point.altitudeMeters]), [points]);
+  const accuracy = useMemo(
+    () =>
+      points
+        .map((point, index) => (point.accuracyMeters === undefined ? undefined : [index, point.accuracyMeters]))
+        .filter((value): value is number[] => value !== undefined),
+    [points],
+  );
+  const distanceRows = useMemo(() => routeDistanceSeries(points), [points]);
+  const distance = useMemo(() => distanceRows.map((row) => [row.elapsedSeconds, row.distanceKm]), [distanceRows]);
+  const validationRows = useMemo(() => buildValidationRows(points), [points]);
+  const velocityDerivedAcceleration = useMemo(
+    () => validationRows.map((row) => [row.elapsedSeconds, row.derivedAccelMps2]),
+    [validationRows],
+  );
+  const accelX = useMemo(() => sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelX)]), [sensors]);
+  const accelY = useMemo(() => sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelY)]), [sensors]);
+  const accelZ = useMemo(() => sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelZ)]), [sensors]);
+  const orientation = useMemo(
+    () =>
+      sensors
+        .filter((sensor) => sensor.orientationXDegrees !== undefined || sensor.orientationYDegrees !== undefined)
+        .map((sensor) => [
+          sensor.elapsedSeconds,
+          sensor.orientationXDegrees ?? 0,
+          sensor.orientationYDegrees ?? 0,
+          sensor.orientationZDegrees ?? 0,
+        ]),
+    [sensors],
+  );
+  const friction = useMemo(() => sensors.map((sensor) => [toG(sensor, sensor.accelY), toG(sensor, sensor.accelX)]), [sensors]);
 
-  const baseAxis = selectedPointIndex >= 0 ? [{ xAxis: selectedPointIndex }] : [];
+  const baseAxis = useMemo(() => (selectedPointIndex >= 0 ? [{ xAxis: selectedPointIndex }] : []), [selectedPointIndex]);
   const selectedDistanceTime = distanceRows[selectedPointIndex]?.elapsedSeconds;
   const selectedValidationTime = selectedPointIndex > 0 ? validationRows[selectedPointIndex - 1]?.elapsedSeconds : undefined;
-  const distanceAxis = selectedDistanceTime === undefined ? [] : [{ xAxis: selectedDistanceTime }];
-  const validationAxis = selectedValidationTime === undefined ? [] : [{ xAxis: selectedValidationTime }];
-  const summary = summarizePointRange(points, activeSegment);
+  const distanceAxis = useMemo(
+    () => (selectedDistanceTime === undefined ? [] : [{ xAxis: selectedDistanceTime }]),
+    [selectedDistanceTime],
+  );
+  const validationAxis = useMemo(
+    () => (selectedValidationTime === undefined ? [] : [{ xAxis: selectedValidationTime }]),
+    [selectedValidationTime],
+  );
+  const summary = useMemo(() => summarizePointRange(points, activeSegment), [points, activeSegment]);
 
-  function selectBrushSegment(startIndex: number, endIndex: number) {
+  const selectPoint = useCallback(
+    (index: number) => {
+      if (!points.length) {
+        return;
+      }
+      const nextIndex = clampIndex(index, points.length);
+      if (nextIndex === selectedPointIndex) {
+        return;
+      }
+      onSelectedPointIndex(nextIndex);
+    },
+    [onSelectedPointIndex, points.length, selectedPointIndex],
+  );
+
+  const selectBrushSegment = useCallback(
+    (startIndex: number, endIndex: number) => {
+      if (!points.length) {
+        return;
+      }
+      const start = clampIndex(startIndex, points.length);
+      const end = clampIndex(endIndex, points.length);
+      const nextSegment = { startIndex: Math.min(start, end), endIndex: Math.max(start, end), source: "chart" as const };
+      if (activeSegment?.startIndex === nextSegment.startIndex && activeSegment.endIndex === nextSegment.endIndex) {
+        return;
+      }
+      onActiveSegment?.(nextSegment);
+    },
+    [activeSegment?.endIndex, activeSegment?.startIndex, onActiveSegment, points.length],
+  );
+
+  const selectVisibleVelocityRange = useCallback(() => {
     if (!points.length) {
       return;
     }
-    const start = clampIndex(startIndex, points.length);
-    const end = clampIndex(endIndex, points.length);
-    onActiveSegment?.({ startIndex: Math.min(start, end), endIndex: Math.max(start, end), source: "chart" });
-  }
-
-  function selectVisibleVelocityRange() {
-    if (!points.length) {
+    const nextSegment = { startIndex: 0, endIndex: points.length - 1, source: "chart" as const };
+    if (activeSegment?.startIndex === nextSegment.startIndex && activeSegment.endIndex === nextSegment.endIndex) {
       return;
     }
-    onActiveSegment?.({ startIndex: 0, endIndex: points.length - 1, source: "chart" });
-  }
+    onActiveSegment?.(nextSegment);
+  }, [activeSegment?.endIndex, activeSegment?.startIndex, onActiveSegment, points.length]);
+
+  const velocityOption = useMemo(
+    () => lineOption("Point index", "km/h", [{ name: "Velocity", data: velocity }], baseAxis, true),
+    [baseAxis, velocity],
+  );
+  const distanceOption = useMemo(
+    () => lineOption("Elapsed seconds", "km", [{ name: "Distance", data: distance }], distanceAxis),
+    [distance, distanceAxis],
+  );
+  const derivedAccelerationOption = useMemo(
+    () =>
+      lineOption(
+        "Elapsed seconds",
+        "m/s^2",
+        [{ name: "Derived acceleration", data: velocityDerivedAcceleration }],
+        validationAxis,
+      ),
+    [validationAxis, velocityDerivedAcceleration],
+  );
+  const altitudeOption = useMemo(
+    () => lineOption("Point index", "m", [{ name: "Altitude", data: altitude }], baseAxis),
+    [altitude, baseAxis],
+  );
+  const accuracyOption = useMemo(
+    () => lineOption("Point index", "m", [{ name: "Accuracy", data: accuracy }], baseAxis),
+    [accuracy, baseAxis],
+  );
+  const accelerationOption = useMemo(
+    () =>
+      lineOption("Elapsed seconds", "g", [
+        { name: "GX", data: accelX },
+        { name: "GY", data: accelY },
+        { name: "GZ", data: accelZ },
+      ]),
+    [accelX, accelY, accelZ],
+  );
+  const velocityAccelerationOption = useMemo(
+    () => velocityAccelOption(velocity, accelX, accelY, accelZ),
+    [accelX, accelY, accelZ, velocity],
+  );
+  const pitchRollYawOption = useMemo(
+    () =>
+      lineOption("Elapsed seconds", "deg", [
+        { name: "Pitch/Roll X", data: orientation.map((row) => [row[0], row[1]]) },
+        { name: "Pitch/Roll Y", data: orientation.map((row) => [row[0], row[2]]) },
+        { name: "Yaw Z", data: orientation.map((row) => [row[0], row[3]]) },
+      ]),
+    [orientation],
+  );
+  const frictionChartOption = useMemo(() => frictionOption(friction), [friction]);
 
   return (
     <section className="content-band">
@@ -103,49 +196,30 @@ export function Charts({
         <ChartPanel
           title="Velocity"
           className="wide-chart"
-          option={lineOption("Point index", "km/h", [{ name: "Velocity", data: velocity }], baseAxis, true)}
-          onPoint={(index) => onSelectedPointIndex(index)}
+          option={velocityOption}
+          onPoint={selectPoint}
           onBrushSegment={selectBrushSegment}
         />
         <ChartPanel
           title="Distance over time"
           className="wide-chart"
-          option={lineOption("Elapsed seconds", "km", [{ name: "Distance", data: distance }], distanceAxis)}
+          option={distanceOption}
         />
         <ChartPanel
           title="Velocity-derived acceleration"
           className="wide-chart"
-          option={lineOption(
-            "Elapsed seconds",
-            "m/s^2",
-            [{ name: "Derived acceleration", data: velocityDerivedAcceleration }],
-            validationAxis,
-          )}
+          option={derivedAccelerationOption}
         />
-        <ChartPanel title="Altitude" option={lineOption("Point index", "m", [{ name: "Altitude", data: altitude }], baseAxis)} />
-        <ChartPanel
-          title="GPS Accuracy"
-          option={lineOption("Point index", "m", [{ name: "Accuracy", data: accuracy }], baseAxis)}
-        />
+        <ChartPanel title="Altitude" option={altitudeOption} onPoint={selectPoint} />
+        <ChartPanel title="GPS Accuracy" option={accuracyOption} onPoint={selectPoint} />
         <ChartPanel
           title="Acceleration"
           className="wide-chart"
-          option={lineOption("Elapsed seconds", "g", [
-            { name: "GX", data: accelX },
-            { name: "GY", data: accelY },
-            { name: "GZ", data: accelZ },
-          ])}
+          option={accelerationOption}
         />
-        <ChartPanel title="Velocity + Acceleration" className="wide-chart" option={velocityAccelOption(velocity, accelX, accelY, accelZ)} />
-        <ChartPanel
-          title="Pitch / Roll / Yaw"
-          option={lineOption("Elapsed seconds", "deg", [
-            { name: "Pitch/Roll X", data: orientation.map((row) => [row[0], row[1]]) },
-            { name: "Pitch/Roll Y", data: orientation.map((row) => [row[0], row[2]]) },
-            { name: "Yaw Z", data: orientation.map((row) => [row[0], row[3]]) },
-          ])}
-        />
-        <ChartPanel title="Friction Circle" option={frictionOption(friction)} />
+        <ChartPanel title="Velocity + Acceleration" className="wide-chart" option={velocityAccelerationOption} />
+        <ChartPanel title="Pitch / Roll / Yaw" option={pitchRollYawOption} />
+        <ChartPanel title="Friction Circle" option={frictionChartOption} />
       </section>
     </section>
   );

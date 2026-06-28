@@ -15,6 +15,9 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(fileTray.getByText("modern-openvta")).toBeVisible();
   await expect(page.getByText("GPS 37")).toBeVisible();
   await expect(page.getByText("Enhanced 35")).toBeVisible();
+  const rawGpsCountText = await fileTray.getByText(/^GPS \d+$/).textContent();
+  const rawGpsCount = Number(rawGpsCountText?.match(/\d+/)?.[0] ?? 0);
+  expect(rawGpsCount).toBeGreaterThan(0);
   await expect(fileTray.getByText("Sensor 185")).toBeVisible();
   await expect(fileTray.getByText("Warnings 0")).toBeVisible();
   await expect(fileTray.getByText("Active")).toBeVisible();
@@ -85,6 +88,8 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(page.getByRole("img", { name: "Velocity-derived acceleration chart" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Friction Circle chart" })).toBeVisible();
   await page.getByRole("button", { name: "Use visible velocity range as segment" }).click();
+  await expect(metricValue(workspace, "Segment")).toHaveText(`0-${rawGpsCount - 1}`);
+  await expect(metricValue(panelByHeading(analysisMain, "Averages"), "Selected points")).toHaveText(String(rawGpsCount));
   await page.getByRole("button", { name: "Export" }).click();
   await expect(page.getByText("Selected points")).toBeVisible();
 

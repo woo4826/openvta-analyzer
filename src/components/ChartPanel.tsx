@@ -12,6 +12,8 @@ export interface ChartPanelProps {
 
 interface PointEventPayload {
   dataIndex?: unknown;
+  data?: unknown;
+  value?: unknown;
 }
 
 interface BrushSelectedPayload {
@@ -20,12 +22,15 @@ interface BrushSelectedPayload {
 
 interface BrushBatchPayload {
   selected?: Array<{ dataIndex?: unknown }>;
-  areas?: Array<{ coordRange?: unknown; range?: unknown }>;
+  areas?: Array<{ coordRange?: unknown; coordRanges?: unknown }>;
 }
 
 export function ChartPanel({ title, option, className, onPoint, onBrushSegment }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const hoverFrameRef = useRef<number | undefined>(undefined);
+  const lastPointIndexRef = useRef<number | undefined>(undefined);
+  const pendingHoverIndexRef = useRef<number | undefined>(undefined);
   const mergedClass = className ? `panel ${className}` : "panel";
 
   useEffect(() => {
@@ -35,11 +40,45 @@ export function ChartPanel({ title, option, className, onPoint, onBrushSegment }
     chart.setOption(option, true);
 
     const resize = () => chart.resize();
-    const handlePoint = (...args: unknown[]) => {
-      const params = toPointEventPayload(args[0]);
-      if (params && typeof params.dataIndex === "number" && Number.isFinite(params.dataIndex)) {
-        onPoint?.(params.dataIndex);
+    const cancelPendingHover = () => {
+      if (hoverFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(hoverFrameRef.current);
+        hoverFrameRef.current = undefined;
       }
+      pendingHoverIndexRef.current = undefined;
+    };
+    const emitPoint = (index: number, force = false) => {
+      if (!force && lastPointIndexRef.current === index) {
+        return;
+      }
+      lastPointIndexRef.current = index;
+      onPoint?.(index);
+    };
+    const handleClick = (...args: unknown[]) => {
+      const index = toPointIndex(args[0]);
+      if (index === undefined) {
+        return;
+      }
+      cancelPendingHover();
+      emitPoint(index, true);
+    };
+    const handleHover = (...args: unknown[]) => {
+      const index = toPointIndex(args[0]);
+      if (index === undefined || lastPointIndexRef.current === index) {
+        return;
+      }
+      pendingHoverIndexRef.current = index;
+      if (hoverFrameRef.current !== undefined) {
+        return;
+      }
+      hoverFrameRef.current = window.requestAnimationFrame(() => {
+        hoverFrameRef.current = undefined;
+        const pendingIndex = pendingHoverIndexRef.current;
+        pendingHoverIndexRef.current = undefined;
+        if (pendingIndex !== undefined) {
+          emitPoint(pendingIndex);
+        }
+      });
     };
     const handleBrush = (...args: unknown[]) => {
       const params = toBrushSelectedPayload(args[0]);
@@ -53,12 +92,9 @@ export function ChartPanel({ title, option, className, onPoint, onBrushSegment }
     };
 
     window.addEventListener("resize", resize);
-    chart.off("click");
-    chart.off("mouseover");
-    chart.off("brushSelected");
     if (onPoint) {
-      chart.on("click", handlePoint);
-      chart.on("mouseover", handlePoint);
+      chart.on("click", handleClick);
+      chart.on("mouseover", handleHover);
     }
     if (onBrushSegment) {
       chart.on("brushSelected", handleBrush);
@@ -66,8 +102,9 @@ export function ChartPanel({ title, option, className, onPoint, onBrushSegment }
 
     return () => {
       window.removeEventListener("resize", resize);
-      chart.off("click", handlePoint);
-      chart.off("mouseover", handlePoint);
+      cancelPendingHover();
+      chart.off("click", handleClick);
+      chart.off("mouseover", handleHover);
       chart.off("brushSelected", handleBrush);
     };
   }, [option, onPoint, onBrushSegment]);
@@ -95,6 +132,18 @@ function toPointEventPayload(value: unknown): PointEventPayload | undefined {
   return isObject(value) ? value : undefined;
 }
 
+function toPointIndex(value: unknown): number | undefined {
+  const params = toPointEventPayload(value);
+  if (!params) {
+    return undefined;
+  }
+  const coordinateIndex = firstCoordinateValue(params.value) ?? firstCoordinateValue(params.data);
+  if (coordinateIndex !== undefined) {
+    return Math.round(coordinateIndex);
+  }
+  return typeof params.dataIndex === "number" && Number.isFinite(params.dataIndex) ? Math.trunc(params.dataIndex) : undefined;
+}
+
 function toBrushSelectedPayload(value: unknown): BrushSelectedPayload | undefined {
   if (!isObject(value) || !("batch" in value)) {
     return undefined;
@@ -111,12 +160,15 @@ function getBrushSegment(params: BrushSelectedPayload): { startIndex: number; en
     return toSegment(selectedIndexes);
   }
 
-  const rangeValues =
+  const coordinateValues =
     params.batch?.flatMap((batch) =>
-      batch.areas?.flatMap((area) => firstNumericPair(area.coordRange) ?? firstNumericPair(area.range) ?? []) ?? [],
+      batch.areas?.flatMap((area) => [
+        ...coordinateRangePairs(area.coordRange).flat(),
+        ...coordinateRangePairs(area.coordRanges).flat(),
+      ]) ?? [],
     ) ?? [];
-  if (rangeValues.length >= 2) {
-    return toSegment(rangeValues);
+  if (coordinateValues.length >= 2) {
+    return toSegment(coordinateValues);
   }
 
   return undefined;
@@ -127,25 +179,46 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function numericArray(value: unknown): number[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is number => typeof item === "number" && Number.isFinite(item));
-}
-
-function firstNumericPair(value: unknown): number[] | undefined {
-  const values = collectNumbers(value);
-  return values.length >= 2 ? values.slice(0, 2) : undefined;
-}
-
-function collectNumbers(value: unknown): number[] {
   if (typeof value === "number" && Number.isFinite(value)) {
     return [value];
   }
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.flatMap((item) => collectNumbers(item));
+  return value.filter((item): item is number => typeof item === "number" && Number.isFinite(item));
+}
+
+function firstCoordinateValue(value: unknown): number | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const first = value[0];
+  return typeof first === "number" && Number.isFinite(first) ? first : undefined;
+}
+
+function coordinateRangePairs(value: unknown): number[][] {
+  if (isNumericPair(value)) {
+    return [value];
+  }
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const directPairs = value.filter(isNumericPair);
+  if (directPairs.length) {
+    return [directPairs[0]];
+  }
+  return value.flatMap((item) => coordinateRangePairs(item));
+}
+
+function isNumericPair(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    typeof value[0] === "number" &&
+    Number.isFinite(value[0]) &&
+    typeof value[1] === "number" &&
+    Number.isFinite(value[1])
+  );
 }
 
 function toSegment(values: number[]): { startIndex: number; endIndex: number } {
