@@ -19,7 +19,7 @@ import type {
   TransformMode,
   VtaFile,
 } from "../domain/types";
-import { Charts } from "./Charts";
+import { Charts, type AccelerationSensorSet } from "./Charts";
 import { SegmentedControl } from "./ui";
 
 interface CalibrationPanelProps {
@@ -70,13 +70,17 @@ export function CalibrationPanel({
     [presets, selectedPresetId],
   );
   const previewSensors = useMemo(() => {
-    if (transformMode === "raw") {
-      return sensors;
+    const calibratedSensors = applyCalibration(sensors, calibration);
+    const filteredSensors = transformedSensors.length ? transformedSensors : calibratedSensors;
+    return sensorsForTransformMode(transformMode, sensors, calibratedSensors, filteredSensors);
+  }, [calibration, sensors, transformMode, transformedSensors]);
+  const previewAccelerationSensorSets = useMemo(() => {
+    if (transformMode !== "compare") {
+      return undefined;
     }
-    if (transformMode === "calibrated") {
-      return applyCalibration(sensors, calibration);
-    }
-    return transformedSensors.length ? transformedSensors : applyCalibration(sensors, calibration);
+    const calibratedSensors = applyCalibration(sensors, calibration);
+    const filteredSensors = transformedSensors.length ? transformedSensors : calibratedSensors;
+    return accelerationSensorSets(sensors, calibratedSensors, filteredSensors);
   }, [calibration, sensors, transformMode, transformedSensors]);
 
   function updateOffset(key: "x" | "y" | "z", value: number) {
@@ -361,6 +365,7 @@ export function CalibrationPanel({
           <Charts
             file={file}
             sensors={previewSensors}
+            accelerationSensorSets={previewAccelerationSensorSets}
             selectedPointIndex={0}
             onSelectedPointIndex={() => undefined}
             transformMode={transformMode}
@@ -424,4 +429,31 @@ function parseOptionalNumber(value: string): number | undefined {
 function createPresetId(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "preset";
   return `calibration-${slug}-${Date.now()}`;
+}
+
+function sensorsForTransformMode(
+  mode: TransformMode,
+  rawSensors: SensorPoint[],
+  calibratedSensors: SensorPoint[],
+  filteredSensors: SensorPoint[],
+): SensorPoint[] {
+  if (mode === "raw") {
+    return rawSensors;
+  }
+  if (mode === "calibrated") {
+    return calibratedSensors;
+  }
+  return filteredSensors;
+}
+
+function accelerationSensorSets(
+  rawSensors: SensorPoint[],
+  calibratedSensors: SensorPoint[],
+  filteredSensors: SensorPoint[],
+): AccelerationSensorSet[] {
+  return [
+    { label: "Raw", sensors: rawSensors },
+    { label: "Calibrated", sensors: calibratedSensors },
+    { label: "Filtered", sensors: filteredSensors },
+  ];
 }

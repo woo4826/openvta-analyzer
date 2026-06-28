@@ -14,6 +14,7 @@ import type {
   CalibrationOffsets,
   FilterSettings,
   MapSettings,
+  SensorPoint,
   SourceVisibility,
   TransformMode,
   VtaFile,
@@ -22,7 +23,7 @@ import type {
 import { FileDrop } from "../components/FileDrop";
 import { FileTray } from "../components/FileTray";
 import { Overview } from "../components/Overview";
-import { Charts } from "../components/Charts";
+import { Charts, type AccelerationSensorSet } from "../components/Charts";
 import { Tables } from "../components/Tables";
 import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ExportPanel } from "../components/ExportPanel";
@@ -39,6 +40,7 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 ];
 
 const defaultSourceVisibility: SourceVisibility = { rawGps: true, enhancedGps: true };
+const emptySensors: SensorPoint[] = [];
 const defaultMapSettings: MapSettings = {
   pointSize: 6,
   tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -79,6 +81,18 @@ export function App() {
     [calibratedSensors, filterSettings],
   );
   const transformedSensors = filterResult.sensors;
+  const rawSensors = activeFile?.sensorPoints ?? emptySensors;
+  const chartSensors = useMemo(
+    () => sensorsForTransformMode(transformMode, rawSensors, calibratedSensors, transformedSensors),
+    [calibratedSensors, rawSensors, transformedSensors, transformMode],
+  );
+  const chartAccelerationSensorSets = useMemo(
+    () =>
+      transformMode === "compare"
+        ? accelerationSensorSets(rawSensors, calibratedSensors, transformedSensors)
+        : undefined,
+    [calibratedSensors, rawSensors, transformedSensors, transformMode],
+  );
   const stats = useMemo(() => (activeFile ? summarizeVta(activeFile) : undefined), [activeFile]);
 
   useEffect(() => {
@@ -297,7 +311,8 @@ export function App() {
               {activeTab === "charts" ? (
                 <Charts
                   file={activeFile}
-                  sensors={transformedSensors}
+                  sensors={chartSensors}
+                  accelerationSensorSets={chartAccelerationSensorSets}
                   selectedPointIndex={selectedPointIndex}
                   onSelectedPointIndex={setSelectedPointIndex}
                   activeSegment={activeSegment}
@@ -409,4 +424,31 @@ function clampSelectedPointIndex(index: number, pointCount: number): number {
   }
   const safeIndex = Number.isFinite(index) ? Math.trunc(index) : 0;
   return Math.min(pointCount - 1, Math.max(0, safeIndex));
+}
+
+function sensorsForTransformMode(
+  mode: TransformMode,
+  rawSensors: SensorPoint[],
+  calibratedSensors: SensorPoint[],
+  filteredSensors: SensorPoint[],
+): SensorPoint[] {
+  if (mode === "raw") {
+    return rawSensors;
+  }
+  if (mode === "calibrated") {
+    return calibratedSensors;
+  }
+  return filteredSensors;
+}
+
+function accelerationSensorSets(
+  rawSensors: SensorPoint[],
+  calibratedSensors: SensorPoint[],
+  filteredSensors: SensorPoint[],
+): AccelerationSensorSet[] {
+  return [
+    { label: "Raw", sensors: rawSensors },
+    { label: "Calibrated", sensors: calibratedSensors },
+    { label: "Filtered", sensors: filteredSensors },
+  ];
 }

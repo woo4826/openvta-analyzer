@@ -10,6 +10,7 @@ import { Metric, Panel, StatusBadge } from "./ui";
 interface ChartsProps {
   file: VtaFile;
   sensors: SensorPoint[];
+  accelerationSensorSets?: AccelerationSensorSet[];
   selectedPointIndex: number;
   onSelectedPointIndex: (index: number) => void;
   activeSegment?: ActiveSegment;
@@ -18,9 +19,15 @@ interface ChartsProps {
   visiblePoints?: GpsPoint[];
 }
 
+export interface AccelerationSensorSet {
+  label: string;
+  sensors: SensorPoint[];
+}
+
 export function Charts({
   file,
   sensors,
+  accelerationSensorSets,
   selectedPointIndex,
   onSelectedPointIndex,
   activeSegment,
@@ -45,9 +52,13 @@ export function Charts({
     () => validationRows.map((row) => [row.elapsedSeconds, row.derivedAccelMps2]),
     [validationRows],
   );
-  const accelX = useMemo(() => sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelX)]), [sensors]);
-  const accelY = useMemo(() => sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelY)]), [sensors]);
-  const accelZ = useMemo(() => sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelZ)]), [sensors]);
+  const activeAccelerationSensorSets = useMemo(
+    () =>
+      transformMode === "compare" && accelerationSensorSets?.length
+        ? accelerationSensorSets
+        : [{ label: transformSeriesLabel(transformMode), sensors }],
+    [accelerationSensorSets, sensors, transformMode],
+  );
   const orientation = useMemo(
     () =>
       sensors
@@ -143,17 +154,12 @@ export function Charts({
     [accuracy, baseAxis],
   );
   const accelerationOption = useMemo(
-    () =>
-      lineOption("Elapsed seconds", "g", [
-        { name: "GX", data: accelX },
-        { name: "GY", data: accelY },
-        { name: "GZ", data: accelZ },
-      ]),
-    [accelX, accelY, accelZ],
+    () => buildAccelerationOption(activeAccelerationSensorSets),
+    [activeAccelerationSensorSets],
   );
   const velocityAccelerationOption = useMemo(
-    () => velocityAccelOption(velocity, accelX, accelY, accelZ),
-    [accelX, accelY, accelZ, velocity],
+    () => buildVelocityAccelerationOption(velocity, activeAccelerationSensorSets),
+    [activeAccelerationSensorSets, velocity],
   );
   const pitchRollYawOption = useMemo(
     () =>
@@ -230,6 +236,25 @@ interface SeriesData {
   data: number[][];
 }
 
+function buildAccelerationSeries(sensorSets: AccelerationSensorSet[]): SeriesData[] {
+  return sensorSets.flatMap((sensorSet) => {
+    const label = sensorSet.label.trim() || "Acceleration";
+    return [
+      { name: `${label} GX`, data: sensorSet.sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelX)]) },
+      { name: `${label} GY`, data: sensorSet.sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelY)]) },
+      { name: `${label} GZ`, data: sensorSet.sensors.map((sensor) => [sensor.elapsedSeconds, toG(sensor, sensor.accelZ)]) },
+    ];
+  });
+}
+
+function buildAccelerationOption(sensorSets: AccelerationSensorSet[]): EChartsOption {
+  return lineOption("Elapsed seconds", "g", buildAccelerationSeries(sensorSets));
+}
+
+function buildVelocityAccelerationOption(velocity: number[][], sensorSets: AccelerationSensorSet[]): EChartsOption {
+  return velocityAccelOption(velocity, buildAccelerationSeries(sensorSets));
+}
+
 function lineOption(
   xName: string,
   yName: string,
@@ -265,7 +290,7 @@ function lineOption(
   };
 }
 
-function velocityAccelOption(velocity: number[][], x: number[][], y: number[][], z: number[][]): EChartsOption {
+function velocityAccelOption(velocity: number[][], accelerationSeries: SeriesData[]): EChartsOption {
   return {
     animation: false,
     tooltip: { trigger: "axis" },
@@ -282,9 +307,14 @@ function velocityAccelOption(velocity: number[][], x: number[][], y: number[][],
     dataZoom: [{ type: "inside", xAxisIndex: [0, 1] }],
     series: [
       { type: "line", name: "Velocity", data: velocity, xAxisIndex: 0, yAxisIndex: 0, showSymbol: false },
-      { type: "line", name: "GX", data: x, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false },
-      { type: "line", name: "GY", data: y, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false },
-      { type: "line", name: "GZ", data: z, xAxisIndex: 1, yAxisIndex: 1, showSymbol: false },
+      ...accelerationSeries.map((series) => ({
+        type: "line" as const,
+        name: series.name,
+        data: series.data,
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        showSymbol: false,
+      })),
     ],
   };
 }
@@ -325,6 +355,10 @@ function formatTransformMode(mode: TransformMode): string {
     compare: "Compare",
   };
   return labels[mode];
+}
+
+function transformSeriesLabel(mode: TransformMode): string {
+  return mode === "compare" ? "Compare" : formatTransformMode(mode);
 }
 
 function transformBadgeTone(mode: TransformMode): "neutral" | "success" | "warning" | "info" {
