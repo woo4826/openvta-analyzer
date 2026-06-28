@@ -1,4 +1,13 @@
-import type { GpsPoint, SummaryStats, VtaFile } from "../domain/types";
+import type {
+  ActiveSegment,
+  AxisAlignedRegion,
+  GpsPoint,
+  MapSettings,
+  SourceVisibility,
+  SummaryStats,
+  VtaFile,
+} from "../domain/types";
+import { summarizeAxisAlignedRegion, summarizeSegment } from "../domain/analysis";
 import { displayGpsPoints } from "../domain/statistics";
 import { RouteMap } from "./RouteMap";
 import { WarningList } from "./WarningList";
@@ -8,6 +17,13 @@ interface OverviewProps {
   stats: SummaryStats;
   selectedPointIndex: number;
   onSelectedPointIndex: (index: number) => void;
+  sourceVisibility: SourceVisibility;
+  mapSettings: MapSettings;
+  activeSegment?: ActiveSegment;
+  region?: AxisAlignedRegion;
+  onSegmentChange: (segment?: ActiveSegment) => void;
+  onRegionChange: (region?: AxisAlignedRegion) => void;
+  onMapSettingsChange: (settings: MapSettings) => void;
   visiblePoints?: GpsPoint[];
   filterWarning?: string;
 }
@@ -17,11 +33,23 @@ export function Overview({
   stats,
   selectedPointIndex,
   onSelectedPointIndex,
+  sourceVisibility,
+  mapSettings,
+  activeSegment,
+  region,
+  onSegmentChange,
+  onRegionChange,
+  onMapSettingsChange,
   visiblePoints,
   filterWarning,
 }: OverviewProps) {
   const points = visiblePoints ?? displayGpsPoints(file);
   const selected = points[selectedPointIndex];
+  const segmentSummary = activeSegment
+    ? summarizeSegment(file, file.sensorPoints, activeSegment, sourceVisibility)
+    : undefined;
+  const regionSummary = region ? summarizeAxisAlignedRegion(points, region) : undefined;
+
   return (
     <section className="overview-grid">
       <div className="panel">
@@ -30,7 +58,18 @@ export function Overview({
           <span>{file.detectedFormat}</span>
         </div>
         <div className="panel-body">
-          <RouteMap points={points} selectedIndex={selectedPointIndex} onSelectedIndex={onSelectedPointIndex} />
+          <RouteMap
+            points={points}
+            selectedIndex={selectedPointIndex}
+            sourceVisibility={sourceVisibility}
+            settings={mapSettings}
+            segment={activeSegment}
+            region={region}
+            onSelectedIndex={onSelectedPointIndex}
+            onSegmentChange={onSegmentChange}
+            onRegionChange={onRegionChange}
+            onSettingsChange={onMapSettingsChange}
+          />
         </div>
       </div>
 
@@ -60,6 +99,49 @@ export function Overview({
             />
           </div>
         </div>
+
+        {segmentSummary ? (
+          <div className="panel">
+            <div className="panel-header">
+              <h3>Segment</h3>
+              <span>
+                {activeSegment?.startIndex}-{activeSegment?.endIndex}
+              </span>
+            </div>
+            <div className="panel-body metric-grid">
+              <Metric label="Segment points" value={String(segmentSummary.pointCount)} />
+              <Metric label="Distance" value={`${segmentSummary.distanceKm.toFixed(3)} km`} />
+              <Metric label="Duration" value={formatDuration(segmentSummary.durationSeconds)} />
+              <Metric label="Max speed" value={`${segmentSummary.maxSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label="Avg speed" value={`${segmentSummary.averageSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label="Sensor rows" value={String(segmentSummary.sensorCount)} />
+              <Metric label="Warnings" value={String(segmentSummary.warningCount)} />
+              <Metric
+                label="Altitude range"
+                value={formatAltitudeRange(segmentSummary.minAltitudeMeters, segmentSummary.maxAltitudeMeters)}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {regionSummary ? (
+          <div className="panel">
+            <div className="panel-header">
+              <h3>Region</h3>
+              <span>Axis-aligned bounds</span>
+            </div>
+            <div className="panel-body metric-grid">
+              <Metric label="Region points" value={String(regionSummary.pointCount)} />
+              <Metric label="Distance" value={`${regionSummary.distanceKm.toFixed(3)} km`} />
+              <Metric label="Max speed" value={`${regionSummary.maxSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label="Avg speed" value={`${regionSummary.averageSpeedKmh.toFixed(1)} km/h`} />
+              <Metric
+                label="Altitude range"
+                value={formatAltitudeRange(regionSummary.minAltitudeMeters, regionSummary.maxAltitudeMeters)}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div className="panel">
           <div className="panel-header">
@@ -107,4 +189,11 @@ function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remaining = Math.round(seconds % 60);
   return `${minutes}m ${remaining}s`;
+}
+
+function formatAltitudeRange(minAltitudeMeters?: number, maxAltitudeMeters?: number): string {
+  if (minAltitudeMeters === undefined || maxAltitudeMeters === undefined) {
+    return "No altitude";
+  }
+  return `${minAltitudeMeters.toFixed(0)}-${maxAltitudeMeters.toFixed(0)} m`;
 }

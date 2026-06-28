@@ -34,6 +34,11 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
 
   await expect(page.getByText("Distance")).toBeVisible();
   await expect(page.getByLabel("Speed-colored route plot")).toBeVisible();
+  await page.getByRole("button", { name: "Set segment start" }).click();
+  await page.getByRole("button", { name: "Set segment end" }).click();
+  await expect(analysisMain.getByRole("heading", { name: "Segment" })).toBeVisible();
+  await page.getByRole("button", { name: "Create region" }).click();
+  await expect(page.getByText("Region points")).toBeVisible();
 
   await page.getByRole("button", { name: "Charts" }).click();
   await expect(page.getByRole("img", { name: "Velocity chart" })).toBeVisible();

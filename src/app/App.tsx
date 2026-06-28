@@ -9,8 +9,10 @@ import { summarizeVta } from "../domain/statistics";
 import { loadTextFilesFromInput } from "../domain/zip";
 import type {
   ActiveSegment,
+  AxisAlignedRegion,
   CalibrationOffsets,
   FilterSettings,
+  MapSettings,
   SourceVisibility,
   TransformMode,
   VtaFile,
@@ -35,6 +37,13 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "export", label: "Export" },
 ];
 
+const defaultSourceVisibility: SourceVisibility = { rawGps: true, enhancedGps: true };
+const defaultMapSettings: MapSettings = {
+  pointSize: 6,
+  tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  speedThresholds: [10, 30, 50, 80],
+};
+
 export function App() {
   const [files, setFiles] = useState<VtaWorkspaceFile[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -42,8 +51,10 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [calibration, setCalibration] = useState<CalibrationOffsets | undefined>();
   const [filterSettings, setFilterSettings] = useState<FilterSettings>(defaultFilterSettings);
-  const [sourceVisibility, setSourceVisibility] = useState<SourceVisibility>({ rawGps: true, enhancedGps: true });
+  const [sourceVisibility, setSourceVisibility] = useState<SourceVisibility>(defaultSourceVisibility);
+  const [mapSettings, setMapSettings] = useState<MapSettings>(defaultMapSettings);
   const [activeSegment, setActiveSegment] = useState<ActiveSegment | undefined>();
+  const [region, setRegion] = useState<AxisAlignedRegion | undefined>();
   const [transformMode, setTransformMode] = useState<TransformMode>("raw");
   const [loadError, setLoadError] = useState<string | undefined>();
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
@@ -71,6 +82,7 @@ export function App() {
   useEffect(() => {
     if (!activeFile) {
       previousEffectiveSourceVisibility.current = undefined;
+      setRegion(undefined);
       return;
     }
     const previous = previousEffectiveSourceVisibility.current;
@@ -78,6 +90,7 @@ export function App() {
     if (previous && !isSameSourceVisibility(previous, effectiveSourceVisibility)) {
       setSelectedPointIndex(0);
       setActiveSegment(undefined);
+      setRegion(undefined);
     }
   }, [activeFile, effectiveSourceVisibility]);
 
@@ -100,8 +113,9 @@ export function App() {
       setActiveTab("overview");
       setCalibration(undefined);
       setFilterSettings(defaultFilterSettings);
-      setSourceVisibility({ rawGps: true, enhancedGps: true });
+      setSourceVisibility(defaultSourceVisibility);
       setActiveSegment(undefined);
+      setRegion(undefined);
       setTransformMode("raw");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Unable to load selected file.");
@@ -115,8 +129,9 @@ export function App() {
     setActiveTab("overview");
     setCalibration(undefined);
     setFilterSettings(defaultFilterSettings);
-    setSourceVisibility({ rawGps: true, enhancedGps: true });
+    setSourceVisibility(defaultSourceVisibility);
     setActiveSegment(undefined);
+    setRegion(undefined);
     setTransformMode("raw");
     setLoadError(undefined);
   }
@@ -140,6 +155,7 @@ export function App() {
     setActiveIndex(nextIndex);
     setSelectedPointIndex(0);
     setActiveSegment(undefined);
+    setRegion(undefined);
   }
 
   function removeFile(fileId: string) {
@@ -151,6 +167,7 @@ export function App() {
     setFiles(nextFiles);
     setSelectedPointIndex(0);
     setActiveSegment(undefined);
+    setRegion(undefined);
     if (!nextFiles.length) {
       setActiveIndex(0);
       setActiveTab("overview");
@@ -169,6 +186,7 @@ export function App() {
     setSourceVisibility(nextVisibility);
     setSelectedPointIndex(0);
     setActiveSegment(undefined);
+    setRegion(undefined);
   }
 
   return (
@@ -187,6 +205,7 @@ export function App() {
                 setActiveIndex(Number(event.target.value));
                 setSelectedPointIndex(0);
                 setActiveSegment(undefined);
+                setRegion(undefined);
               }}
             >
               {files.map((file, index) => (
@@ -259,6 +278,13 @@ export function App() {
                   stats={stats}
                   selectedPointIndex={selectedPointIndex}
                   onSelectedPointIndex={setSelectedPointIndex}
+                  sourceVisibility={effectiveSourceVisibility}
+                  mapSettings={mapSettings}
+                  activeSegment={activeSegment}
+                  region={region}
+                  onSegmentChange={setActiveSegment}
+                  onRegionChange={setRegion}
+                  onMapSettingsChange={setMapSettings}
                   visiblePoints={visibleGpsPoints}
                   filterWarning={filterResult.warning}
                 />
