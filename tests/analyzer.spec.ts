@@ -1,4 +1,5 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test("loads the sample and renders core analysis views", async ({ page }) => {
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
@@ -96,10 +97,39 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await page.getByRole("button", { name: "Tables" }).click();
   await page.getByRole("tab", { name: "Validation" }).click();
   await expect(page.getByRole("columnheader", { name: "Derived accel" })).toBeVisible();
+  const validationTable = page.getByRole("tabpanel", { name: "Validation table" });
+  const initialTableCounts = await tableStatusCounts(page);
+  const validationIndexes = await validationTable.locator("tbody tr td:first-child").allTextContents();
+  const filterQuery = await applyReducingFilter(page, validationIndexes, initialTableCounts.totalRows);
+  const filteredTableCounts = await tableStatusCounts(page);
+  expect(filteredTableCounts.totalRows).toBe(initialTableCounts.totalRows);
+  expect(filteredTableCounts.visibleRows).toBeGreaterThan(1);
+  expect(filteredTableCounts.visibleRows).toBeLessThan(initialTableCounts.totalRows);
+  const firstIndexBeforeSort = await firstValidationTableCell(validationTable);
+  await validationTable.getByRole("button", { name: "Index" }).click();
+  await expect(validationTable.getByRole("columnheader", { name: "Index" })).toHaveAttribute("aria-sort", "descending");
+  const firstVisibleCells = await validationTable.locator("tbody tr").first().locator("td").allTextContents();
+  expect(firstVisibleCells[0].trim()).not.toBe(firstIndexBeforeSort);
+
   const tableDownloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export visible rows" }).click();
   const tableDownload = await tableDownloadPromise;
   expect(tableDownload.suggestedFilename()).toBe("validation-visible.csv");
+  const tableDownloadPath = await tableDownload.path();
+  if (!tableDownloadPath) {
+    throw new Error("Expected validation export download to have a filesystem path.");
+  }
+  const tableCsv = await readFile(tableDownloadPath, "utf8");
+  const tableCsvLines = tableCsv.trim().split(/\r?\n/);
+  const exportedRows = tableCsvLines.slice(1);
+  const firstExportedRow = exportedRows[0].split(",");
+
+  expect(tableCsvLines[0]).toBe("index,elapsedSeconds,speedKmh,deltaSpeedKmh,derivedAccelMps2");
+  expect(exportedRows).toHaveLength(filteredTableCounts.visibleRows);
+  expect(exportedRows.length).toBeLessThan(initialTableCounts.totalRows);
+  expect(exportedRows.every((row) => row.includes(filterQuery))).toBe(true);
+  expect(firstExportedRow[0]).toBe(firstVisibleCells[0].trim());
+  expect(Number(firstExportedRow[4])).toBeCloseTo(Number(firstVisibleCells[4]), 3);
 });
 
 test("applies sample calibration and exports summary", async ({ page }) => {
@@ -164,4 +194,42 @@ function panelByHeading(scope: Locator, name: string | RegExp): Locator {
 
 function metricValue(scope: Locator, label: string): Locator {
   return scope.locator(".metric").filter({ hasText: label }).locator("strong");
+}
+
+async function applyReducingFilter(page: Page, indexTexts: string[], totalRows: number): Promise<string> {
+  const searchInput = page.getByLabel("Search tables");
+  const candidates = [
+    ...new Set(
+      indexTexts
+        .flatMap((text) => text.trim().split(""))
+        .filter((character) => /\d/.test(character)),
+    ),
+    ...indexTexts.map((text) => text.trim()),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    await searchInput.fill(candidate);
+    const counts = await tableStatusCounts(page);
+    if (counts.totalRows === totalRows && counts.visibleRows > 1 && counts.visibleRows < totalRows) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Expected to find a validation table filter that reduces visible rows.");
+}
+
+async function tableStatusCounts(page: Page): Promise<{ visibleRows: number; totalRows: number }> {
+  const text = await page.locator(".table-status").textContent();
+  const match = text?.match(/:\s*(\d+)\s+of\s+(\d+)\s+rows/);
+  if (!match) {
+    throw new Error(`Unexpected table status: ${text ?? "<empty>"}`);
+  }
+  return {
+    visibleRows: Number(match[1]),
+    totalRows: Number(match[2]),
+  };
+}
+
+async function firstValidationTableCell(validationTable: Locator): Promise<string> {
+  return (await validationTable.locator("tbody tr").first().locator("td").first().textContent())?.trim() ?? "";
 }
