@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseVtaText } from "../parser";
+import { displayGpsPointsWithSources } from "../analysis";
 import { applyCalibration, estimateCalibrationOffsets } from "../calibration";
 import { applyAccelerationFilter } from "../filtering";
-import { exportSegmentVta, validationCsv } from "../export";
+import { exportSegmentVta, exportVisibleSegmentVta, validationCsv } from "../export";
 import { summarizeVta } from "../statistics";
 
 describe("parseVtaText", () => {
@@ -77,6 +78,29 @@ describe("statistics, calibration, filtering, export", () => {
     expect(summary.distanceKm).toBeGreaterThan(0.2);
     expect(summary.maxSpeedKmh).toBe(38);
     expect(exportSegmentVta(trace, { startIndex: 0, endIndex: 1 })).toContain("SegmentPointIndexes: 0-1");
+  });
+
+  it("exports visible segment GPS rows without reincluding hidden sources", () => {
+    const trace = parseVtaText(
+      "visible-segment.Vta",
+      [
+        "%% VTALogger Kotlin Version: 0.0.3",
+        "$17062026,152258,-33.875000000,151.224998333,12,26,0,6",
+        "#1,0.000,0,0,0,0,0.1,0.2,9.7",
+        "@17062026,152259,-33.876000000,151.225998333,13,31,0,6,5.0,gps,1,ImuHeading,0.9,preset,0",
+        "#2,1.000,0,0,0,0,0.2,0.3,9.8",
+        "$17062026,152300,-33.877000000,151.226998333,14,38,0,6",
+      ].join("\n"),
+    );
+
+    const rawOnlyPoints = displayGpsPointsWithSources(trace, { rawGps: true, enhancedGps: false });
+    const exported = exportVisibleSegmentVta(trace, rawOnlyPoints, { startIndex: 0, endIndex: 1 });
+
+    expect(exported).toContain("$17062026,152258");
+    expect(exported).toContain("$17062026,152300");
+    expect(exported).toContain("#1,0.000");
+    expect(exported).toContain("#2,1.000");
+    expect(exported).not.toContain("@17062026,152259");
   });
 
   it("estimates and applies calibration offsets", () => {

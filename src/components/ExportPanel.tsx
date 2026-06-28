@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import type { GpsPoint, SegmentSelection, SensorPoint, SummaryStats, VtaFile } from "../domain/types";
+import type { GpsPoint, SensorPoint, SummaryStats, VtaFile } from "../domain/types";
 import { displayGpsPoints, routeDistanceKm } from "../domain/statistics";
-import { downloadText, genericCsv, sensorCsv, summaryJson } from "../domain/export";
+import { downloadText, exportVisibleSegmentVta, genericCsv, sensorCsv, summaryJson } from "../domain/export";
 
 interface ExportPanelProps {
   file: VtaFile;
@@ -120,31 +120,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function exportVisibleSegmentVta(file: VtaFile, points: GpsPoint[], selection: SegmentSelection): string {
-  if (!points.length) {
-    return [...file.headers, "%% End"].join("\n");
-  }
-  const start = Math.max(0, Math.min(selection.startIndex, selection.endIndex));
-  const end = Math.min(points.length - 1, Math.max(selection.startIndex, selection.endIndex));
-  const firstLine = points[start]?.lineNumber ?? 1;
-  const lastLine = points[end]?.lineNumber ?? file.rawLines.length;
-  const minLine = Math.min(firstLine, lastLine);
-  const maxLine = Math.max(firstLine, lastLine);
-  const body = file.rawLines
-    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
-    .filter(({ line, lineNumber }) => line && lineNumber >= minLine && lineNumber <= maxLine)
-    .filter(({ line }) => line.startsWith("$") || line.startsWith("@") || line.startsWith("#"))
-    .map(({ line }) => line);
-  return [
-    "%% OpenVTA Analyzer Segment Export",
-    `%% Source: ${file.sourceName}`,
-    `%% SegmentPointIndexes: ${start}-${end}`,
-    ...file.headers.filter((line) => !line.startsWith("%% End")),
-    ...body,
-    "%% End",
-  ].join("\n");
 }
 
 function gpsCsv(points: GpsPoint[]): string {

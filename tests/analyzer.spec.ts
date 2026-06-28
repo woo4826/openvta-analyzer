@@ -61,3 +61,41 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("summary.json");
 });
+
+test("keeps unavailable source toggles unpressed", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator(".dropzone input[type=file]").setInputFiles({
+    name: "raw-only.Vta",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      [
+        "%% VTALogger Kotlin Version: 0.0.3",
+        "$17062026,152258,-33.875000000,151.224998333,12,26,0,6",
+        "$17062026,152259,-33.876000000,151.225998333,13,31,0,6",
+      ].join("\n"),
+    ),
+  });
+
+  const analysisMain = page.locator(".analysis-main");
+  const workspace = page.locator(".analysis-inspector");
+  await expect(analysisMain.getByRole("heading", { name: "raw-only.Vta" })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Raw GPS" })).toHaveAttribute("aria-pressed", "true");
+  await expect(workspace.getByRole("button", { name: "Enhanced" })).toHaveAttribute("aria-pressed", "false");
+
+  await page.locator(".topbar input[type=file]").setInputFiles({
+    name: "enhanced-only.Vta",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      [
+        "%% VTALogger Kotlin Version: 0.0.3",
+        "@17062026,152258,-33.875000000,151.224998333,12,26,0,6,5.0,gps,1,ImuHeading,0.9,preset,0",
+        "@17062026,152259,-33.876000000,151.225998333,13,31,0,6,5.0,gps,2,ImuHeading,0.9,preset,1",
+      ].join("\n"),
+    ),
+  });
+
+  await expect(analysisMain.getByRole("heading", { name: "enhanced-only.Vta" })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Raw GPS" })).toHaveAttribute("aria-pressed", "false");
+  await expect(workspace.getByRole("button", { name: "Enhanced" })).toHaveAttribute("aria-pressed", "true");
+});

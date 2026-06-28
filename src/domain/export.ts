@@ -1,10 +1,13 @@
-import type { SegmentSelection, SensorPoint, SummaryStats, ValidationRow, VtaFile } from "./types";
+import type { GpsPoint, SegmentSelection, SensorPoint, SummaryStats, ValidationRow, VtaFile } from "./types";
 import { displayGpsPoints } from "./statistics";
 
 export type LineEnding = "lf" | "crlf";
 
 export function exportSegmentVta(file: VtaFile, selection: SegmentSelection): string {
-  const points = displayGpsPoints(file);
+  return exportVisibleSegmentVta(file, displayGpsPoints(file), selection);
+}
+
+export function exportVisibleSegmentVta(file: VtaFile, points: GpsPoint[], selection: SegmentSelection): string {
   if (!points.length) {
     return [...file.headers, "%% End"].join("\n");
   }
@@ -14,10 +17,16 @@ export function exportSegmentVta(file: VtaFile, selection: SegmentSelection): st
   const lastLine = points[end]?.lineNumber ?? file.rawLines.length;
   const minLine = Math.min(firstLine, lastLine);
   const maxLine = Math.max(firstLine, lastLine);
+  const selectedPointLineNumbers = new Set(points.slice(start, end + 1).map((point) => point.lineNumber));
+  const sensorLineNumbers = new Set(
+    file.sensorPoints
+      .filter((sensor) => sensor.lineNumber >= minLine && sensor.lineNumber <= maxLine)
+      .map((sensor) => sensor.lineNumber),
+  );
   const body = file.rawLines
     .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
     .filter(({ line, lineNumber }) => line && lineNumber >= minLine && lineNumber <= maxLine)
-    .filter(({ line }) => line.startsWith("$") || line.startsWith("@") || line.startsWith("#"))
+    .filter(({ lineNumber }) => selectedPointLineNumbers.has(lineNumber) || sensorLineNumbers.has(lineNumber))
     .map(({ line }) => line);
   return [
     "%% OpenVTA Analyzer Segment Export",
