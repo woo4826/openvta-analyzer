@@ -1,9 +1,10 @@
 import { createContext, useContext } from "react";
-import type { LanguageCode, TranslationKey } from "./locales";
+import type { LanguageCode, LanguageMetadata, TranslationKey } from "./locales";
 
 export interface I18nContextValue {
   language: LanguageCode;
   setLanguage: (language: LanguageCode) => void;
+  languages: Record<LanguageCode, LanguageMetadata>;
   t: (key: TranslationKey, values?: Record<string, string | number>) => string;
 }
 

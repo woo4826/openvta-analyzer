@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { I18nContext } from "./useI18n";
-import { detectInitialLanguage, interpolate, LANGUAGE_STORAGE_KEY, translations, type LanguageCode, type TranslationKey } from "./locales";
+import {
+  detectInitialLanguage,
+  interpolate,
+  languages,
+  LANGUAGE_STORAGE_KEY,
+  translations,
+  type LanguageCode,
+  type TranslationKey,
+} from "./locales";
 
 interface I18nProviderProps {
   children: ReactNode;
@@ -25,6 +33,7 @@ export function I18nProvider({ children }: I18nProviderProps) {
     () => ({
       language,
       setLanguage,
+      languages,
       t: (key: TranslationKey, values?: Record<string, string | number>) => interpolate(translations[language][key], values),
     }),
     [language],

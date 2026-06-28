@@ -276,7 +276,9 @@ export function detectInitialLanguage(sources: LanguageDetectionSources = {}): L
 
   if (storedLanguage) {
     const normalizedStoredLanguage = normalizeLanguage(storedLanguage);
-    return normalizedStoredLanguage ?? "en";
+    if (normalizedStoredLanguage) {
+      return normalizedStoredLanguage;
+    }
   }
 
   const browserLanguages = getLanguageCandidates(sources);

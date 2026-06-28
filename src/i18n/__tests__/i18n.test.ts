@@ -34,17 +34,19 @@ describe("i18n language helpers", () => {
     ).toBe("ja");
   });
 
-  it("falls back to English for invalid storage or unsupported browser language", () => {
+  it("ignores invalid storage before checking browser language", () => {
     expect(
       detectInitialLanguage({
         storage: storageWith("pt-BR"),
         navigatorLanguages: ["ko-KR"],
       }),
-    ).toBe("en");
+    ).toBe("ko");
+  });
 
+  it("falls back to English for invalid storage and unsupported browser language", () => {
     expect(
       detectInitialLanguage({
-        storage: storageWith(null),
+        storage: storageWith("pt-BR"),
         navigatorLanguages: ["pt-BR"],
       }),
     ).toBe("en");
@@ -85,6 +87,7 @@ describe("I18nProvider", () => {
     render(createElement(I18nProvider, null, createElement(I18nConsumer)));
 
     expect(screen.getByTestId("language")).toHaveTextContent("ko");
+    expect(screen.getByTestId("language-count")).toHaveTextContent("7");
     expect(screen.getByTestId("translated")).toHaveTextContent("현재 언어: 한국어");
 
     await waitFor(() => {
@@ -105,12 +108,13 @@ describe("I18nProvider", () => {
 });
 
 function I18nConsumer() {
-  const { language, setLanguage, t } = useI18n();
+  const { language, languages: languageOptions, setLanguage, t } = useI18n();
 
   return createElement(
     "div",
     null,
     createElement("div", { "data-testid": "language" }, language),
+    createElement("div", { "data-testid": "language-count" }, Object.keys(languageOptions).length),
     createElement("div", { "data-testid": "translated" }, t("language.current", { language: languages[language].nativeName })),
     createElement("button", { type: "button", onClick: () => setLanguage("ja") }, "Use Japanese"),
   );
