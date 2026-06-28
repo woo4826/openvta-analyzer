@@ -19,6 +19,7 @@ import type {
   TransformMode,
   VtaFile,
 } from "../domain/types";
+import { localizeFilterWarning } from "../i18n/filterWarnings";
 import { useI18n } from "../i18n/useI18n";
 import { Charts, type AccelerationSensorSet } from "./Charts";
 import { SegmentedControl } from "./ui";
@@ -421,16 +422,6 @@ function channelsFromValue(value: string): FilterSettings["channels"] {
   if (value === "xy") return { x: true, y: true, z: false };
   if (value === "z") return { x: false, y: false, z: true };
   return { x: true, y: true, z: true };
-}
-
-function localizeFilterWarning(message: string, t: ReturnType<typeof useI18n>["t"]): string {
-  if (message === "Filter skipped because the cutoff frequency is outside the valid range.") {
-    return t("calibration.filterWarning.cutoffOutOfRange");
-  }
-  if (message === "Sensor timestamps are irregular; an effective sample rate was estimated for filtering.") {
-    return t("calibration.filterWarning.irregularTimestamps");
-  }
-  return message;
 }
 
 function parseWindow(start: string, end: string): CalibrationWindow {

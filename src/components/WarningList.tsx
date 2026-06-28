@@ -1,4 +1,5 @@
 import type { ParseWarning } from "../domain/types";
+import { localizeFilterWarning } from "../i18n/filterWarnings";
 import { useI18n } from "../i18n/useI18n";
 
 interface WarningListProps {
@@ -8,13 +9,14 @@ interface WarningListProps {
 
 export function WarningList({ warnings, extraWarning }: WarningListProps) {
   const { t } = useI18n();
+  const localizedExtraWarning = extraWarning ? localizeFilterWarning(extraWarning, t) : undefined;
 
-  if (!warnings.length && !extraWarning) {
+  if (!warnings.length && !localizedExtraWarning) {
     return <div className="empty-state">{t("warnings.noWarnings")}</div>;
   }
   return (
     <div className="warning-list">
-      {extraWarning ? <div className="warning-item">{extraWarning}</div> : null}
+      {localizedExtraWarning ? <div className="warning-item">{localizedExtraWarning}</div> : null}
       {warnings.slice(0, 12).map((warning, index) => (
         <div className="warning-item" key={`${warning.code}-${warning.lineNumber ?? index}`}>
           {warning.lineNumber ? `${t("warnings.line", { line: warning.lineNumber })}: ` : null}

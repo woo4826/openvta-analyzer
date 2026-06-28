@@ -216,6 +216,11 @@ test("persists Korean language and keeps the sample workflow usable", async ({ p
   await expect(analysisMain.getByRole("heading", { name: "보정 및 필터링" })).toBeVisible();
   await expect(analysisMain.getByRole("button", { name: "현재 파일에서 추정" })).toBeVisible();
   await expect(analysisMain.getByLabel("저역 통과 필터")).toBeVisible();
+  await analysisMain.getByLabel("저역 통과 필터").selectOption("on");
+  await analysisMain.getByLabel("컷오프 Hz").fill("9999");
+
+  await analysisMain.getByRole("button", { name: "개요" }).click();
+  await expect(analysisMain.getByText("컷오프 주파수가 유효 범위를 벗어나 필터를 건너뛰었습니다.")).toBeVisible();
 
   await analysisMain.getByRole("button", { name: "내보내기", exact: true }).click();
   await expect(analysisMain.getByRole("heading", { name: "내보내기" })).toBeVisible();
