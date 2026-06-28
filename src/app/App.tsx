@@ -1,18 +1,29 @@
 import { useMemo, useState } from "react";
 import { Download, FileUp, Gauge, Settings, TestTube2 } from "lucide-react";
 import { sampleCalibrationName, sampleCalibrationText, sampleVtaName, sampleVtaText } from "./sampleData";
+import { displayGpsPointsWithSources } from "../domain/analysis";
 import { applyCalibration, estimateCalibrationOffsets } from "../domain/calibration";
 import { defaultFilterSettings, applyAccelerationFilter } from "../domain/filtering";
 import { parseVtaText } from "../domain/parser";
 import { summarizeVta } from "../domain/statistics";
 import { loadTextFilesFromInput } from "../domain/zip";
-import type { CalibrationOffsets, FilterSettings, VtaFile } from "../domain/types";
+import type {
+  ActiveSegment,
+  CalibrationOffsets,
+  FilterSettings,
+  SourceVisibility,
+  TransformMode,
+  VtaFile,
+  VtaWorkspaceFile,
+} from "../domain/types";
 import { FileDrop } from "../components/FileDrop";
+import { FileTray } from "../components/FileTray";
 import { Overview } from "../components/Overview";
 import { Charts } from "../components/Charts";
 import { Tables } from "../components/Tables";
 import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ExportPanel } from "../components/ExportPanel";
+import { WorkspaceStatus } from "../components/WorkspaceStatus";
 
 type TabKey = "overview" | "charts" | "tables" | "calibration" | "export";
 
@@ -25,15 +36,22 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 ];
 
 export function App() {
-  const [files, setFiles] = useState<VtaFile[]>([]);
+  const [files, setFiles] = useState<VtaWorkspaceFile[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedPointIndex, setSelectedPointIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [calibration, setCalibration] = useState<CalibrationOffsets | undefined>();
   const [filterSettings, setFilterSettings] = useState<FilterSettings>(defaultFilterSettings);
+  const [sourceVisibility, setSourceVisibility] = useState<SourceVisibility>({ rawGps: true, enhancedGps: true });
+  const [activeSegment, setActiveSegment] = useState<ActiveSegment | undefined>();
+  const [transformMode, setTransformMode] = useState<TransformMode>("raw");
   const [loadError, setLoadError] = useState<string | undefined>();
 
   const activeFile = files[activeIndex];
+  const visibleGpsPoints = useMemo(
+    () => (activeFile ? displayGpsPointsWithSources(activeFile, sourceVisibility) : []),
+    [activeFile, sourceVisibility],
+  );
   const calibratedSensors = useMemo(
     () => applyCalibration(activeFile?.sensorPoints ?? [], calibration),
     [activeFile, calibration],
@@ -53,25 +71,31 @@ export function App() {
         setLoadError("No .Vta files were found in the selected input.");
         return;
       }
-      const parsed = loaded.map((file) => parseVtaText(file.name, file.text));
+      const parsed = loaded.map((file, index) => toWorkspaceFile(parseVtaText(file.name, file.text), index));
       setFiles(parsed);
       setActiveIndex(0);
       setSelectedPointIndex(0);
       setActiveTab("overview");
       setCalibration(undefined);
       setFilterSettings(defaultFilterSettings);
+      setSourceVisibility({ rawGps: true, enhancedGps: true });
+      setActiveSegment(undefined);
+      setTransformMode("raw");
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Unable to load selected file.");
     }
   }
 
   function loadSample() {
-    setFiles([parseVtaText(sampleVtaName, sampleVtaText)]);
+    setFiles([toWorkspaceFile(parseVtaText(sampleVtaName, sampleVtaText), 0)]);
     setActiveIndex(0);
     setSelectedPointIndex(0);
     setActiveTab("overview");
     setCalibration(undefined);
     setFilterSettings(defaultFilterSettings);
+    setSourceVisibility({ rawGps: true, enhancedGps: true });
+    setActiveSegment(undefined);
+    setTransformMode("raw");
     setLoadError(undefined);
   }
 
@@ -84,6 +108,39 @@ export function App() {
   async function loadCalibrationFile(file: File) {
     const parsed = parseVtaText(file.name, await file.text());
     setCalibration(estimateCalibrationOffsets(parsed.sensorPoints, {}, parsed.sourceName));
+  }
+
+  function selectFile(fileId: string) {
+    const nextIndex = files.findIndex((file) => file.id === fileId);
+    if (nextIndex === -1) {
+      return;
+    }
+    setActiveIndex(nextIndex);
+    setSelectedPointIndex(0);
+    setActiveSegment(undefined);
+  }
+
+  function removeFile(fileId: string) {
+    const removedIndex = files.findIndex((file) => file.id === fileId);
+    if (removedIndex === -1) {
+      return;
+    }
+    const nextFiles = files.filter((file) => file.id !== fileId);
+    setFiles(nextFiles);
+    setSelectedPointIndex(0);
+    setActiveSegment(undefined);
+    if (!nextFiles.length) {
+      setActiveIndex(0);
+      setActiveTab("overview");
+      return;
+    }
+    if (removedIndex === activeIndex) {
+      setActiveIndex(Math.min(removedIndex, nextFiles.length - 1));
+      return;
+    }
+    if (removedIndex < activeIndex) {
+      setActiveIndex(activeIndex - 1);
+    }
   }
 
   return (
@@ -101,10 +158,11 @@ export function App() {
               onChange={(event) => {
                 setActiveIndex(Number(event.target.value));
                 setSelectedPointIndex(0);
+                setActiveSegment(undefined);
               }}
             >
               {files.map((file, index) => (
-                <option value={index} key={file.sourceName}>
+                <option value={index} key={file.id}>
                   {file.sourceName}
                 </option>
               ))}
@@ -143,60 +201,83 @@ export function App() {
         {!activeFile ? (
           <FileDrop onFiles={(incoming) => void loadFiles(incoming)} loadError={loadError} onSample={loadSample} />
         ) : (
-          <>
-            <nav className="tabs" aria-label="Analyzer sections">
-              {tabs.map((tab) => (
-                <button
-                  type="button"
-                  key={tab.key}
-                  className={tab.key === activeTab ? "tab active" : "tab"}
-                  onClick={() => setActiveTab(tab.key)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-
-            {activeTab === "overview" && stats ? (
-              <Overview
-                file={activeFile}
-                stats={stats}
-                selectedPointIndex={selectedPointIndex}
-                onSelectedPointIndex={setSelectedPointIndex}
-                filterWarning={filterResult.warning}
+          <div className="workspace-grid">
+            <aside className="file-rail">
+              <FileTray
+                files={files}
+                activeFileId={activeFile.id}
+                onSelectFile={selectFile}
+                onRemoveFile={removeFile}
               />
-            ) : null}
+            </aside>
 
-            {activeTab === "charts" ? (
-              <Charts
-                file={activeFile}
-                sensors={transformedSensors}
-                selectedPointIndex={selectedPointIndex}
-                onSelectedPointIndex={setSelectedPointIndex}
+            <section className="analysis-main">
+              <nav className="tabs" aria-label="Analyzer sections">
+                {tabs.map((tab) => (
+                  <button
+                    type="button"
+                    key={tab.key}
+                    className={tab.key === activeTab ? "tab active" : "tab"}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+
+              {activeTab === "overview" && stats ? (
+                <Overview
+                  file={activeFile}
+                  stats={stats}
+                  selectedPointIndex={selectedPointIndex}
+                  onSelectedPointIndex={setSelectedPointIndex}
+                  visiblePoints={visibleGpsPoints}
+                  filterWarning={filterResult.warning}
+                />
+              ) : null}
+
+              {activeTab === "charts" ? (
+                <Charts
+                  file={activeFile}
+                  sensors={transformedSensors}
+                  selectedPointIndex={selectedPointIndex}
+                  onSelectedPointIndex={setSelectedPointIndex}
+                />
+              ) : null}
+
+              {activeTab === "tables" ? <Tables file={activeFile} sensors={transformedSensors} /> : null}
+
+              {activeTab === "calibration" ? (
+                <CalibrationPanel
+                  file={activeFile}
+                  sensors={activeFile.sensorPoints}
+                  transformedSensors={transformedSensors}
+                  calibration={calibration}
+                  onCalibration={setCalibration}
+                  onCalibrationFile={(file) => void loadCalibrationFile(file)}
+                  filterSettings={filterSettings}
+                  onFilterSettings={setFilterSettings}
+                  filterWarning={filterResult.warning}
+                  sampleRateHz={filterResult.sampleRateHz}
+                />
+              ) : null}
+
+              {activeTab === "export" && stats ? (
+                <ExportPanel file={activeFile} sensors={transformedSensors} stats={stats} />
+              ) : null}
+            </section>
+
+            <aside className="analysis-inspector">
+              <WorkspaceStatus
+                sourceVisibility={sourceVisibility}
+                onSourceVisibility={setSourceVisibility}
+                transformMode={transformMode}
+                onTransformMode={setTransformMode}
+                activeSegment={activeSegment}
+                onActiveSegment={setActiveSegment}
               />
-            ) : null}
-
-            {activeTab === "tables" ? <Tables file={activeFile} sensors={transformedSensors} /> : null}
-
-            {activeTab === "calibration" ? (
-              <CalibrationPanel
-                file={activeFile}
-                sensors={activeFile.sensorPoints}
-                transformedSensors={transformedSensors}
-                calibration={calibration}
-                onCalibration={setCalibration}
-                onCalibrationFile={(file) => void loadCalibrationFile(file)}
-                filterSettings={filterSettings}
-                onFilterSettings={setFilterSettings}
-                filterWarning={filterResult.warning}
-                sampleRateHz={filterResult.sampleRateHz}
-              />
-            ) : null}
-
-            {activeTab === "export" && stats ? (
-              <ExportPanel file={activeFile} sensors={transformedSensors} stats={stats} />
-            ) : null}
-          </>
+            </aside>
+          </div>
         )}
 
         <footer className="privacy-note">
@@ -206,4 +287,13 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function toWorkspaceFile(file: VtaFile, index: number): VtaWorkspaceFile {
+  const loadedAt = Date.now();
+  return {
+    ...file,
+    id: `${file.sourceName}-${loadedAt}-${index}`,
+    loadedAt,
+  };
 }

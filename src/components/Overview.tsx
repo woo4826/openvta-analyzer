@@ -1,4 +1,4 @@
-import type { SummaryStats, VtaFile } from "../domain/types";
+import type { GpsPoint, SummaryStats, VtaFile } from "../domain/types";
 import { displayGpsPoints } from "../domain/statistics";
 import { RouteMap } from "./RouteMap";
 import { WarningList } from "./WarningList";
@@ -8,11 +8,19 @@ interface OverviewProps {
   stats: SummaryStats;
   selectedPointIndex: number;
   onSelectedPointIndex: (index: number) => void;
+  visiblePoints?: GpsPoint[];
   filterWarning?: string;
 }
 
-export function Overview({ file, stats, selectedPointIndex, onSelectedPointIndex, filterWarning }: OverviewProps) {
-  const points = displayGpsPoints(file);
+export function Overview({
+  file,
+  stats,
+  selectedPointIndex,
+  onSelectedPointIndex,
+  visiblePoints,
+  filterWarning,
+}: OverviewProps) {
+  const points = visiblePoints ?? displayGpsPoints(file);
   const selected = points[selectedPointIndex];
   return (
     <section className="overview-grid">
@@ -100,4 +108,3 @@ function formatDuration(seconds: number): string {
   const remaining = Math.round(seconds % 60);
   return `${minutes}m ${remaining}s`;
 }
-

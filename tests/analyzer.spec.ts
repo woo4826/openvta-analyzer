@@ -5,8 +5,15 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Open a VTA or ZIP file" })).toBeVisible();
 
   await page.getByRole("button", { name: "Load built-in sample" }).click();
-  await expect(page.getByText("OpenVTA_sample.Vta")).toBeVisible();
-  await expect(page.getByText("modern-openvta")).toBeVisible();
+  const analysisMain = page.locator(".analysis-main");
+  await expect(analysisMain.getByRole("heading", { name: "OpenVTA_sample.Vta" })).toBeVisible();
+  await expect(analysisMain.getByText("modern-openvta")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
+  await expect(page.getByText("GPS 37")).toBeVisible();
+  await expect(page.getByText("Enhanced 35")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Raw GPS" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Enhanced" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Compare" })).toBeVisible();
   await expect(page.getByText("Distance")).toBeVisible();
   await expect(page.getByLabel("Speed-colored route plot")).toBeVisible();
 
@@ -36,4 +43,3 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("summary.json");
 });
-
