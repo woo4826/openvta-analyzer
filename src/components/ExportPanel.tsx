@@ -22,6 +22,7 @@ import {
   withLineEndings,
   type LineEnding,
 } from "../domain/export";
+import { useI18n } from "../i18n/useI18n";
 
 interface ExportPanelProps {
   file: VtaFile;
@@ -50,6 +51,7 @@ export function ExportPanel({
   calibration,
   filterSettings,
 }: ExportPanelProps) {
+  const { t } = useI18n();
   const points = useMemo(() => visiblePoints ?? displayGpsPoints(file), [file, visiblePoints]);
   const normalizedSegment = useMemo(() => {
     if (!points.length) {
@@ -92,12 +94,12 @@ export function ExportPanel({
     <section className="content-band">
       <div className="panel">
         <div className="panel-header">
-          <h2>Export</h2>
+          <h2>{t("export.title")}</h2>
         </div>
         <div className="panel-body content-band">
           <div className="form-grid">
             <label className="field">
-              <span>Segment start point</span>
+              <span>{t("export.segmentStartPoint")}</span>
               <input
                 type="number"
                 min="0"
@@ -107,7 +109,7 @@ export function ExportPanel({
               />
             </label>
             <label className="field">
-              <span>Segment end point</span>
+              <span>{t("export.segmentEndPoint")}</span>
               <input
                 type="number"
                 min="0"
@@ -117,14 +119,14 @@ export function ExportPanel({
               />
             </label>
             <label className="field">
-              <span>Line endings</span>
+              <span>{t("export.lineEndings")}</span>
               <select value={lineEnding} onChange={(event) => onLineEnding(event.target.value as LineEnding)}>
                 <option value="lf">LF</option>
                 <option value="crlf">CRLF</option>
               </select>
             </label>
             <div className="metric">
-              <span>Selected points</span>
+              <span>{t("export.selectedPoints")}</span>
               <strong>{count}</strong>
             </div>
           </div>
@@ -142,7 +144,7 @@ export function ExportPanel({
               }
               disabled={!points.length}
             >
-              Export original segment .Vta
+              {t("export.originalSegmentVta")}
             </button>
             <button
               type="button"
@@ -162,30 +164,30 @@ export function ExportPanel({
                 )
               }
               disabled={transformedExportDisabled}
-              title={transformMode === "compare" ? "Choose Raw, Calibrated, or Filtered before exporting transformed VTA." : undefined}
+              title={transformMode === "compare" ? t("export.compareTransformExportTitle") : undefined}
             >
-              Export transformed segment .Vta
+              {t("export.transformedSegmentVta")}
             </button>
             <button
               type="button"
               className="button"
               onClick={() => downloadText("gps-points.csv", gpsPointsCsv(selectedPoints, lineEnding), "text/csv")}
             >
-              Export GPS CSV
+              {t("export.gpsCsv")}
             </button>
             <button
               type="button"
               className="button"
               onClick={() => downloadText("sensor-points.csv", sensorCsv(selectedSensors, lineEnding), "text/csv")}
             >
-              Export Sensor CSV
+              {t("export.sensorCsv")}
             </button>
             <button
               type="button"
               className="button"
               onClick={() => downloadText("validation.csv", validationCsv(validationRows, lineEnding), "text/csv")}
             >
-              Export validation CSV
+              {t("export.validationCsv")}
             </button>
             <button
               type="button"
@@ -194,7 +196,7 @@ export function ExportPanel({
                 downloadText("summary.json", withLineEndings(summaryJson(file, exportStats), lineEnding), "application/json")
               }
             >
-              Export Summary JSON
+              {t("export.summaryJson")}
             </button>
           </div>
         </div>
@@ -202,14 +204,14 @@ export function ExportPanel({
 
       <div className="panel">
         <div className="panel-header">
-          <h3>Segment Preview</h3>
+          <h3>{t("export.segmentPreview")}</h3>
         </div>
         <div className="panel-body metric-grid">
-          <Metric label="Source" value={file.sourceName} />
-          <Metric label="Format" value={file.detectedFormat} />
-          <Metric label="Start" value={points[start] ? `${points[start].date} ${points[start].time}` : "n/a"} />
-          <Metric label="End" value={points[end] ? `${points[end].date} ${points[end].time}` : "n/a"} />
-          <Metric label="Transform" value={transformMode} />
+          <Metric label={t("export.source")} value={file.sourceName} />
+          <Metric label={t("export.format")} value={file.detectedFormat} />
+          <Metric label={t("export.start")} value={points[start] ? `${points[start].date} ${points[start].time}` : t("export.unavailable")} />
+          <Metric label={t("export.end")} value={points[end] ? `${points[end].date} ${points[end].time}` : t("export.unavailable")} />
+          <Metric label={t("export.transform")} value={formatTransformMode(transformMode, t)} />
         </div>
       </div>
     </section>
@@ -223,6 +225,16 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function formatTransformMode(mode: TransformMode, t: ReturnType<typeof useI18n>["t"]): string {
+  const labels = {
+    raw: "workspace.transform.raw",
+    calibrated: "workspace.transform.calibrated",
+    filtered: "workspace.transform.filtered",
+    compare: "workspace.transform.compare",
+  } as const satisfies Record<TransformMode, Parameters<typeof t>[0]>;
+  return t(labels[mode]);
 }
 
 function clamp(value: number, min: number, max: number): number {

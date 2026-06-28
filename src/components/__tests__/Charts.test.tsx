@@ -1,8 +1,11 @@
 import type { EChartsOption } from "echarts";
+import type { ReactElement } from "react";
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Charts, type AccelerationSensorSet } from "../Charts";
 import type { SensorPoint, VtaFile } from "../../domain/types";
+import { interpolate, languages, translations } from "../../i18n/locales";
+import { I18nContext } from "../../i18n/useI18n";
 
 interface CapturedChart {
   title: string;
@@ -24,7 +27,7 @@ describe("Charts acceleration options", () => {
   });
 
   it("labels acceleration series with the active transform meaning", () => {
-    render(
+    renderWithI18n(
       <Charts
         file={file()}
         sensors={[sensor({ elapsedSeconds: 1.5, accelX: 9.80665, accelY: 0, accelZ: 19.6133, accelUnit: "mps2" })]}
@@ -47,7 +50,7 @@ describe("Charts acceleration options", () => {
       { label: "Filtered", sensors: [sensor({ accelX: 7, accelY: 8, accelZ: 9 })] },
     ];
 
-    render(
+    renderWithI18n(
       <Charts
         file={file()}
         sensors={accelerationSensorSets[2].sensors}
@@ -73,6 +76,21 @@ describe("Charts acceleration options", () => {
     expect(seriesNames(chartOption("Velocity + Acceleration"))).toEqual(["Velocity", ...expectedAccelerationNames]);
   });
 });
+
+function renderWithI18n(children: ReactElement) {
+  return render(
+    <I18nContext.Provider
+      value={{
+        language: "en",
+        setLanguage: () => undefined,
+        languages,
+        t: (key, values) => interpolate(translations.en[key], values),
+      }}
+    >
+      {children}
+    </I18nContext.Provider>,
+  );
+}
 
 function chartOption(title: string): EChartsOption {
   const chart = capturedCharts.find((item) => item.title === title);

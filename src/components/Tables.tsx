@@ -13,6 +13,8 @@ import {
 } from "../domain/export";
 import { displayGpsPoints } from "../domain/statistics";
 import type { ActiveSegment, GpsPoint, ParseWarning, SensorPoint, ValidationRow, VtaFile } from "../domain/types";
+import type { TranslationKey } from "../i18n/locales";
+import { useI18n } from "../i18n/useI18n";
 import { Panel, Tabs, ToolbarButton } from "./ui";
 
 type TableTab = "gps" | "enhanced" | "sensors" | "warnings" | "summary" | "validation";
@@ -35,6 +37,14 @@ interface TableColumn {
   id: string;
   label: string;
   numeric?: boolean;
+}
+
+interface ColumnTemplate<T> {
+  id: string;
+  labelKey: TranslationKey;
+  numeric?: boolean;
+  value: (item: T) => TableValue;
+  render?: (item: T) => ReactNode;
 }
 
 interface ColumnBuilder<T> extends TableColumn {
@@ -60,14 +70,6 @@ interface TableDefinition {
 }
 
 const tableOrder: TableTab[] = ["gps", "enhanced", "sensors", "warnings", "summary", "validation"];
-const tableLabels: Record<TableTab, string> = {
-  gps: "GPS",
-  enhanced: "Enhanced",
-  sensors: "Sensors",
-  warnings: "Warnings",
-  summary: "Summary",
-  validation: "Validation",
-};
 const defaultSorts: Record<TableTab, SortState> = {
   gps: { columnId: "index", direction: "asc" },
   enhanced: { columnId: "index", direction: "asc" },
@@ -77,147 +79,147 @@ const defaultSorts: Record<TableTab, SortState> = {
   validation: { columnId: "index", direction: "asc" },
 };
 
-const gpsColumns: Array<ColumnBuilder<GpsPoint>> = [
-  { id: "index", label: "Index", numeric: true, value: (point) => point.index },
-  { id: "source", label: "Source", value: (point) => point.source },
-  { id: "date", label: "Date", value: (point) => point.date },
-  { id: "time", label: "Time", value: (point) => point.time },
+const gpsColumnTemplates: Array<ColumnTemplate<GpsPoint>> = [
+  { id: "index", labelKey: "tables.column.index", numeric: true, value: (point) => point.index },
+  { id: "source", labelKey: "tables.column.source", value: (point) => point.source },
+  { id: "date", labelKey: "tables.column.date", value: (point) => point.date },
+  { id: "time", labelKey: "tables.column.time", value: (point) => point.time },
   {
     id: "latitude",
-    label: "Lat",
+    labelKey: "tables.column.latitude",
     numeric: true,
     value: (point) => point.latitude,
     render: (point) => point.latitude.toFixed(8),
   },
   {
     id: "longitude",
-    label: "Lon",
+    labelKey: "tables.column.longitude",
     numeric: true,
     value: (point) => point.longitude,
     render: (point) => point.longitude.toFixed(8),
   },
   {
     id: "speedKmh",
-    label: "Speed",
+    labelKey: "tables.column.speed",
     numeric: true,
     value: (point) => point.speedKmh,
     render: (point) => point.speedKmh.toFixed(1),
   },
   {
     id: "altitudeMeters",
-    label: "Altitude",
+    labelKey: "tables.column.altitude",
     numeric: true,
     value: (point) => point.altitudeMeters,
     render: (point) => point.altitudeMeters.toFixed(1),
   },
-  { id: "satelliteCount", label: "Sat", numeric: true, value: (point) => point.satelliteCount },
+  { id: "satelliteCount", labelKey: "tables.column.satellites", numeric: true, value: (point) => point.satelliteCount },
   {
     id: "accuracyMeters",
-    label: "Accuracy",
+    labelKey: "tables.column.accuracy",
     numeric: true,
     value: (point) => point.accuracyMeters ?? "",
     render: (point) => point.accuracyMeters?.toFixed(2) ?? "",
   },
 ];
 
-const sensorColumns: Array<ColumnBuilder<SensorPoint>> = [
-  { id: "index", label: "Index", numeric: true, value: (sensor) => sensor.index },
+const sensorColumnTemplates: Array<ColumnTemplate<SensorPoint>> = [
+  { id: "index", labelKey: "tables.column.index", numeric: true, value: (sensor) => sensor.index },
   {
     id: "elapsedSeconds",
-    label: "Elapsed",
+    labelKey: "tables.column.elapsed",
     numeric: true,
     value: (sensor) => sensor.elapsedSeconds,
     render: (sensor) => sensor.elapsedSeconds.toFixed(3),
   },
-  { id: "eventCode", label: "Event", numeric: true, value: (sensor) => sensor.eventCode },
-  { id: "accelUnit", label: "Unit", value: (sensor) => sensor.accelUnit },
+  { id: "eventCode", labelKey: "tables.column.event", numeric: true, value: (sensor) => sensor.eventCode },
+  { id: "accelUnit", labelKey: "tables.column.unit", value: (sensor) => sensor.accelUnit },
   {
     id: "accelX",
-    label: "GX",
+    labelKey: "tables.column.gx",
     numeric: true,
     value: (sensor) => sensor.accelX,
     render: (sensor) => sensor.accelX.toFixed(3),
   },
   {
     id: "accelY",
-    label: "GY",
+    labelKey: "tables.column.gy",
     numeric: true,
     value: (sensor) => sensor.accelY,
     render: (sensor) => sensor.accelY.toFixed(3),
   },
   {
     id: "accelZ",
-    label: "GZ",
+    labelKey: "tables.column.gz",
     numeric: true,
     value: (sensor) => sensor.accelZ,
     render: (sensor) => sensor.accelZ.toFixed(3),
   },
   {
     id: "orientationXDegrees",
-    label: "OX",
+    labelKey: "tables.column.ox",
     numeric: true,
     value: (sensor) => sensor.orientationXDegrees ?? "",
     render: (sensor) => sensor.orientationXDegrees?.toFixed(3) ?? "",
   },
   {
     id: "orientationYDegrees",
-    label: "OY",
+    labelKey: "tables.column.oy",
     numeric: true,
     value: (sensor) => sensor.orientationYDegrees ?? "",
     render: (sensor) => sensor.orientationYDegrees?.toFixed(3) ?? "",
   },
   {
     id: "orientationZDegrees",
-    label: "OZ",
+    labelKey: "tables.column.oz",
     numeric: true,
     value: (sensor) => sensor.orientationZDegrees ?? "",
     render: (sensor) => sensor.orientationZDegrees?.toFixed(3) ?? "",
   },
 ];
 
-const warningColumns: Array<ColumnBuilder<ParseWarning>> = [
+const warningColumnTemplates: Array<ColumnTemplate<ParseWarning>> = [
   {
     id: "lineNumber",
-    label: "Line",
+    labelKey: "tables.column.line",
     numeric: true,
     value: (warning) => warning.lineNumber ?? "",
   },
-  { id: "code", label: "Code", value: (warning) => warning.code },
-  { id: "message", label: "Message", value: (warning) => warning.message },
+  { id: "code", labelKey: "tables.column.code", value: (warning) => warning.code },
+  { id: "message", labelKey: "tables.column.message", value: (warning) => warning.message },
 ];
 
-const summaryColumns: Array<ColumnBuilder<SummaryCsvRow>> = [
-  { id: "metric", label: "Metric", value: (row) => row.metric },
-  { id: "value", label: "Value", value: (row) => row.value },
-  { id: "detail", label: "Detail", value: (row) => row.detail ?? "" },
+const summaryColumnTemplates: Array<ColumnTemplate<SummaryCsvRow>> = [
+  { id: "metric", labelKey: "tables.column.metric", value: (row) => row.metric },
+  { id: "value", labelKey: "tables.column.value", value: (row) => row.value },
+  { id: "detail", labelKey: "tables.column.detail", value: (row) => row.detail ?? "" },
 ];
 
-const validationColumns: Array<ColumnBuilder<ValidationRow>> = [
-  { id: "index", label: "Index", numeric: true, value: (row) => row.index },
+const validationColumnTemplates: Array<ColumnTemplate<ValidationRow>> = [
+  { id: "index", labelKey: "tables.column.index", numeric: true, value: (row) => row.index },
   {
     id: "elapsedSeconds",
-    label: "Elapsed seconds",
+    labelKey: "tables.column.elapsedSeconds",
     numeric: true,
     value: (row) => row.elapsedSeconds,
     render: (row) => row.elapsedSeconds.toFixed(3),
   },
   {
     id: "speedKmh",
-    label: "Speed km/h",
+    labelKey: "tables.column.speedKmh",
     numeric: true,
     value: (row) => row.speedKmh,
     render: (row) => row.speedKmh.toFixed(1),
   },
   {
     id: "deltaSpeedKmh",
-    label: "Delta speed km/h",
+    labelKey: "tables.column.deltaSpeedKmh",
     numeric: true,
     value: (row) => row.deltaSpeedKmh,
     render: (row) => row.deltaSpeedKmh.toFixed(1),
   },
   {
     id: "derivedAccelMps2",
-    label: "Derived accel",
+    labelKey: "tables.column.derivedAccel",
     numeric: true,
     value: (row) => row.derivedAccelMps2,
     render: (row) => row.derivedAccelMps2.toFixed(3),
@@ -225,9 +227,26 @@ const validationColumns: Array<ColumnBuilder<ValidationRow>> = [
 ];
 
 export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesProps) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<TableTab>("gps");
   const [query, setQuery] = useState("");
   const [sortStates, setSortStates] = useState<Partial<Record<TableTab, SortState>>>({});
+  const tableLabels = useMemo<Record<TableTab, string>>(
+    () => ({
+      gps: t("tables.tab.gps"),
+      enhanced: t("tables.tab.enhanced"),
+      sensors: t("tables.tab.sensors"),
+      warnings: t("tables.tab.warnings"),
+      summary: t("tables.tab.summary"),
+      validation: t("tables.tab.validation"),
+    }),
+    [t],
+  );
+  const gpsColumns = useMemo(() => localizeColumns(gpsColumnTemplates, t), [t]);
+  const sensorColumns = useMemo(() => localizeColumns(sensorColumnTemplates, t), [t]);
+  const warningColumns = useMemo(() => localizeColumns(warningColumnTemplates, t), [t]);
+  const summaryColumns = useMemo(() => localizeColumns(summaryColumnTemplates, t), [t]);
+  const validationColumns = useMemo(() => localizeColumns(validationColumnTemplates, t), [t]);
   const points = useMemo(() => visiblePoints ?? displayGpsPoints(file), [file, visiblePoints]);
   const gpsPointKeys = useMemo(() => buildPointLookup(file.gpsPoints), [file.gpsPoints]);
   const enhancedPointKeys = useMemo(() => buildPointLookup(file.enhancedPoints), [file.enhancedPoints]);
@@ -259,6 +278,7 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
         selectedPointCount: segmentPoints.length,
         pointSummary,
         hasSegment: Boolean(activeSegment),
+        t,
       }),
     [
       activeSegment,
@@ -267,6 +287,7 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
       points.length,
       segmentPoints.length,
       sensors,
+      t,
       visibleEnhancedPoints.length,
       visibleGpsPoints.length,
     ],
@@ -324,7 +345,25 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
         filename: "validation-visible.csv",
       },
     }),
-    [file.parseWarnings, sensors, summaryRows, validationRows, visibleEnhancedPoints, visibleGpsPoints],
+    [
+      file.parseWarnings,
+      gpsColumns,
+      sensors,
+      sensorColumns,
+      summaryColumns,
+      summaryRows,
+      tableLabels.enhanced,
+      tableLabels.gps,
+      tableLabels.sensors,
+      tableLabels.summary,
+      tableLabels.validation,
+      tableLabels.warnings,
+      validationColumns,
+      validationRows,
+      visibleEnhancedPoints,
+      visibleGpsPoints,
+      warningColumns,
+    ],
   );
   const activeDefinition = definitions[activeTab];
   const activeSort = sortStates[activeTab] ?? defaultSorts[activeTab];
@@ -348,36 +387,47 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
 
   return (
     <section className="content-band">
-      <Panel title="Tables" eyebrow={file.sourceName}>
+      <Panel title={t("tables.title")} eyebrow={file.sourceName}>
         <div className="content-band">
           <div className="table-toolbar">
             <label className="field table-search">
-              <span>Search rows</span>
+              <span>{t("tables.searchRows")}</span>
               <input
-                aria-label="Search tables"
-                placeholder="Search rows"
+                aria-label={t("tables.searchAria")}
+                placeholder={t("tables.searchRows")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
             <ToolbarButton icon={<Download size={16} aria-hidden />} onClick={exportVisibleRows}>
-              Export visible rows
+              {t("tables.exportVisibleRows")}
             </ToolbarButton>
           </div>
 
           <Tabs
-            ariaLabel="Table views"
+            ariaLabel={t("tables.tableViewsAria")}
             items={tableOrder.map((id) => ({ id, label: tableLabels[id] }))}
             value={activeTab}
             onChange={(value) => setActiveTab(value as TableTab)}
           />
 
           <div className="table-status" aria-live="polite">
-            {activeDefinition.label}: {visibleRows.length} of {activeDefinition.rows.length} rows
+            {t("tables.statusRows", {
+              label: activeDefinition.label,
+              visible: visibleRows.length,
+              total: activeDefinition.rows.length,
+            })}
           </div>
 
-          <div role="tabpanel" aria-label={`${activeDefinition.label} table`}>
-            <SortableTable definition={activeDefinition} rows={visibleRows} sort={activeSort} onSort={updateSort} />
+          <div role="tabpanel" aria-label={t("tables.tabPanelAria", { label: activeDefinition.label })}>
+            <SortableTable
+              definition={activeDefinition}
+              rows={visibleRows}
+              sort={activeSort}
+              onSort={updateSort}
+              noRowsLabel={t("tables.noRows")}
+              sortByLabel={(label) => t("tables.sortBy", { label })}
+            />
           </div>
         </div>
       </Panel>
@@ -390,11 +440,15 @@ function SortableTable({
   rows,
   sort,
   onSort,
+  noRowsLabel,
+  sortByLabel,
 }: {
   definition: TableDefinition;
   rows: TableRow[];
   sort: SortState;
   onSort: (columnId: string) => void;
+  noRowsLabel: string;
+  sortByLabel: (label: string) => string;
 }) {
   return (
     <div className="table-wrap">
@@ -413,7 +467,7 @@ function SortableTable({
                     type="button"
                     className="sort-header"
                     onClick={() => onSort(column.id)}
-                    title={`Sort by ${column.label}`}
+                    title={sortByLabel(column.label)}
                   >
                     <span>{column.label}</span>
                     <span className="sort-indicator" aria-hidden="true">
@@ -439,7 +493,7 @@ function SortableTable({
           ) : (
             <tr>
               <td colSpan={definition.columns.length} className="empty-table-cell">
-                No rows
+                {noRowsLabel}
               </td>
             </tr>
           )}
@@ -447,6 +501,10 @@ function SortableTable({
       </table>
     </div>
   );
+}
+
+function localizeColumns<T>(columns: Array<ColumnTemplate<T>>, t: ReturnType<typeof useI18n>["t"]): Array<ColumnBuilder<T>> {
+  return columns.map((column) => ({ ...column, label: t(column.labelKey) }));
 }
 
 function createRows<T>(
@@ -541,6 +599,7 @@ function buildSummaryRows({
   selectedPointCount,
   pointSummary,
   hasSegment,
+  t,
 }: {
   file: VtaFile;
   sensors: SensorPoint[];
@@ -550,20 +609,23 @@ function buildSummaryRows({
   selectedPointCount: number;
   pointSummary: ReturnType<typeof summarizePointRange>;
   hasSegment: boolean;
+  t: ReturnType<typeof useI18n>["t"];
 }): SummaryCsvRow[] {
-  const scope = hasSegment ? `Range ${pointSummary.startIndex}-${pointSummary.endIndex}` : "All visible points";
+  const scope = hasSegment
+    ? t("tables.summary.scope.range", { start: pointSummary.startIndex, end: pointSummary.endIndex })
+    : t("tables.summary.scope.allVisiblePoints");
   return [
-    { metric: "Source name", value: file.sourceName },
-    { metric: "Format", value: file.detectedFormat },
-    { metric: "Visible GPS count", value: visibleGpsCount },
-    { metric: "Visible enhanced count", value: visibleEnhancedCount },
-    { metric: "Sensor count", value: sensors.length },
-    { metric: "Warning count", value: file.parseWarnings.length },
-    { metric: "Visible point count", value: visiblePointCount },
-    { metric: "Selected point count", value: selectedPointCount, detail: scope },
-    { metric: "Distance", value: `${pointSummary.distanceKm.toFixed(3)} km`, detail: scope },
-    { metric: "Average speed", value: `${pointSummary.averageSpeedKmh.toFixed(1)} km/h`, detail: scope },
-    { metric: "Max speed", value: `${pointSummary.maxSpeedKmh.toFixed(1)} km/h`, detail: scope },
-    { metric: "Max derived accel", value: `${pointSummary.maxDerivedAccelMps2.toFixed(3)} m/s^2`, detail: scope },
+    { metric: t("tables.summary.sourceName"), value: file.sourceName },
+    { metric: t("tables.summary.format"), value: file.detectedFormat },
+    { metric: t("tables.summary.visibleGpsCount"), value: visibleGpsCount },
+    { metric: t("tables.summary.visibleEnhancedCount"), value: visibleEnhancedCount },
+    { metric: t("tables.summary.sensorCount"), value: sensors.length },
+    { metric: t("tables.summary.warningCount"), value: file.parseWarnings.length },
+    { metric: t("tables.summary.visiblePointCount"), value: visiblePointCount },
+    { metric: t("tables.summary.selectedPointCount"), value: selectedPointCount, detail: scope },
+    { metric: t("tables.summary.distance"), value: `${pointSummary.distanceKm.toFixed(3)} km`, detail: scope },
+    { metric: t("tables.summary.averageSpeed"), value: `${pointSummary.averageSpeedKmh.toFixed(1)} km/h`, detail: scope },
+    { metric: t("tables.summary.maxSpeed"), value: `${pointSummary.maxSpeedKmh.toFixed(1)} km/h`, detail: scope },
+    { metric: t("tables.summary.maxDerivedAccel"), value: `${pointSummary.maxDerivedAccelMps2.toFixed(3)} m/s^2`, detail: scope },
   ];
 }

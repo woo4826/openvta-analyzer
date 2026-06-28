@@ -4,6 +4,7 @@ import type { EChartsOption } from "echarts";
 
 export interface ChartPanelProps {
   title: string;
+  ariaLabel?: string;
   option: EChartsOption;
   className?: string;
   onPoint?: (index: number) => void;
@@ -25,7 +26,7 @@ interface BrushBatchPayload {
   areas?: Array<{ coordRange?: unknown; coordRanges?: unknown }>;
 }
 
-export function ChartPanel({ title, option, className, onPoint, onBrushSegment }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, onPoint, onBrushSegment }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const hoverFrameRef = useRef<number | undefined>(undefined);
@@ -122,7 +123,7 @@ export function ChartPanel({ title, option, className, onPoint, onBrushSegment }
         <h3>{title}</h3>
       </div>
       <div className="panel-body">
-        <div className="chart" ref={ref} role="img" aria-label={`${title} chart`} />
+        <div className="chart" ref={ref} role="img" aria-label={ariaLabel ?? `${title} chart`} />
       </div>
     </section>
   );

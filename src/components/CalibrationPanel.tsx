@@ -19,6 +19,7 @@ import type {
   TransformMode,
   VtaFile,
 } from "../domain/types";
+import { useI18n } from "../i18n/useI18n";
 import { Charts, type AccelerationSensorSet } from "./Charts";
 import { SegmentedControl } from "./ui";
 
@@ -37,13 +38,6 @@ interface CalibrationPanelProps {
   onTransformMode: (mode: TransformMode) => void;
 }
 
-const transformOptions: Array<{ value: TransformMode; label: string }> = [
-  { value: "raw", label: "Raw" },
-  { value: "calibrated", label: "Calibrated" },
-  { value: "filtered", label: "Filtered" },
-  { value: "compare", label: "Compare" },
-];
-
 export function CalibrationPanel({
   file,
   sensors,
@@ -58,12 +52,22 @@ export function CalibrationPanel({
   transformMode,
   onTransformMode,
 }: CalibrationPanelProps) {
+  const { t } = useI18n();
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presets, setPresets] = useState<CalibrationPreset[]>(() => loadCalibrationPresets());
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | undefined>();
+  const transformOptions = useMemo<Array<{ value: TransformMode; label: string }>>(
+    () => [
+      { value: "raw", label: t("workspace.transform.raw") },
+      { value: "calibrated", label: t("workspace.transform.calibrated") },
+      { value: "filtered", label: t("workspace.transform.filtered") },
+      { value: "compare", label: t("workspace.transform.compare") },
+    ],
+    [t],
+  );
   const estimatedFromSession = useMemo(() => estimateCalibrationOffsets(sensors, {}, file.sourceName), [file, sensors]);
   const selectedPreset = useMemo(
     () => presets.find((preset) => preset.id === selectedPresetId) ?? presets[0],
@@ -80,8 +84,9 @@ export function CalibrationPanel({
     }
     const calibratedSensors = applyCalibration(sensors, calibration);
     const filteredSensors = transformedSensors.length ? transformedSensors : calibratedSensors;
-    return accelerationSensorSets(sensors, calibratedSensors, filteredSensors);
-  }, [calibration, sensors, transformMode, transformedSensors]);
+    return accelerationSensorSets(sensors, calibratedSensors, filteredSensors, t);
+  }, [calibration, sensors, t, transformMode, transformedSensors]);
+  const localizedFilterWarning = filterWarning ? localizeFilterWarning(filterWarning, t) : undefined;
 
   function updateOffset(key: "x" | "y" | "z", value: number) {
     const base = calibration ?? estimatedFromSession;
@@ -92,20 +97,20 @@ export function CalibrationPanel({
   function estimateSelectedWindow() {
     const offsets = estimateCalibrationOffsets(sensors, parseWindow(windowStart, windowEnd), file.sourceName);
     if (!offsets) {
-      setStatusMessage("No sensor samples were found in that static window.");
+      setStatusMessage(t("calibration.status.noSamplesStaticWindow"));
       return;
     }
     onCalibration(offsets);
-    setStatusMessage(`Estimated ${offsets.sampleCount} samples from the selected window.`);
+    setStatusMessage(t("calibration.status.estimatedSelectedWindow", { count: offsets.sampleCount }));
   }
 
   function estimateCurrentFile() {
     if (!estimatedFromSession) {
-      setStatusMessage("No sensor samples were found in the current file.");
+      setStatusMessage(t("calibration.status.noSamplesCurrentFile"));
       return;
     }
     onCalibration(estimatedFromSession);
-    setStatusMessage(`Estimated ${estimatedFromSession.sampleCount} samples from the current file.`);
+    setStatusMessage(t("calibration.status.estimatedCurrentFile", { count: estimatedFromSession.sampleCount }));
   }
 
   function updatePresets(nextPresets: CalibrationPreset[]) {
@@ -116,12 +121,12 @@ export function CalibrationPanel({
   function savePreset() {
     const name = presetName.trim();
     if (!name) {
-      setStatusMessage("Enter a preset name before saving.");
+      setStatusMessage(t("calibration.status.enterPresetName"));
       return;
     }
     const offsets = calibration ?? estimatedFromSession;
     if (!offsets) {
-      setStatusMessage("No calibration offsets are available to save.");
+      setStatusMessage(t("calibration.status.noOffsetsToSave"));
       return;
     }
     const existingPreset =
@@ -135,34 +140,34 @@ export function CalibrationPanel({
     };
     updatePresets(upsertCalibrationPreset(presets, preset));
     setSelectedPresetId(preset.id);
-    setStatusMessage("Preset saved.");
+    setStatusMessage(t("calibration.status.presetSaved"));
   }
 
   function applyPreset() {
     if (!selectedPreset) {
-      setStatusMessage("Choose a preset to apply.");
+      setStatusMessage(t("calibration.status.choosePresetToApply"));
       return;
     }
     onCalibration(selectedPreset.offsets);
     setPresetName(selectedPreset.name);
-    setStatusMessage(`Applied preset ${selectedPreset.name}.`);
+    setStatusMessage(t("calibration.status.appliedPreset", { name: selectedPreset.name }));
   }
 
   function deletePreset() {
     if (!selectedPreset) {
-      setStatusMessage("Choose a preset to delete.");
+      setStatusMessage(t("calibration.status.choosePresetToDelete"));
       return;
     }
     const nextPresets = removeCalibrationPreset(presets, selectedPreset.id);
     updatePresets(nextPresets);
     setSelectedPresetId(nextPresets[0]?.id ?? "");
-    setStatusMessage(`Deleted preset ${selectedPreset.name}.`);
+    setStatusMessage(t("calibration.status.deletedPreset", { name: selectedPreset.name }));
   }
 
   async function importPresetFile(file: File) {
     const imported = importCalibrationPresets(await file.text());
     if (!imported.length) {
-      setStatusMessage("No valid calibration presets were found in that JSON file.");
+      setStatusMessage(t("calibration.status.noValidPresets"));
       return;
     }
     setPresets((current) => {
@@ -171,20 +176,24 @@ export function CalibrationPanel({
       return nextPresets;
     });
     setSelectedPresetId(imported[imported.length - 1].id);
-    setStatusMessage(`Imported ${imported.length} calibration preset${imported.length === 1 ? "" : "s"}.`);
+    setStatusMessage(
+      t(imported.length === 1 ? "calibration.status.importedPresets.one" : "calibration.status.importedPresets.other", {
+        count: imported.length,
+      }),
+    );
   }
 
   return (
     <section className="content-band">
       <div className="panel">
         <div className="panel-header">
-          <h2>Calibration and Filtering</h2>
+          <h2>{t("calibration.title")}</h2>
           <SlidersHorizontal size={18} aria-hidden />
         </div>
         <div className="panel-body content-band">
           <div className="row-actions">
             <label className="button">
-              Load CAL file
+              {t("calibration.loadCalFile")}
               <input
                 hidden
                 type="file"
@@ -197,16 +206,16 @@ export function CalibrationPanel({
               />
             </label>
             <button type="button" className="button" onClick={estimateCurrentFile}>
-              Estimate from current file
+              {t("calibration.estimateFromCurrentFile")}
             </button>
             <button type="button" className="button" onClick={() => onCalibration(undefined)}>
-              Reset calibration
+              {t("calibration.resetCalibration")}
             </button>
           </div>
 
           <div className="form-grid">
             <label className="field">
-              <span>Window start seconds</span>
+              <span>{t("calibration.windowStartSeconds")}</span>
               <input
                 type="number"
                 step="0.001"
@@ -215,7 +224,7 @@ export function CalibrationPanel({
               />
             </label>
             <label className="field">
-              <span>Window end seconds</span>
+              <span>{t("calibration.windowEndSeconds")}</span>
               <input
                 type="number"
                 step="0.001"
@@ -224,43 +233,46 @@ export function CalibrationPanel({
               />
             </label>
             <div className="field">
-              <span>Static window</span>
+              <span>{t("calibration.staticWindow")}</span>
               <button type="button" className="button" onClick={estimateSelectedWindow}>
-                Estimate selected window
+                {t("calibration.estimateSelectedWindow")}
               </button>
-              <small>Blank values are unbounded. Reversed values are normalized.</small>
+              <small>{t("calibration.staticWindowHelp")}</small>
             </div>
           </div>
 
           <div className="form-grid">
-            <OffsetField label="GX offset" value={calibration?.x} onChange={(value) => updateOffset("x", value)} />
-            <OffsetField label="GY offset" value={calibration?.y} onChange={(value) => updateOffset("y", value)} />
-            <OffsetField label="GZ offset" value={calibration?.z} onChange={(value) => updateOffset("z", value)} />
+            <OffsetField label={t("calibration.offset.gx")} value={calibration?.x} onChange={(value) => updateOffset("x", value)} />
+            <OffsetField label={t("calibration.offset.gy")} value={calibration?.y} onChange={(value) => updateOffset("y", value)} />
+            <OffsetField label={t("calibration.offset.gz")} value={calibration?.z} onChange={(value) => updateOffset("z", value)} />
           </div>
 
           <div className="metric-grid">
-            <Metric label="Calibration source" value={calibration?.sourceName ?? "None"} />
-            <Metric label="Samples" value={calibration ? String(calibration.sampleCount) : "0"} />
-            <Metric label="Unit" value={calibration?.unit ?? sensors[0]?.accelUnit ?? "n/a"} />
-            <Metric label="Filter sample rate" value={sampleRateHz ? `${sampleRateHz.toFixed(1)} Hz` : "n/a"} />
+            <Metric label={t("calibration.source")} value={calibration?.sourceName ?? t("calibration.none")} />
+            <Metric label={t("calibration.samples")} value={calibration ? String(calibration.sampleCount) : "0"} />
+            <Metric label={t("calibration.unit")} value={calibration?.unit ?? sensors[0]?.accelUnit ?? t("calibration.unavailable")} />
+            <Metric
+              label={t("calibration.filterSampleRate")}
+              value={sampleRateHz ? `${sampleRateHz.toFixed(1)} Hz` : t("calibration.unavailable")}
+            />
           </div>
 
           <div className="form-grid">
             <label className="field">
-              <span>Preset name</span>
+              <span>{t("calibration.presetName")}</span>
               <input value={presetName} onChange={(event) => setPresetName(event.target.value)} />
             </label>
             <div className="field">
-              <span>Preset actions</span>
+              <span>{t("calibration.presetActions")}</span>
               <div className="row-actions">
                 <button type="button" className="button primary" onClick={savePreset}>
-                  Save preset
+                  {t("calibration.savePreset")}
                 </button>
                 <button type="button" className="button" onClick={applyPreset} disabled={!selectedPreset}>
-                  Apply preset
+                  {t("calibration.applyPreset")}
                 </button>
                 <button type="button" className="button" onClick={deletePreset} disabled={!selectedPreset}>
-                  Delete preset
+                  {t("calibration.deletePreset")}
                 </button>
               </div>
             </div>
@@ -274,10 +286,10 @@ export function CalibrationPanel({
                 downloadText("calibration-presets.json", exportCalibrationPresets(presets), "application/json")
               }
             >
-              Export presets JSON
+              {t("calibration.exportPresetsJson")}
             </button>
             <label className="button">
-              Import presets JSON
+              {t("calibration.importPresetsJson")}
               <input
                 hidden
                 type="file"
@@ -292,7 +304,7 @@ export function CalibrationPanel({
           </div>
 
           {presets.length ? (
-            <div className="row-actions" aria-label="Saved calibration presets">
+            <div className="row-actions" aria-label={t("calibration.savedPresetsAria")}>
               {presets.map((preset) => (
                 <button
                   type="button"
@@ -311,17 +323,17 @@ export function CalibrationPanel({
 
           <div className="form-grid">
             <label className="field">
-              <span>Low-pass filter</span>
+              <span>{t("calibration.lowPassFilter")}</span>
               <select
                 value={filterSettings.enabled ? "on" : "off"}
                 onChange={(event) => onFilterSettings({ ...filterSettings, enabled: event.target.value === "on" })}
               >
-                <option value="off">Off</option>
-                <option value="on">On</option>
+                <option value="off">{t("calibration.off")}</option>
+                <option value="on">{t("calibration.on")}</option>
               </select>
             </label>
             <label className="field">
-              <span>Cutoff Hz</span>
+              <span>{t("calibration.cutoffHz")}</span>
               <input
                 type="number"
                 min="0.1"
@@ -333,28 +345,28 @@ export function CalibrationPanel({
               />
             </label>
             <label className="field">
-              <span>Channels</span>
+              <span>{t("calibration.channels")}</span>
               <select
                 value={channelValue(filterSettings)}
                 onChange={(event) => onFilterSettings({ ...filterSettings, channels: channelsFromValue(event.target.value) })}
               >
-                <option value="xyz">GX + GY + GZ</option>
-                <option value="xy">GX + GY</option>
-                <option value="z">GZ only</option>
+                <option value="xyz">{t("calibration.channels.xyz")}</option>
+                <option value="xy">{t("calibration.channels.xy")}</option>
+                <option value="z">{t("calibration.channels.zOnly")}</option>
               </select>
             </label>
           </div>
 
-          {filterWarning ? <div className="warning-item">{filterWarning}</div> : null}
+          {localizedFilterWarning ? <div className="warning-item">{localizedFilterWarning}</div> : null}
           {statusMessage ? <div className="warning-item">{statusMessage}</div> : null}
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-header">
-          <h3>Transform preview</h3>
+          <h3>{t("calibration.transformPreview")}</h3>
           <SegmentedControl
-            ariaLabel="Calibration preview transform mode"
+            ariaLabel={t("calibration.previewTransformModeAria")}
             options={transformOptions}
             value={transformMode}
             onChange={(value) => onTransformMode(value as TransformMode)}
@@ -411,6 +423,16 @@ function channelsFromValue(value: string): FilterSettings["channels"] {
   return { x: true, y: true, z: true };
 }
 
+function localizeFilterWarning(message: string, t: ReturnType<typeof useI18n>["t"]): string {
+  if (message === "Filter skipped because the cutoff frequency is outside the valid range.") {
+    return t("calibration.filterWarning.cutoffOutOfRange");
+  }
+  if (message === "Sensor timestamps are irregular; an effective sample rate was estimated for filtering.") {
+    return t("calibration.filterWarning.irregularTimestamps");
+  }
+  return message;
+}
+
 function parseWindow(start: string, end: string): CalibrationWindow {
   return {
     startElapsedSeconds: parseOptionalNumber(start),
@@ -450,10 +472,11 @@ function accelerationSensorSets(
   rawSensors: SensorPoint[],
   calibratedSensors: SensorPoint[],
   filteredSensors: SensorPoint[],
+  t: ReturnType<typeof useI18n>["t"],
 ): AccelerationSensorSet[] {
   return [
-    { label: "Raw", sensors: rawSensors },
-    { label: "Calibrated", sensors: calibratedSensors },
-    { label: "Filtered", sensors: filteredSensors },
+    { label: t("workspace.transform.raw"), sensors: rawSensors },
+    { label: t("workspace.transform.calibrated"), sensors: calibratedSensors },
+    { label: t("workspace.transform.filtered"), sensors: filteredSensors },
   ];
 }
