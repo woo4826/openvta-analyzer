@@ -72,6 +72,9 @@ export function ExportPanel({
   );
   const count = points.length ? end - start + 1 : 0;
   const validationRows = useMemo(() => buildValidationRows(selectedPoints), [selectedPoints]);
+  const transformedExportDisabled = !points.length || transformMode === "compare";
+  const exportCalibration = transformMode === "raw" ? undefined : calibration;
+  const exportFilterSettings = transformMode === "filtered" ? filterSettings : undefined;
 
   function updateSegmentBoundary(key: "startIndex" | "endIndex", value: number) {
     if (!points.length) {
@@ -150,15 +153,16 @@ export function ExportPanel({
                   withLineEndings(
                     exportTransformedVisibleSegmentVta(file, points, { startIndex: start, endIndex: end }, sensors, {
                       transformMode,
-                      calibration,
-                      filterSettings,
+                      calibration: exportCalibration,
+                      filterSettings: exportFilterSettings,
                     }),
                     lineEnding,
                   ),
                   "text/plain",
                 )
               }
-              disabled={!points.length}
+              disabled={transformedExportDisabled}
+              title={transformMode === "compare" ? "Choose Raw, Calibrated, or Filtered before exporting transformed VTA." : undefined}
             >
               Export transformed segment .Vta
             </button>

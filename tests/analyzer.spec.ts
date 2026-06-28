@@ -192,11 +192,47 @@ test("applies sample calibration and exports summary", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Calibration and Filtering" })).toBeVisible();
   await expect(page.getByText("CAL_sample.Vta")).toBeVisible();
-  await page.getByLabel("Low-pass filter").selectOption("on");
-  await expect(page.getByLabel("Cutoff Hz")).toBeVisible();
 
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Export" })).toBeVisible();
+  const rawVta = await downloadTextByButton(
+    page,
+    "Export transformed segment .Vta",
+    "OpenVTA_sample_transformed_segment.Vta",
+  );
+  expect(rawVta).toContain("%% TransformMode: raw");
+  expect(rawVta).toContain("%% Calibration: none");
+  expect(rawVta).toContain("%% Filter: none");
+
+  await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Calibrated" }).click();
+  const calibratedVta = await downloadTextByButton(
+    page,
+    "Export transformed segment .Vta",
+    "OpenVTA_sample_transformed_segment.Vta",
+  );
+  expect(calibratedVta).toContain("%% TransformMode: calibrated");
+  expect(calibratedVta).toContain("%% Calibration: unit=mps2; samples=160;");
+  expect(calibratedVta).toContain("source=CAL_sample.Vta");
+  expect(calibratedVta).toContain("%% Filter: none");
+
+  await page.getByRole("button", { name: "Calibration" }).click();
+  await page.getByLabel("Low-pass filter").selectOption("on");
+  await expect(page.getByLabel("Cutoff Hz")).toBeVisible();
+  await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Filtered" }).click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const filteredVta = await downloadTextByButton(
+    page,
+    "Export transformed segment .Vta",
+    "OpenVTA_sample_transformed_segment.Vta",
+  );
+  expect(filteredVta).toContain("%% TransformMode: filtered");
+  expect(filteredVta).toContain("%% Calibration: unit=mps2; samples=160;");
+  expect(filteredVta).toContain("source=CAL_sample.Vta");
+  expect(filteredVta).toContain("%% Filter: enabled=true; cutoffHz=5; channels=XYZ");
+
+  await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Compare" }).click();
+  await expect(page.getByRole("button", { name: "Export transformed segment .Vta" })).toBeDisabled();
+
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export Summary JSON" }).click();
   const download = await downloadPromise;

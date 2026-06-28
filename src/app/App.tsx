@@ -93,6 +93,10 @@ export function App() {
         : undefined,
     [calibratedSensors, rawSensors, transformedSensors, transformMode],
   );
+  const exportSensors = useMemo(
+    () => sensorsForTransformMode(transformMode, rawSensors, calibratedSensors, transformedSensors),
+    [calibratedSensors, rawSensors, transformedSensors, transformMode],
+  );
   const stats = useMemo(() => (activeFile ? summarizeVta(activeFile) : undefined), [activeFile]);
 
   useEffect(() => {
@@ -351,7 +355,7 @@ export function App() {
               {activeTab === "export" && stats ? (
                 <ExportPanel
                   file={activeFile}
-                  sensors={transformedSensors}
+                  sensors={exportSensors}
                   stats={stats}
                   visiblePoints={visibleGpsPoints}
                   activeSegment={activeSegment}
