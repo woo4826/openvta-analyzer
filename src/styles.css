@@ -676,6 +676,25 @@ footer.privacy-note {
   border-top: 1px solid var(--color-border);
 }
 
+.table-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.table-search {
+  flex: 1 1 220px;
+  max-width: 420px;
+}
+
+.table-status {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--line-normal);
+}
+
 .data-table,
 table {
   width: 100%;
@@ -702,8 +721,42 @@ th {
   font-weight: 700;
 }
 
+.sort-header {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sort-header:hover {
+  color: var(--color-text);
+}
+
+.sort-indicator {
+  color: var(--color-text-subtle);
+  font-size: var(--text-xs);
+}
+
 td {
   color: var(--color-text);
+}
+
+.numeric-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-table-cell {
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 tbody tr:hover {
@@ -753,6 +806,7 @@ tbody tr:hover {
 .field textarea:focus,
 .button:focus-visible,
 .tab:focus-visible,
+.sort-header:focus-visible,
 .segmented button:focus-visible {
   outline: 2px solid #6fc6bf;
   outline-offset: 1px;
@@ -891,6 +945,10 @@ tbody tr:hover {
   .chart-view-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .table-toolbar {
+    align-items: stretch;
   }
 
   .dropzone {

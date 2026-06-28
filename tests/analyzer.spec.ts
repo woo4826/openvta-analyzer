@@ -94,8 +94,12 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(page.getByText("Selected points")).toBeVisible();
 
   await page.getByRole("button", { name: "Tables" }).click();
-  await expect(page.getByRole("heading", { name: /GPS and enhanced points/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Sensor rows/ })).toBeVisible();
+  await page.getByRole("tab", { name: "Validation" }).click();
+  await expect(page.getByRole("columnheader", { name: "Derived accel" })).toBeVisible();
+  const tableDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export visible rows" }).click();
+  const tableDownload = await tableDownloadPromise;
+  expect(tableDownload.suggestedFilename()).toBe("validation-visible.csv");
 });
 
 test("applies sample calibration and exports summary", async ({ page }) => {

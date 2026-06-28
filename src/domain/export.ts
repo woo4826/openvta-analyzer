@@ -1,7 +1,20 @@
-import type { GpsPoint, SegmentSelection, SensorPoint, SummaryStats, ValidationRow, VtaFile } from "./types";
+import type {
+  GpsPoint,
+  ParseWarning,
+  SegmentSelection,
+  SensorPoint,
+  SummaryStats,
+  ValidationRow,
+  VtaFile,
+} from "./types";
 import { displayGpsPoints } from "./statistics";
 
 export type LineEnding = "lf" | "crlf";
+export interface SummaryCsvRow {
+  metric: string;
+  value: string | number;
+  detail?: string | number;
+}
 
 export function exportSegmentVta(file: VtaFile, selection: SegmentSelection): string {
   return exportVisibleSegmentVta(file, displayGpsPoints(file), selection);
@@ -39,7 +52,11 @@ export function exportVisibleSegmentVta(file: VtaFile, points: GpsPoint[], selec
 }
 
 export function gpsCsv(file: VtaFile): string {
-  const rows = displayGpsPoints(file).map((point) => [
+  return gpsPointsCsv(displayGpsPoints(file));
+}
+
+export function gpsPointsCsv(points: GpsPoint[], lineEnding: LineEnding = "lf"): string {
+  const rows = points.map((point) => [
     point.index,
     point.source,
     point.date,
@@ -67,12 +84,24 @@ export function gpsCsv(file: VtaFile): string {
       "accuracyMeters",
     ],
     rows,
+    lineEnding,
   );
 }
 
-export function sensorCsv(sensors: SensorPoint[]): string {
+export function sensorCsv(sensors: SensorPoint[], lineEnding: LineEnding = "lf"): string {
   return genericCsv(
-    ["index", "elapsedSeconds", "eventCode", "accelUnit", "accelX", "accelY", "accelZ"],
+    [
+      "index",
+      "elapsedSeconds",
+      "eventCode",
+      "accelUnit",
+      "accelX",
+      "accelY",
+      "accelZ",
+      "orientationXDegrees",
+      "orientationYDegrees",
+      "orientationZDegrees",
+    ],
     sensors.map((sensor) => [
       sensor.index,
       sensor.elapsedSeconds,
@@ -81,7 +110,11 @@ export function sensorCsv(sensors: SensorPoint[]): string {
       sensor.accelX,
       sensor.accelY,
       sensor.accelZ,
+      sensor.orientationXDegrees ?? "",
+      sensor.orientationYDegrees ?? "",
+      sensor.orientationZDegrees ?? "",
     ]),
+    lineEnding,
   );
 }
 
@@ -131,6 +164,22 @@ export function validationCsv(rows: ValidationRow[], lineEnding: LineEnding = "l
       row.deltaSpeedKmh,
       row.derivedAccelMps2,
     ]),
+    lineEnding,
+  );
+}
+
+export function warningsCsv(warnings: ParseWarning[], lineEnding: LineEnding = "lf"): string {
+  return genericCsv(
+    ["lineNumber", "code", "message"],
+    warnings.map((warning) => [warning.lineNumber ?? "", warning.code, warning.message]),
+    lineEnding,
+  );
+}
+
+export function summaryRowsCsv(rows: SummaryCsvRow[], lineEnding: LineEnding = "lf"): string {
+  return genericCsv(
+    ["metric", "value", "detail"],
+    rows.map((row) => [row.metric, row.value, row.detail ?? ""]),
     lineEnding,
   );
 }

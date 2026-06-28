@@ -304,7 +304,12 @@ export function App() {
               ) : null}
 
               {activeTab === "tables" ? (
-                <Tables file={activeFile} sensors={transformedSensors} visiblePoints={visibleGpsPoints} />
+                <Tables
+                  file={activeFile}
+                  sensors={transformedSensors}
+                  visiblePoints={visibleGpsPoints}
+                  activeSegment={activeSegment}
+                />
               ) : null}
 
               {activeTab === "calibration" ? (
