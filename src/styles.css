@@ -933,6 +933,14 @@ tbody tr:hover {
     min-width: 0;
   }
 
+  .button {
+    min-height: var(--control-height);
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+    line-height: var(--line-tight);
+    white-space: normal;
+  }
+
   .metric-grid {
     grid-template-columns: 1fr;
   }

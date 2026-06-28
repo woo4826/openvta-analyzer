@@ -56,6 +56,7 @@ interface TableRow {
   id: string;
   ordinal: number;
   item: unknown;
+  exportItem?: unknown;
   values: Record<string, TableValue>;
   cells: Record<string, ReactNode>;
   searchText: string;
@@ -67,6 +68,10 @@ interface TableDefinition {
   columns: TableColumn[];
   rows: TableRow[];
   filename: string;
+}
+
+interface SummaryTableRow extends SummaryCsvRow {
+  exportRow: SummaryCsvRow;
 }
 
 const tableOrder: TableTab[] = ["gps", "enhanced", "sensors", "warnings", "summary", "validation"];
@@ -188,7 +193,7 @@ const warningColumnTemplates: Array<ColumnTemplate<ParseWarning>> = [
   { id: "message", labelKey: "tables.column.message", value: (warning) => warning.message },
 ];
 
-const summaryColumnTemplates: Array<ColumnTemplate<SummaryCsvRow>> = [
+const summaryColumnTemplates: Array<ColumnTemplate<SummaryTableRow>> = [
   { id: "metric", labelKey: "tables.column.metric", value: (row) => row.metric },
   { id: "value", labelKey: "tables.column.value", value: (row) => row.value },
   { id: "detail", labelKey: "tables.column.detail", value: (row) => row.detail ?? "" },
@@ -334,7 +339,7 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
         id: "summary",
         label: tableLabels.summary,
         columns: summaryColumns,
-        rows: createRows(summaryRows, summaryColumns, (row) => `summary-${row.metric}`),
+        rows: createRows(summaryRows, summaryColumns, (row) => `summary-${row.exportRow.metric}`, (row) => row.exportRow),
         filename: "summary-visible.csv",
       },
       validation: {
@@ -511,6 +516,7 @@ function createRows<T>(
   items: T[],
   columns: Array<ColumnBuilder<T>>,
   getId: (item: T, index: number) => string,
+  getExportItem?: (item: T) => unknown,
 ): TableRow[] {
   return items.map((item, ordinal) => {
     const values: Record<string, TableValue> = {};
@@ -524,6 +530,7 @@ function createRows<T>(
       id: getId(item, ordinal),
       ordinal,
       item,
+      exportItem: getExportItem?.(item),
       values,
       cells,
       searchText: Object.values(values).join(" ").toLowerCase(),
@@ -572,7 +579,7 @@ function csvForRows(tab: TableTab, rows: TableRow[]): string {
 }
 
 function toItems<T>(rows: TableRow[]): T[] {
-  return rows.map((row) => row.item as T);
+  return rows.map((row) => (row.exportItem ?? row.item) as T);
 }
 
 function buildPointLookup(points: GpsPoint[]): { objects: Set<GpsPoint>; keys: Set<string> } {
@@ -610,22 +617,52 @@ function buildSummaryRows({
   pointSummary: ReturnType<typeof summarizePointRange>;
   hasSegment: boolean;
   t: ReturnType<typeof useI18n>["t"];
-}): SummaryCsvRow[] {
-  const scope = hasSegment
+}): SummaryTableRow[] {
+  const localizedScope = hasSegment
     ? t("tables.summary.scope.range", { start: pointSummary.startIndex, end: pointSummary.endIndex })
     : t("tables.summary.scope.allVisiblePoints");
-  return [
-    { metric: t("tables.summary.sourceName"), value: file.sourceName },
-    { metric: t("tables.summary.format"), value: file.detectedFormat },
-    { metric: t("tables.summary.visibleGpsCount"), value: visibleGpsCount },
-    { metric: t("tables.summary.visibleEnhancedCount"), value: visibleEnhancedCount },
-    { metric: t("tables.summary.sensorCount"), value: sensors.length },
-    { metric: t("tables.summary.warningCount"), value: file.parseWarnings.length },
-    { metric: t("tables.summary.visiblePointCount"), value: visiblePointCount },
-    { metric: t("tables.summary.selectedPointCount"), value: selectedPointCount, detail: scope },
-    { metric: t("tables.summary.distance"), value: `${pointSummary.distanceKm.toFixed(3)} km`, detail: scope },
-    { metric: t("tables.summary.averageSpeed"), value: `${pointSummary.averageSpeedKmh.toFixed(1)} km/h`, detail: scope },
-    { metric: t("tables.summary.maxSpeed"), value: `${pointSummary.maxSpeedKmh.toFixed(1)} km/h`, detail: scope },
-    { metric: t("tables.summary.maxDerivedAccel"), value: `${pointSummary.maxDerivedAccelMps2.toFixed(3)} m/s^2`, detail: scope },
+  const exportScope = hasSegment ? `Range ${pointSummary.startIndex}-${pointSummary.endIndex}` : "All visible points";
+  const rows: Array<{ metricKey: TranslationKey; exportRow: SummaryCsvRow; localizeDetail?: boolean }> = [
+    { metricKey: "tables.summary.sourceName", exportRow: { metric: "Source name", value: file.sourceName } },
+    { metricKey: "tables.summary.format", exportRow: { metric: "Format", value: file.detectedFormat } },
+    { metricKey: "tables.summary.visibleGpsCount", exportRow: { metric: "Visible GPS count", value: visibleGpsCount } },
+    {
+      metricKey: "tables.summary.visibleEnhancedCount",
+      exportRow: { metric: "Visible enhanced count", value: visibleEnhancedCount },
+    },
+    { metricKey: "tables.summary.sensorCount", exportRow: { metric: "Sensor count", value: sensors.length } },
+    { metricKey: "tables.summary.warningCount", exportRow: { metric: "Warning count", value: file.parseWarnings.length } },
+    { metricKey: "tables.summary.visiblePointCount", exportRow: { metric: "Visible point count", value: visiblePointCount } },
+    {
+      metricKey: "tables.summary.selectedPointCount",
+      exportRow: { metric: "Selected point count", value: selectedPointCount, detail: exportScope },
+      localizeDetail: true,
+    },
+    {
+      metricKey: "tables.summary.distance",
+      exportRow: { metric: "Distance", value: `${pointSummary.distanceKm.toFixed(3)} km`, detail: exportScope },
+      localizeDetail: true,
+    },
+    {
+      metricKey: "tables.summary.averageSpeed",
+      exportRow: { metric: "Average speed", value: `${pointSummary.averageSpeedKmh.toFixed(1)} km/h`, detail: exportScope },
+      localizeDetail: true,
+    },
+    {
+      metricKey: "tables.summary.maxSpeed",
+      exportRow: { metric: "Max speed", value: `${pointSummary.maxSpeedKmh.toFixed(1)} km/h`, detail: exportScope },
+      localizeDetail: true,
+    },
+    {
+      metricKey: "tables.summary.maxDerivedAccel",
+      exportRow: { metric: "Max derived accel", value: `${pointSummary.maxDerivedAccelMps2.toFixed(3)} m/s^2`, detail: exportScope },
+      localizeDetail: true,
+    },
   ];
+  return rows.map(({ metricKey, exportRow, localizeDetail }) => ({
+    ...exportRow,
+    metric: t(metricKey),
+    detail: localizeDetail ? localizedScope : exportRow.detail,
+    exportRow,
+  }));
 }
