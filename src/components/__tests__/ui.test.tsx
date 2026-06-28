@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { Metric, Panel, SegmentedControl, StatusBadge, Tabs } from "../ui";
+import { Field, Metric, Panel, SegmentedControl, StatusBadge, Tabs } from "../ui";
 
 describe("UI primitives", () => {
   it("renders a panel with metric content", () => {
@@ -61,5 +61,17 @@ describe("UI primitives", () => {
 
     await user.click(screen.getByRole("tab", { name: /warnings/i }));
     expect(onChange).toHaveBeenCalledWith("warnings");
+  });
+
+  it("renders field label, hint, and alert error", () => {
+    render(
+      <Field label="Coordinate source" htmlFor="coordinate-source" hint="Choose the imported track source." error="Source is required">
+        <input id="coordinate-source" />
+      </Field>,
+    );
+
+    expect(screen.getByLabelText("Coordinate source")).toBeVisible();
+    expect(screen.getByText("Choose the imported track source.")).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent("Source is required");
   });
 });
