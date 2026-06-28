@@ -28,15 +28,17 @@ import { Tables } from "../components/Tables";
 import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ExportPanel } from "../components/ExportPanel";
 import { WorkspaceStatus } from "../components/WorkspaceStatus";
+import { useI18n } from "../i18n/useI18n";
+import type { LanguageCode, TranslationKey } from "../i18n/locales";
 
 type TabKey = "overview" | "charts" | "tables" | "calibration" | "export";
 
-const tabs: Array<{ key: TabKey; label: string }> = [
-  { key: "overview", label: "Overview" },
-  { key: "charts", label: "Charts" },
-  { key: "tables", label: "Tables" },
-  { key: "calibration", label: "Calibration" },
-  { key: "export", label: "Export" },
+const tabs: Array<{ key: TabKey; labelKey: TranslationKey }> = [
+  { key: "overview", labelKey: "app.tab.overview" },
+  { key: "charts", labelKey: "app.tab.charts" },
+  { key: "tables", labelKey: "app.tab.tables" },
+  { key: "calibration", labelKey: "app.tab.calibration" },
+  { key: "export", labelKey: "app.tab.export" },
 ];
 
 const defaultSourceVisibility: SourceVisibility = { rawGps: true, enhancedGps: true };
@@ -48,6 +50,7 @@ const defaultMapSettings: MapSettings = {
 };
 
 export function App() {
+  const { language, languages, setLanguage, t } = useI18n();
   const [files, setFiles] = useState<VtaWorkspaceFile[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedPointIndex, setSelectedPointIndex] = useState(0);
@@ -123,7 +126,7 @@ export function App() {
     try {
       const loaded = (await Promise.all(inputFiles.map(loadTextFilesFromInput))).flat();
       if (!loaded.length) {
-        setLoadError("No .Vta files were found in the selected input.");
+        setLoadError(t("app.loadError.noVtaFiles"));
         return;
       }
       const parsed = loaded.map((file, index) => toWorkspaceFile(parseVtaText(file.name, file.text), index));
@@ -139,7 +142,7 @@ export function App() {
       setTransformMode("raw");
       setLineEnding("lf");
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Unable to load selected file.");
+      setLoadError(error instanceof Error ? error.message : t("app.loadError.unable"));
     }
   }
 
@@ -216,12 +219,26 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <strong>OpenVTA Analyzer</strong>
-          <span>Client-side VTA route, sensor, calibration, and filtering workspace</span>
+          <span>{t("app.brand.subtitle")}</span>
         </div>
         <div className="topbar-actions">
+          <label className="language-selector">
+            <span>{t("language.selector.label")}</span>
+            <select
+              aria-label={t("language.selector.label")}
+              value={language}
+              onChange={(event) => setLanguage(event.target.value as LanguageCode)}
+            >
+              {Object.values(languages).map((option) => (
+                <option value={option.code} key={option.code}>
+                  {option.nativeName}
+                </option>
+              ))}
+            </select>
+          </label>
           {files.length > 1 ? (
             <select
-              aria-label="Active file"
+              aria-label={t("app.activeFile.label")}
               value={activeIndex}
               onChange={(event) => {
                 setActiveIndex(Number(event.target.value));
@@ -239,7 +256,7 @@ export function App() {
           ) : null}
           <label className="button ghost">
             <FileUp size={16} aria-hidden />
-            Open VTA/ZIP
+            {t("app.openFile")}
             <input
               hidden
               type="file"
@@ -253,18 +270,18 @@ export function App() {
           </label>
           <button type="button" className="button ghost" onClick={loadSample}>
             <TestTube2 size={16} aria-hidden />
-            Load sample
+            {t("app.loadSample")}
           </button>
           <button type="button" className="button ghost" onClick={loadSampleCalibration} disabled={!activeFile}>
             <Settings size={16} aria-hidden />
-            Sample CAL
+            {t("app.sampleCalibration")}
           </button>
         </div>
       </header>
 
       <main className="workspace">
         <div className="privacy-note">
-          Files are parsed locally in this browser. No GPS traces or sensor records are uploaded by the app.
+          {t("app.privacyNote")}
         </div>
 
         {!activeFile ? (
@@ -281,7 +298,7 @@ export function App() {
             </aside>
 
             <section className="analysis-main">
-              <nav className="tabs" aria-label="Analyzer sections">
+              <nav className="tabs" aria-label={t("app.sectionsAria")}>
                 {tabs.map((tab) => (
                   <button
                     type="button"
@@ -289,7 +306,7 @@ export function App() {
                     className={tab.key === activeTab ? "tab active" : "tab"}
                     onClick={() => setActiveTab(tab.key)}
                   >
-                    {tab.label}
+                    {t(tab.labelKey)}
                   </button>
                 ))}
               </nav>
@@ -383,8 +400,7 @@ export function App() {
         )}
 
         <footer className="privacy-note">
-          <Gauge size={15} aria-hidden /> Map tiles use the configured interactive tile source only for visible views.
-          Exported files are generated locally with browser downloads. <Download size={15} aria-hidden />
+          <Gauge size={15} aria-hidden /> {t("app.footerNote")} <Download size={15} aria-hidden />
         </footer>
       </main>
     </div>

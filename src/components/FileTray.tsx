@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import type { VtaWorkspaceFile } from "../domain/types";
+import { useI18n } from "../i18n/useI18n";
 import { IconButton, Metric, Panel, StatusBadge } from "./ui";
 
 interface FileTrayProps {
@@ -10,8 +11,10 @@ interface FileTrayProps {
 }
 
 export function FileTray({ files, activeFileId, onSelectFile, onRemoveFile }: FileTrayProps) {
+  const { t } = useI18n();
+
   return (
-    <Panel title="Files" bodyClassName="content-band">
+    <Panel title={t("fileTray.title")} bodyClassName="content-band">
       {files.map((file) => {
         const active = file.id === activeFileId;
         return (
@@ -22,9 +25,9 @@ export function FileTray({ files, activeFileId, onSelectFile, onRemoveFile }: Fi
                 <span>{file.detectedFormat}</span>
               </div>
               <div className="row-actions">
-                {active ? <StatusBadge tone="success">Active</StatusBadge> : null}
+                {active ? <StatusBadge tone="success">{t("fileTray.active")}</StatusBadge> : null}
                 <IconButton
-                  label={`Remove ${file.sourceName}`}
+                  label={t("fileTray.remove", { name: file.sourceName })}
                   icon={<Trash2 size={15} aria-hidden />}
                   variant="ghost"
                   onClick={(event) => {
@@ -40,22 +43,28 @@ export function FileTray({ files, activeFileId, onSelectFile, onRemoveFile }: Fi
               aria-pressed={active}
               onClick={() => onSelectFile(file.id)}
             >
-              {active ? "Selected" : "Select"}
+              {active ? t("fileTray.selected") : t("fileTray.select")}
             </button>
-            <div className="row-actions" aria-label={`${file.sourceName} summary counts`}>
-              <StatusBadge>GPS {file.gpsPoints.length}</StatusBadge>
-              <StatusBadge>Enhanced {file.enhancedPoints.length}</StatusBadge>
-              <StatusBadge>Sensor {file.sensorPoints.length}</StatusBadge>
+            <div className="row-actions" aria-label={t("fileTray.summaryCounts", { name: file.sourceName })}>
+              <StatusBadge>
+                {t("fileTray.gps")} {file.gpsPoints.length}
+              </StatusBadge>
+              <StatusBadge>
+                {t("fileTray.enhanced")} {file.enhancedPoints.length}
+              </StatusBadge>
+              <StatusBadge>
+                {t("fileTray.sensor")} {file.sensorPoints.length}
+              </StatusBadge>
               <StatusBadge tone={file.parseWarnings.length ? "warning" : "neutral"}>
-                Warnings {file.parseWarnings.length}
+                {t("fileTray.warnings")} {file.parseWarnings.length}
               </StatusBadge>
             </div>
-            <div className="metric-grid" aria-label={`${file.sourceName} row counts`}>
-              <Metric label="GPS" value={file.gpsPoints.length} />
-              <Metric label="Enhanced" value={file.enhancedPoints.length} />
-              <Metric label="Sensor" value={file.sensorPoints.length} />
+            <div className="metric-grid" aria-label={t("fileTray.rowCounts", { name: file.sourceName })}>
+              <Metric label={t("fileTray.gps")} value={file.gpsPoints.length} />
+              <Metric label={t("fileTray.enhanced")} value={file.enhancedPoints.length} />
+              <Metric label={t("fileTray.sensor")} value={file.sensorPoints.length} />
               <Metric
-                label="Warnings"
+                label={t("fileTray.warnings")}
                 value={file.parseWarnings.length}
                 tone={file.parseWarnings.length ? "warning" : "neutral"}
               />

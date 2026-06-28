@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, LineString, Point, Polygon } from "geojson";
 import { normalizeSegment } from "../domain/analysis";
 import type { ActiveSegment, AxisAlignedRegion, GpsPoint, MapSettings, SourceVisibility } from "../domain/types";
+import { useI18n } from "../i18n/useI18n";
 import { MapControls } from "./MapControls";
 
 interface RouteMapProps {
@@ -30,6 +31,7 @@ export function RouteMap({
   onRegionChange,
   onSettingsChange,
 }: RouteMapProps) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
@@ -182,7 +184,7 @@ export function RouteMap({
   }
 
   if (!points.length || !bounds) {
-    return <div className="map-shell empty-state">No GPS data available for mapping.</div>;
+    return <div className="map-shell empty-state">{t("map.noGpsData")}</div>;
   }
 
   const selected = points[selectedIndex];
@@ -193,9 +195,9 @@ export function RouteMap({
   return (
     <div className="map-shell" data-source-visibility={sourceVisibilityState(sourceVisibility)}>
       {!mapFailed ? <div className="map-container" ref={containerRef} /> : null}
-      {mapFailed ? <div className="empty-state">Map tiles unavailable. Showing coordinate plot.</div> : null}
+      {mapFailed ? <div className="empty-state">{t("map.tilesUnavailable")}</div> : null}
       {mapFailed ? (
-        <svg className="coordinate-layer" viewBox="0 0 1000 640" role="img" aria-label="Speed-colored route plot">
+        <svg className="coordinate-layer" viewBox="0 0 1000 640" role="img" aria-label={t("map.speedColoredRoutePlot")}>
           {regionRect ? (
             <rect
               x={regionRect.x}
@@ -270,7 +272,7 @@ export function RouteMap({
           ) : null}
         </svg>
       ) : (
-        <div className="coordinate-layer" aria-label="Speed-colored route plot" role="img" />
+        <div className="coordinate-layer" aria-label={t("map.speedColoredRoutePlot")} role="img" />
       )}
       <MapControls
         settings={settings}

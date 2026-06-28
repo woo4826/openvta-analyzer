@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileArchive, FileText } from "lucide-react";
+import { useI18n } from "../i18n/useI18n";
 
 interface FileDropProps {
   onFiles: (files: File[]) => void;
@@ -8,6 +9,7 @@ interface FileDropProps {
 }
 
 export function FileDrop({ onFiles, loadError, onSample }: FileDropProps) {
+  const { t } = useI18n();
   const [dragging, setDragging] = useState(false);
   return (
     <section
@@ -26,15 +28,12 @@ export function FileDrop({ onFiles, loadError, onSample }: FileDropProps) {
     >
       <div className="dropzone-content">
         <FileArchive size={42} aria-hidden />
-        <h1>Open a VTA or ZIP file</h1>
-        <p>
-          Drop `.Vta` files or zipped sessions here. The analyzer supports modern OpenVTA rows, legacy phone
-          rows, and standalone IMU box records.
-        </p>
+        <h1>{t("fileDrop.title")}</h1>
+        <p>{t("fileDrop.body")}</p>
         <div className="row-actions">
           <label className="button primary">
             <FileText size={16} aria-hidden />
-            Choose files
+            {t("fileDrop.chooseFiles")}
             <input
               hidden
               type="file"
@@ -47,7 +46,7 @@ export function FileDrop({ onFiles, loadError, onSample }: FileDropProps) {
             />
           </label>
           <button type="button" className="button" onClick={onSample}>
-            Load built-in sample
+            {t("fileDrop.loadBuiltInSample")}
           </button>
         </div>
         {loadError ? <div className="warning-item">{loadError}</div> : null}
@@ -55,4 +54,3 @@ export function FileDrop({ onFiles, loadError, onSample }: FileDropProps) {
     </section>
   );
 }
-

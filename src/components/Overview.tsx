@@ -9,6 +9,7 @@ import type {
 } from "../domain/types";
 import { summarizeAxisAlignedRegion, summarizeSegment } from "../domain/analysis";
 import { displayGpsPoints } from "../domain/statistics";
+import { useI18n } from "../i18n/useI18n";
 import { RouteMap } from "./RouteMap";
 import { WarningList } from "./WarningList";
 
@@ -43,6 +44,7 @@ export function Overview({
   visiblePoints,
   filterWarning,
 }: OverviewProps) {
+  const { t } = useI18n();
   const points = visiblePoints ?? displayGpsPoints(file);
   const selected = points[selectedPointIndex];
   const segmentSummary = activeSegment
@@ -76,26 +78,30 @@ export function Overview({
       <div className="content-band">
         <div className="panel">
           <div className="panel-header">
-            <h3>Summary</h3>
+            <h3>{t("overview.summary")}</h3>
           </div>
           <div className="panel-body metric-grid">
-            <Metric label="Distance" value={`${stats.distanceKm.toFixed(3)} km`} />
-            <Metric label="Duration" value={formatDuration(stats.durationSeconds)} />
-            <Metric label="Max speed" value={`${stats.maxSpeedKmh.toFixed(1)} km/h`} />
-            <Metric label="Moving average" value={`${stats.averageMovingSpeedKmh.toFixed(1)} km/h`} />
-            <Metric label="GPS / Enhanced" value={`${stats.gpsCount} / ${stats.enhancedCount}`} />
-            <Metric label="Sensor rows" value={String(stats.sensorCount)} />
+            <Metric label={t("overview.distance")} value={`${stats.distanceKm.toFixed(3)} km`} />
+            <Metric label={t("overview.duration")} value={formatDuration(stats.durationSeconds)} />
+            <Metric label={t("overview.maxSpeed")} value={`${stats.maxSpeedKmh.toFixed(1)} km/h`} />
+            <Metric label={t("overview.movingAverage")} value={`${stats.averageMovingSpeedKmh.toFixed(1)} km/h`} />
+            <Metric label={t("overview.gpsEnhanced")} value={`${stats.gpsCount} / ${stats.enhancedCount}`} />
+            <Metric label={t("overview.sensorRows")} value={String(stats.sensorCount)} />
             <Metric
-              label="Altitude range"
+              label={t("overview.altitudeRange")}
               value={
                 stats.minAltitudeMeters === undefined || stats.maxAltitudeMeters === undefined
-                  ? "No altitude"
+                  ? t("overview.noAltitude")
                   : `${stats.minAltitudeMeters.toFixed(0)}-${stats.maxAltitudeMeters.toFixed(0)} m`
               }
             />
             <Metric
-              label="Avg accuracy"
-              value={stats.averageAccuracyMeters === undefined ? "No data" : `${stats.averageAccuracyMeters.toFixed(2)} m`}
+              label={t("overview.avgAccuracy")}
+              value={
+                stats.averageAccuracyMeters === undefined
+                  ? t("overview.noData")
+                  : `${stats.averageAccuracyMeters.toFixed(2)} m`
+              }
             />
           </div>
         </div>
@@ -103,22 +109,22 @@ export function Overview({
         {segmentSummary ? (
           <div className="panel">
             <div className="panel-header">
-              <h3>Segment</h3>
+              <h3>{t("overview.segment")}</h3>
               <span>
                 {activeSegment?.startIndex}-{activeSegment?.endIndex}
               </span>
             </div>
             <div className="panel-body metric-grid">
-              <Metric label="Segment points" value={String(segmentSummary.pointCount)} />
-              <Metric label="Distance" value={`${segmentSummary.distanceKm.toFixed(3)} km`} />
-              <Metric label="Duration" value={formatDuration(segmentSummary.durationSeconds)} />
-              <Metric label="Max speed" value={`${segmentSummary.maxSpeedKmh.toFixed(1)} km/h`} />
-              <Metric label="Avg speed" value={`${segmentSummary.averageSpeedKmh.toFixed(1)} km/h`} />
-              <Metric label="Sensor rows" value={String(segmentSummary.sensorCount)} />
-              <Metric label="Warnings" value={String(segmentSummary.warningCount)} />
+              <Metric label={t("overview.segmentPoints")} value={String(segmentSummary.pointCount)} />
+              <Metric label={t("overview.distance")} value={`${segmentSummary.distanceKm.toFixed(3)} km`} />
+              <Metric label={t("overview.duration")} value={formatDuration(segmentSummary.durationSeconds)} />
+              <Metric label={t("overview.maxSpeed")} value={`${segmentSummary.maxSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label={t("overview.avgSpeed")} value={`${segmentSummary.averageSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label={t("overview.sensorRows")} value={String(segmentSummary.sensorCount)} />
+              <Metric label={t("overview.warnings")} value={String(segmentSummary.warningCount)} />
               <Metric
-                label="Altitude range"
-                value={formatAltitudeRange(segmentSummary.minAltitudeMeters, segmentSummary.maxAltitudeMeters)}
+                label={t("overview.altitudeRange")}
+                value={formatAltitudeRange(segmentSummary.minAltitudeMeters, segmentSummary.maxAltitudeMeters, t("overview.noAltitude"))}
               />
             </div>
           </div>
@@ -127,17 +133,17 @@ export function Overview({
         {regionSummary ? (
           <div className="panel">
             <div className="panel-header">
-              <h3>Region</h3>
-              <span>Axis-aligned bounds</span>
+              <h3>{t("overview.region")}</h3>
+              <span>{t("overview.axisAlignedBounds")}</span>
             </div>
             <div className="panel-body metric-grid">
-              <Metric label="Region points" value={String(regionSummary.pointCount)} />
-              <Metric label="Distance" value={`${regionSummary.distanceKm.toFixed(3)} km`} />
-              <Metric label="Max speed" value={`${regionSummary.maxSpeedKmh.toFixed(1)} km/h`} />
-              <Metric label="Avg speed" value={`${regionSummary.averageSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label={t("overview.regionPoints")} value={String(regionSummary.pointCount)} />
+              <Metric label={t("overview.distance")} value={`${regionSummary.distanceKm.toFixed(3)} km`} />
+              <Metric label={t("overview.maxSpeed")} value={`${regionSummary.maxSpeedKmh.toFixed(1)} km/h`} />
+              <Metric label={t("overview.avgSpeed")} value={`${regionSummary.averageSpeedKmh.toFixed(1)} km/h`} />
               <Metric
-                label="Altitude range"
-                value={formatAltitudeRange(regionSummary.minAltitudeMeters, regionSummary.maxAltitudeMeters)}
+                label={t("overview.altitudeRange")}
+                value={formatAltitudeRange(regionSummary.minAltitudeMeters, regionSummary.maxAltitudeMeters, t("overview.noAltitude"))}
               />
             </div>
           </div>
@@ -145,27 +151,27 @@ export function Overview({
 
         <div className="panel">
           <div className="panel-header">
-            <h3>Selected Point</h3>
+            <h3>{t("overview.selectedPoint")}</h3>
           </div>
           <div className="panel-body">
             {selected ? (
               <div className="metric-grid">
-                <Metric label="Index" value={String(selectedPointIndex)} />
-                <Metric label="Time" value={`${selected.date} ${selected.time}`} />
-                <Metric label="Latitude" value={selected.latitude.toFixed(8)} />
-                <Metric label="Longitude" value={selected.longitude.toFixed(8)} />
-                <Metric label="Speed" value={`${selected.speedKmh.toFixed(1)} km/h`} />
-                <Metric label="Source" value={selected.source} />
+                <Metric label={t("overview.index")} value={String(selectedPointIndex)} />
+                <Metric label={t("overview.time")} value={`${selected.date} ${selected.time}`} />
+                <Metric label={t("overview.latitude")} value={selected.latitude.toFixed(8)} />
+                <Metric label={t("overview.longitude")} value={selected.longitude.toFixed(8)} />
+                <Metric label={t("overview.speed")} value={`${selected.speedKmh.toFixed(1)} km/h`} />
+                <Metric label={t("overview.source")} value={selected.source} />
               </div>
             ) : (
-              <div className="empty-state">No GPS point selected.</div>
+              <div className="empty-state">{t("overview.noGpsPointSelected")}</div>
             )}
           </div>
         </div>
 
         <div className="panel">
           <div className="panel-header">
-            <h3>Warnings</h3>
+            <h3>{t("overview.warnings")}</h3>
           </div>
           <div className="panel-body">
             <WarningList warnings={file.parseWarnings} extraWarning={filterWarning} />
@@ -191,9 +197,9 @@ function formatDuration(seconds: number): string {
   return `${minutes}m ${remaining}s`;
 }
 
-function formatAltitudeRange(minAltitudeMeters?: number, maxAltitudeMeters?: number): string {
+function formatAltitudeRange(minAltitudeMeters: number | undefined, maxAltitudeMeters: number | undefined, emptyLabel: string): string {
   if (minAltitudeMeters === undefined || maxAltitudeMeters === undefined) {
-    return "No altitude";
+    return emptyLabel;
   }
   return `${minAltitudeMeters.toFixed(0)}-${maxAltitudeMeters.toFixed(0)} m`;
 }

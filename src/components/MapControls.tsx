@@ -1,5 +1,6 @@
 import { Flag, FlagTriangleRight, ScanLine, SquareDashed, X } from "lucide-react";
 import type { MapSettings } from "../domain/types";
+import { useI18n } from "../i18n/useI18n";
 import { Field, IconButton } from "./ui";
 
 interface MapControlsProps {
@@ -28,6 +29,7 @@ export function MapControls({
   onCreateRegion,
   onSettingsChange,
 }: MapControlsProps) {
+  const { t } = useI18n();
   const pointSize = clampPointSize(settings.pointSize);
 
   function updatePointSize(value: number) {
@@ -35,33 +37,43 @@ export function MapControls({
   }
 
   return (
-    <div className="map-toolbar" aria-label="Map analysis controls">
-      <div className="map-control-group" role="group" aria-label="Route controls">
-        <IconButton label="Fit route" icon={<ScanLine size={15} aria-hidden />} onClick={onFitRoute} disabled={!hasPoints} />
+    <div className="map-toolbar" aria-label={t("map.toolbarAria")}>
+      <div className="map-control-group" role="group" aria-label={t("map.routeControlsAria")}>
         <IconButton
-          label="Set segment start"
+          label={t("map.fitRoute")}
+          icon={<ScanLine size={15} aria-hidden />}
+          onClick={onFitRoute}
+          disabled={!hasPoints}
+        />
+        <IconButton
+          label={t("map.setSegmentStart")}
           icon={<Flag size={15} aria-hidden />}
           onClick={onSetSegmentStart}
           disabled={!hasPoints}
         />
         <IconButton
-          label="Set segment end"
+          label={t("map.setSegmentEnd")}
           icon={<FlagTriangleRight size={15} aria-hidden />}
           onClick={onSetSegmentEnd}
           disabled={!hasPoints}
         />
-        <IconButton label="Clear segment" icon={<X size={15} aria-hidden />} onClick={onClearSegment} disabled={!hasSegment} />
         <IconButton
-          label="Create region"
+          label={t("map.clearSegment")}
+          icon={<X size={15} aria-hidden />}
+          onClick={onClearSegment}
+          disabled={!hasSegment}
+        />
+        <IconButton
+          label={t("map.createRegion")}
           icon={<SquareDashed size={15} aria-hidden />}
           onClick={onCreateRegion}
           disabled={!hasPoints}
         />
       </div>
-      <Field label="Point size" htmlFor="map-point-size" className="map-point-size">
+      <Field label={t("map.pointSize")} htmlFor="map-point-size" className="map-point-size">
         <input
           id="map-point-size"
-          aria-label="Point size"
+          aria-label={t("map.pointSize")}
           type="number"
           min={MIN_POINT_SIZE}
           max={MAX_POINT_SIZE}
