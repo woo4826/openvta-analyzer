@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseVtaText } from "../parser";
 import { applyCalibration, estimateCalibrationOffsets } from "../calibration";
 import { applyAccelerationFilter } from "../filtering";
-import { exportSegmentVta } from "../export";
+import { exportSegmentVta, validationCsv } from "../export";
 import { summarizeVta } from "../statistics";
 
 describe("parseVtaText", () => {
@@ -112,5 +112,21 @@ describe("statistics, calibration, filtering, export", () => {
     expect(result.sampleRateHz).toBeCloseTo(100);
     expect(Math.abs(result.sensors[20].accelX)).toBeLessThan(1);
   });
-});
 
+  it("exports validation rows with CRLF line endings", () => {
+    const csv = validationCsv(
+      [
+        {
+          index: 1,
+          elapsedSeconds: 1,
+          speedKmh: 36,
+          deltaSpeedKmh: 36,
+          derivedAccelMps2: 10,
+        },
+      ],
+      "crlf",
+    );
+
+    expect(csv).toBe("index,elapsedSeconds,speedKmh,deltaSpeedKmh,derivedAccelMps2\r\n1,1,36,36,10");
+  });
+});

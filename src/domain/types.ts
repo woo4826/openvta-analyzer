@@ -73,6 +73,78 @@ export interface VtaFile {
   parseWarnings: ParseWarning[];
 }
 
+export interface VtaWorkspaceFile extends VtaFile {
+  id: string;
+  loadedAt: number;
+}
+
+export interface SourceVisibility {
+  rawGps: boolean;
+  enhancedGps: boolean;
+}
+
+export interface ActiveSegment {
+  startIndex: number;
+  endIndex: number;
+  source: "manual" | "map" | "chart";
+}
+
+export interface SegmentSummary {
+  pointCount: number;
+  sensorCount: number;
+  durationSeconds: number;
+  distanceKm: number;
+  averageSpeedKmh: number;
+  maxSpeedKmh: number;
+  minAltitudeMeters?: number;
+  maxAltitudeMeters?: number;
+  warningCount: number;
+}
+
+export interface ValidationRow {
+  index: number;
+  elapsedSeconds: number;
+  speedKmh: number;
+  deltaSpeedKmh: number;
+  derivedAccelMps2: number;
+}
+
+export interface CalibrationPreset {
+  id: string;
+  name: string;
+  createdAt: number;
+  offsets: CalibrationOffsets;
+}
+
+export interface MapSettings {
+  pointSize: number;
+  tileUrl: string;
+  speedThresholds: [number, number, number, number];
+}
+
+export interface ChartSettings {
+  showRaw: boolean;
+  showTransformed: boolean;
+}
+
+export type TransformMode = "raw" | "calibrated" | "filtered" | "compare";
+
+export interface AxisAlignedRegion {
+  minLatitude: number;
+  maxLatitude: number;
+  minLongitude: number;
+  maxLongitude: number;
+}
+
+export interface RegionSummary {
+  pointCount: number;
+  distanceKm: number;
+  averageSpeedKmh: number;
+  maxSpeedKmh: number;
+  minAltitudeMeters?: number;
+  maxAltitudeMeters?: number;
+}
+
 export interface SummaryStats {
   durationSeconds: number;
   distanceKm: number;
@@ -127,4 +199,3 @@ export interface LoadedTextFile {
   name: string;
   text: string;
 }
-

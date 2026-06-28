@@ -1,5 +1,7 @@
-import type { SegmentSelection, SensorPoint, SummaryStats, VtaFile } from "./types";
+import type { SegmentSelection, SensorPoint, SummaryStats, ValidationRow, VtaFile } from "./types";
 import { displayGpsPoints } from "./statistics";
+
+export type LineEnding = "lf" | "crlf";
 
 export function exportSegmentVta(file: VtaFile, selection: SegmentSelection): string {
   const points = displayGpsPoints(file);
@@ -41,7 +43,7 @@ export function gpsCsv(file: VtaFile): string {
     point.satelliteCount,
     point.accuracyMeters ?? "",
   ]);
-  return csv([
+  return genericCsv(
     [
       "index",
       "source",
@@ -55,14 +57,14 @@ export function gpsCsv(file: VtaFile): string {
       "satelliteCount",
       "accuracyMeters",
     ],
-    ...rows,
-  ]);
+    rows,
+  );
 }
 
 export function sensorCsv(sensors: SensorPoint[]): string {
-  return csv([
+  return genericCsv(
     ["index", "elapsedSeconds", "eventCode", "accelUnit", "accelX", "accelY", "accelZ"],
-    ...sensors.map((sensor) => [
+    sensors.map((sensor) => [
       sensor.index,
       sensor.elapsedSeconds,
       sensor.eventCode,
@@ -71,7 +73,7 @@ export function sensorCsv(sensors: SensorPoint[]): string {
       sensor.accelY,
       sensor.accelZ,
     ]),
-  ]);
+  );
 }
 
 export function summaryJson(file: VtaFile, stats: SummaryStats): string {
@@ -97,12 +99,34 @@ export function downloadText(filename: string, text: string, type = "text/plain"
   URL.revokeObjectURL(url);
 }
 
-function csv(rows: Array<Array<string | number>>): string {
-  return rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+export function withLineEndings(text: string, lineEnding: LineEnding): string {
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return lineEnding === "crlf" ? normalized.replace(/\n/g, "\r\n") : normalized;
+}
+
+export function genericCsv(
+  headers: string[],
+  rows: Array<Array<string | number>>,
+  lineEnding: LineEnding = "lf",
+): string {
+  return withLineEndings([headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n"), lineEnding);
+}
+
+export function validationCsv(rows: ValidationRow[], lineEnding: LineEnding = "lf"): string {
+  return genericCsv(
+    ["index", "elapsedSeconds", "speedKmh", "deltaSpeedKmh", "derivedAccelMps2"],
+    rows.map((row) => [
+      row.index,
+      row.elapsedSeconds,
+      row.speedKmh,
+      row.deltaSpeedKmh,
+      row.derivedAccelMps2,
+    ]),
+    lineEnding,
+  );
 }
 
 function escapeCsv(value: string | number): string {
   const text = String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
-
