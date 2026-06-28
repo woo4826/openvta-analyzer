@@ -1,0 +1,11 @@
+{
+  "name": "OpenVTA Analyzer",
+  "short_name": "OpenVTA",
+  "description": "Analyze VTA GPS and sensor files locally in the browser.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#1f4f6f",
+  "icons": []
+}
+

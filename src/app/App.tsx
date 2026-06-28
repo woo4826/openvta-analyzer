@@ -1,0 +1,209 @@
+import { useMemo, useState } from "react";
+import { Download, FileUp, Gauge, Settings, TestTube2 } from "lucide-react";
+import { sampleCalibrationName, sampleCalibrationText, sampleVtaName, sampleVtaText } from "./sampleData";
+import { applyCalibration, estimateCalibrationOffsets } from "../domain/calibration";
+import { defaultFilterSettings, applyAccelerationFilter } from "../domain/filtering";
+import { parseVtaText } from "../domain/parser";
+import { summarizeVta } from "../domain/statistics";
+import { loadTextFilesFromInput } from "../domain/zip";
+import type { CalibrationOffsets, FilterSettings, VtaFile } from "../domain/types";
+import { FileDrop } from "../components/FileDrop";
+import { Overview } from "../components/Overview";
+import { Charts } from "../components/Charts";
+import { Tables } from "../components/Tables";
+import { CalibrationPanel } from "../components/CalibrationPanel";
+import { ExportPanel } from "../components/ExportPanel";
+
+type TabKey = "overview" | "charts" | "tables" | "calibration" | "export";
+
+const tabs: Array<{ key: TabKey; label: string }> = [
+  { key: "overview", label: "Overview" },
+  { key: "charts", label: "Charts" },
+  { key: "tables", label: "Tables" },
+  { key: "calibration", label: "Calibration" },
+  { key: "export", label: "Export" },
+];
+
+export function App() {
+  const [files, setFiles] = useState<VtaFile[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [selectedPointIndex, setSelectedPointIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [calibration, setCalibration] = useState<CalibrationOffsets | undefined>();
+  const [filterSettings, setFilterSettings] = useState<FilterSettings>(defaultFilterSettings);
+  const [loadError, setLoadError] = useState<string | undefined>();
+
+  const activeFile = files[activeIndex];
+  const calibratedSensors = useMemo(
+    () => applyCalibration(activeFile?.sensorPoints ?? [], calibration),
+    [activeFile, calibration],
+  );
+  const filterResult = useMemo(
+    () => applyAccelerationFilter(calibratedSensors, filterSettings),
+    [calibratedSensors, filterSettings],
+  );
+  const transformedSensors = filterResult.sensors;
+  const stats = useMemo(() => (activeFile ? summarizeVta(activeFile) : undefined), [activeFile]);
+
+  async function loadFiles(inputFiles: File[]) {
+    setLoadError(undefined);
+    try {
+      const loaded = (await Promise.all(inputFiles.map(loadTextFilesFromInput))).flat();
+      if (!loaded.length) {
+        setLoadError("No .Vta files were found in the selected input.");
+        return;
+      }
+      const parsed = loaded.map((file) => parseVtaText(file.name, file.text));
+      setFiles(parsed);
+      setActiveIndex(0);
+      setSelectedPointIndex(0);
+      setActiveTab("overview");
+      setCalibration(undefined);
+      setFilterSettings(defaultFilterSettings);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Unable to load selected file.");
+    }
+  }
+
+  function loadSample() {
+    setFiles([parseVtaText(sampleVtaName, sampleVtaText)]);
+    setActiveIndex(0);
+    setSelectedPointIndex(0);
+    setActiveTab("overview");
+    setCalibration(undefined);
+    setFilterSettings(defaultFilterSettings);
+    setLoadError(undefined);
+  }
+
+  function loadSampleCalibration() {
+    const calibrationFile = parseVtaText(sampleCalibrationName, sampleCalibrationText);
+    setCalibration(estimateCalibrationOffsets(calibrationFile.sensorPoints, {}, calibrationFile.sourceName));
+    setActiveTab("calibration");
+  }
+
+  async function loadCalibrationFile(file: File) {
+    const parsed = parseVtaText(file.name, await file.text());
+    setCalibration(estimateCalibrationOffsets(parsed.sensorPoints, {}, parsed.sourceName));
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand">
+          <strong>OpenVTA Analyzer</strong>
+          <span>Client-side VTA route, sensor, calibration, and filtering workspace</span>
+        </div>
+        <div className="topbar-actions">
+          {files.length > 1 ? (
+            <select
+              aria-label="Active file"
+              value={activeIndex}
+              onChange={(event) => {
+                setActiveIndex(Number(event.target.value));
+                setSelectedPointIndex(0);
+              }}
+            >
+              {files.map((file, index) => (
+                <option value={index} key={file.sourceName}>
+                  {file.sourceName}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <label className="button ghost">
+            <FileUp size={16} aria-hidden />
+            Open VTA/ZIP
+            <input
+              hidden
+              type="file"
+              multiple
+              accept=".vta,.Vta,.zip"
+              onChange={(event) => {
+                void loadFiles(Array.from(event.target.files ?? []));
+                event.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <button type="button" className="button ghost" onClick={loadSample}>
+            <TestTube2 size={16} aria-hidden />
+            Load sample
+          </button>
+          <button type="button" className="button ghost" onClick={loadSampleCalibration} disabled={!activeFile}>
+            <Settings size={16} aria-hidden />
+            Sample CAL
+          </button>
+        </div>
+      </header>
+
+      <main className="workspace">
+        <div className="privacy-note">
+          Files are parsed locally in this browser. No GPS traces or sensor records are uploaded by the app.
+        </div>
+
+        {!activeFile ? (
+          <FileDrop onFiles={(incoming) => void loadFiles(incoming)} loadError={loadError} onSample={loadSample} />
+        ) : (
+          <>
+            <nav className="tabs" aria-label="Analyzer sections">
+              {tabs.map((tab) => (
+                <button
+                  type="button"
+                  key={tab.key}
+                  className={tab.key === activeTab ? "tab active" : "tab"}
+                  onClick={() => setActiveTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+
+            {activeTab === "overview" && stats ? (
+              <Overview
+                file={activeFile}
+                stats={stats}
+                selectedPointIndex={selectedPointIndex}
+                onSelectedPointIndex={setSelectedPointIndex}
+                filterWarning={filterResult.warning}
+              />
+            ) : null}
+
+            {activeTab === "charts" ? (
+              <Charts
+                file={activeFile}
+                sensors={transformedSensors}
+                selectedPointIndex={selectedPointIndex}
+                onSelectedPointIndex={setSelectedPointIndex}
+              />
+            ) : null}
+
+            {activeTab === "tables" ? <Tables file={activeFile} sensors={transformedSensors} /> : null}
+
+            {activeTab === "calibration" ? (
+              <CalibrationPanel
+                file={activeFile}
+                sensors={activeFile.sensorPoints}
+                transformedSensors={transformedSensors}
+                calibration={calibration}
+                onCalibration={setCalibration}
+                onCalibrationFile={(file) => void loadCalibrationFile(file)}
+                filterSettings={filterSettings}
+                onFilterSettings={setFilterSettings}
+                filterWarning={filterResult.warning}
+                sampleRateHz={filterResult.sampleRateHz}
+              />
+            ) : null}
+
+            {activeTab === "export" && stats ? (
+              <ExportPanel file={activeFile} sensors={transformedSensors} stats={stats} />
+            ) : null}
+          </>
+        )}
+
+        <footer className="privacy-note">
+          <Gauge size={15} aria-hidden /> Map tiles use the configured interactive tile source only for visible views.
+          Exported files are generated locally with browser downloads. <Download size={15} aria-hidden />
+        </footer>
+      </main>
+    </div>
+  );
+}
