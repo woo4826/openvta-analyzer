@@ -647,6 +647,20 @@ footer.privacy-note {
   gap: var(--space-6);
 }
 
+.chart-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.chart-view-header h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-xl);
+  line-height: var(--line-tight);
+}
+
 .chart {
   min-width: 0;
   height: 300px;
@@ -871,6 +885,11 @@ tbody tr:hover {
 
   .panel-header {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chart-view-header {
+    align-items: stretch;
     flex-direction: column;
   }
 

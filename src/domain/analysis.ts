@@ -18,6 +18,16 @@ export interface RouteDistanceRow {
   speedKmh: number;
 }
 
+export interface PointRangeSummary {
+  startIndex: number;
+  endIndex: number;
+  pointCount: number;
+  distanceKm: number;
+  averageSpeedKmh: number;
+  maxSpeedKmh: number;
+  maxDerivedAccelMps2: number;
+}
+
 export function displayGpsPointsWithSources(file: VtaFile, sources: SourceVisibility): GpsPoint[] {
   const points = [
     ...(sources.rawGps ? file.gpsPoints : []),
@@ -59,6 +69,38 @@ export function summarizeSegment(
     minAltitudeMeters: altitudes.length ? Math.min(...altitudes) : undefined,
     maxAltitudeMeters: altitudes.length ? Math.max(...altitudes) : undefined,
     warningCount: countWarningsInPointRange(file, selectedPoints),
+  };
+}
+
+export function summarizePointRange(points: GpsPoint[], segment?: ActiveSegment): PointRangeSummary {
+  if (!points.length) {
+    return {
+      startIndex: 0,
+      endIndex: 0,
+      pointCount: 0,
+      distanceKm: 0,
+      averageSpeedKmh: 0,
+      maxSpeedKmh: 0,
+      maxDerivedAccelMps2: 0,
+    };
+  }
+
+  const normalized = segment
+    ? normalizeSegment(segment, points.length)
+    : { startIndex: 0, endIndex: points.length - 1, source: "chart" as const };
+  const selectedPoints = points.slice(normalized.startIndex, normalized.endIndex + 1);
+  const speeds = selectedPoints.map((point) => point.speedKmh).filter(Number.isFinite);
+  const validationRows = buildValidationRows(selectedPoints);
+  const derivedAccelerations = validationRows.map((row) => Math.abs(row.derivedAccelMps2)).filter(Number.isFinite);
+
+  return {
+    startIndex: normalized.startIndex,
+    endIndex: normalized.endIndex,
+    pointCount: selectedPoints.length,
+    distanceKm: routeDistanceKm(selectedPoints),
+    averageSpeedKmh: average(speeds) ?? 0,
+    maxSpeedKmh: speeds.length ? Math.max(...speeds) : 0,
+    maxDerivedAccelMps2: derivedAccelerations.length ? Math.max(...derivedAccelerations) : 0,
   };
 }
 

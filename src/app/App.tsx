@@ -296,6 +296,9 @@ export function App() {
                   sensors={transformedSensors}
                   selectedPointIndex={selectedPointIndex}
                   onSelectedPointIndex={setSelectedPointIndex}
+                  activeSegment={activeSegment}
+                  onActiveSegment={setActiveSegment}
+                  transformMode={transformMode}
                   visiblePoints={visibleGpsPoints}
                 />
               ) : null}

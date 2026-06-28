@@ -81,7 +81,12 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
 
   await page.getByRole("button", { name: "Charts" }).click();
   await expect(page.getByRole("img", { name: "Velocity chart" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Distance over time chart" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Velocity-derived acceleration chart" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Friction Circle chart" })).toBeVisible();
+  await page.getByRole("button", { name: "Use visible velocity range as segment" }).click();
+  await page.getByRole("button", { name: "Export" }).click();
+  await expect(page.getByText("Selected points")).toBeVisible();
 
   await page.getByRole("button", { name: "Tables" }).click();
   await expect(page.getByRole("heading", { name: /GPS and enhanced points/ })).toBeVisible();
