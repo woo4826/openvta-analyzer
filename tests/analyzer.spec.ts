@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 test("loads the sample and renders core analysis views", async ({ page }) => {
+  await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open a VTA or ZIP file" })).toBeVisible();
 
@@ -19,26 +20,64 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(fileTray.getByText("Active")).toBeVisible();
   await expect(fileTray.getByRole("button", { name: "Selected" })).toHaveAttribute("aria-pressed", "true");
   await expect(fileTray.getByRole("button", { name: "Remove OpenVTA_sample.Vta" })).toBeVisible();
-  const rawGpsButton = page.getByRole("button", { name: "Raw GPS" });
-  const enhancedButton = page.getByRole("button", { name: "Enhanced" });
+  const workspace = page.locator(".analysis-inspector");
+  const rawGpsButton = workspace.getByRole("button", { name: "Raw GPS" });
+  const enhancedButton = workspace.getByRole("button", { name: "Enhanced" });
   await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
   await expect(enhancedButton).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Compare" })).toBeVisible();
 
+  await expect(page.getByText("Distance")).toBeVisible();
+  await expect(page.getByLabel("Speed-colored route plot")).toBeVisible();
+  await expect(page.getByText("Map tiles unavailable. Showing coordinate plot.")).toBeVisible();
+  const fallbackPoints = page.locator("svg.coordinate-layer > circle");
+  await expect(fallbackPoints.nth(0)).toBeVisible();
+
+  const pointSizeInput = page.getByLabel("Point size");
+  await pointSizeInput.fill("20");
+  await expect(pointSizeInput).toHaveValue("14");
+  await expect(fallbackPoints.nth(0)).toHaveAttribute("r", "14");
+  await pointSizeInput.fill("5");
+  await expect(pointSizeInput).toHaveValue("5");
+  await expect(fallbackPoints.nth(0)).toHaveAttribute("r", "5");
+
+  const selectedPointPanel = panelByHeading(analysisMain, "Selected Point");
+  await page.getByRole("button", { name: "Set segment start" }).click();
+  await fallbackPoints.nth(10).click();
+  await expect(metricValue(selectedPointPanel, "Index")).toHaveText("10");
+  await page.getByRole("button", { name: "Set segment end" }).click();
+  const segmentPanel = panelByHeading(analysisMain, "Segment");
+  await expect(segmentPanel).toBeVisible();
+  await expect(segmentPanel.locator(".panel-header span")).toHaveText("0-10");
+  await expect(metricValue(segmentPanel, "Segment points")).toHaveText("11");
+  await expect(metricValue(segmentPanel, "Distance")).toHaveText(/0\.\d{3} km/);
+  await expect(metricValue(segmentPanel, "Distance")).not.toHaveText("0.000 km");
+  await expect(metricValue(workspace, "Segment")).toHaveText("0-10");
+
+  await page.getByRole("button", { name: "Clear segment" }).click();
+  await expect(panelByHeading(analysisMain, "Segment")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Clear segment" })).toBeDisabled();
+  await expect(metricValue(workspace, "Segment")).toHaveText("All points");
+
+  await page.getByRole("button", { name: "Set segment start" }).click();
+  await fallbackPoints.nth(15).click();
+  await expect(metricValue(selectedPointPanel, "Index")).toHaveText("15");
+  await page.getByRole("button", { name: "Set segment end" }).click();
+  await expect(panelByHeading(analysisMain, "Segment").locator(".panel-header span")).toHaveText("10-15");
+  await page.getByRole("button", { name: "Create region" }).click();
+  const regionPanel = panelByHeading(analysisMain, "Region");
+  await expect(metricValue(regionPanel, "Region points")).toHaveText("72");
+
   await enhancedButton.click();
   await expect(enhancedButton).toHaveAttribute("aria-pressed", "false");
   await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
+  await expect(panelByHeading(analysisMain, "Segment")).toHaveCount(0);
+  await expect(panelByHeading(analysisMain, "Region")).toHaveCount(0);
+  await expect(metricValue(selectedPointPanel, "Index")).toHaveText("0");
+  await expect(metricValue(workspace, "Segment")).toHaveText("All points");
   await rawGpsButton.click();
   await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
   await expect(enhancedButton).toHaveAttribute("aria-pressed", "false");
-
-  await expect(page.getByText("Distance")).toBeVisible();
-  await expect(page.getByLabel("Speed-colored route plot")).toBeVisible();
-  await page.getByRole("button", { name: "Set segment start" }).click();
-  await page.getByRole("button", { name: "Set segment end" }).click();
-  await expect(analysisMain.getByRole("heading", { name: "Segment" })).toBeVisible();
-  await page.getByRole("button", { name: "Create region" }).click();
-  await expect(page.getByText("Region points")).toBeVisible();
 
   await page.getByRole("button", { name: "Charts" }).click();
   await expect(page.getByRole("img", { name: "Velocity chart" })).toBeVisible();
@@ -104,3 +143,11 @@ test("keeps unavailable source toggles unpressed", async ({ page }) => {
   await expect(workspace.getByRole("button", { name: "Raw GPS" })).toHaveAttribute("aria-pressed", "false");
   await expect(workspace.getByRole("button", { name: "Enhanced" })).toHaveAttribute("aria-pressed", "true");
 });
+
+function panelByHeading(scope: Locator, name: string | RegExp): Locator {
+  return scope.locator(".panel").filter({ hasText: name });
+}
+
+function metricValue(scope: Locator, label: string): Locator {
+  return scope.locator(".metric").filter({ hasText: label }).locator("strong");
+}

@@ -33,6 +33,7 @@ export function RouteMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
+  const [styleLoaded, setStyleLoaded] = useState(false);
   const bounds = useMemo(() => coordinateBounds(points), [points]);
   const segmentPoints = useMemo(() => selectedSegmentPoints(points, segment), [points, segment]);
 
@@ -41,6 +42,7 @@ export function RouteMap({
       return;
     }
     setMapFailed(false);
+    setStyleLoaded(false);
     try {
       const center: [number, number] = [points[0].longitude, points[0].latitude];
       const map = new maplibregl.Map({
@@ -61,9 +63,29 @@ export function RouteMap({
           layers: [{ id: "osm", type: "raster", source: "osm" }],
         },
       });
-      map.on("error", () => setMapFailed(true));
+      let removed = false;
+      const removeMap = () => {
+        if (removed) {
+          return;
+        }
+        removed = true;
+        map.remove();
+        if (mapRef.current === map) {
+          mapRef.current = null;
+        }
+      };
+      map.on("error", () => {
+        setStyleLoaded(false);
+        setMapFailed(true);
+        removeMap();
+      });
+      map.on("styledata", () => {
+        if (map.isStyleLoaded()) {
+          setStyleLoaded(true);
+        }
+      });
       map.on("load", () => {
-        updateMapRoute(map, points, selectedIndex, segment, region, settings);
+        setStyleLoaded(true);
         map.on("click", "route-points", (event) => {
           const rawIndex = event.features?.[0]?.properties?.index;
           const nextIndex = Number(rawIndex);
@@ -82,10 +104,10 @@ export function RouteMap({
       const fitTimer = window.setTimeout(() => fitRoute(), 350);
       return () => {
         window.clearTimeout(fitTimer);
-        mapRef.current?.remove();
-        mapRef.current = null;
+        removeMap();
       };
     } catch {
+      setStyleLoaded(false);
       setMapFailed(true);
     }
     // Only rebuild the MapLibre instance when the route appears or the tile source changes.
@@ -93,7 +115,7 @@ export function RouteMap({
   }, [points.length, settings.tileUrl]);
 
   useEffect(() => {
-    if (!mapRef.current) {
+    if (!mapRef.current || !styleLoaded) {
       return;
     }
     updateMapRoute(mapRef.current, points, selectedIndex, segment, region, settings);
@@ -104,7 +126,7 @@ export function RouteMap({
         duration: 250,
       });
     }
-  }, [points, selectedIndex, segment, region, settings]);
+  }, [points, selectedIndex, segment, region, settings, styleLoaded]);
 
   function fitRoute() {
     if (!mapRef.current || !points.length) {
@@ -227,7 +249,7 @@ export function RouteMap({
               />
             </>
           ) : null}
-          {points.map((point) => {
+          {points.map((point, index) => {
             const [cx, cy] = toSvgPointArray(point, bounds);
             return (
               <circle
@@ -238,7 +260,7 @@ export function RouteMap({
                 fill={speedColor(point.speedKmh, settings.speedThresholds)}
                 stroke="#0c1b22"
                 strokeWidth="1.5"
-                onClick={() => onSelectedIndex(points.indexOf(point))}
+                onClick={() => onSelectedIndex(index)}
                 style={{ pointerEvents: "auto", cursor: "pointer" }}
               />
             );
