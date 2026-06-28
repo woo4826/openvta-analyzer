@@ -15,7 +15,16 @@ OpenVTA Analyzer is a zero-backend Web/PWA workspace for VTA trajectory files. I
 - Named calibration presets with JSON import/export.
 - 2nd-order low-pass Butterworth filtering for acceleration channels.
 - Segment `.Vta`, transformed segment `.Vta`, GPS CSV, sensor CSV, validation CSV, and summary JSON export.
+- Multilingual UI with primary English and Korean translations plus secondary Japanese, Simplified Chinese, Spanish, French, and German translations.
 - Client-side only: traces are not uploaded by the app.
+
+## Language support
+
+OpenVTA Analyzer includes an in-app language selector. English and Korean are primary, high-quality translations. Japanese (`ja`), Simplified Chinese (`zh-CN`), Spanish (`es`), French (`fr`), and German (`de`) are included as secondary translations.
+
+The selected UI language persists locally in the browser under `openvta.language.v1`. It is not uploaded or synchronized by the app.
+
+Language selection changes app UI text only. For compatibility, export schemas, CSV headers, JSON keys, generated VTA metadata, filenames, units, and parsed source data are not localized.
 
 ## Legacy VTA_Road parity scope
 

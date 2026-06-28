@@ -185,6 +185,45 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   expect(Number(firstExportedRow[4])).toBeCloseTo(Number(firstVisibleCells[4]), 3);
 });
 
+test("persists Korean language and keeps the sample workflow usable", async ({ page }) => {
+  await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+  await page.goto("/");
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "Open a VTA or ZIP file" })).toBeVisible();
+  const englishLanguageSelector = page.getByLabel("Language");
+  await expect(englishLanguageSelector).toHaveValue("en");
+
+  await englishLanguageSelector.selectOption("ko");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.getByRole("heading", { name: "VTA 또는 ZIP 파일 열기" })).toBeVisible();
+  await expect(page.getByLabel("언어")).toHaveValue("ko");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.getByRole("heading", { name: "VTA 또는 ZIP 파일 열기" })).toBeVisible();
+  await expect(page.getByLabel("언어")).toHaveValue("ko");
+
+  await page.getByRole("button", { name: "내장 샘플 불러오기" }).click();
+  const analysisMain = page.locator(".analysis-main");
+  await expect(analysisMain.getByRole("heading", { name: "OpenVTA_sample.Vta" })).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "개요" })).toBeVisible();
+  await expect(analysisMain.getByRole("heading", { name: "요약" })).toBeVisible();
+  await expect(analysisMain.getByText("GPS / 보강")).toBeVisible();
+  await expect(analysisMain.getByRole("heading", { name: "선택한 포인트" })).toBeVisible();
+
+  await analysisMain.getByRole("button", { name: "보정" }).click();
+  await expect(analysisMain.getByRole("heading", { name: "보정 및 필터링" })).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "현재 파일에서 추정" })).toBeVisible();
+  await expect(analysisMain.getByLabel("저역 통과 필터")).toBeVisible();
+
+  await analysisMain.getByRole("button", { name: "내보내기", exact: true }).click();
+  await expect(analysisMain.getByRole("heading", { name: "내보내기" })).toBeVisible();
+  await expect(analysisMain.getByLabel("줄 끝 형식")).toBeVisible();
+  await expect(analysisMain.getByText("선택한 포인트")).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "검증 CSV 내보내기" })).toBeVisible();
+});
+
 test("applies sample calibration and exports summary", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Load built-in sample" }).click();
