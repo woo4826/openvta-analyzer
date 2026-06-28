@@ -63,12 +63,12 @@ export function ExportPanel({
   const end = normalizedSegment?.endIndex ?? 0;
   const selectedPoints = useMemo(() => (points.length ? points.slice(start, end + 1) : []), [end, points, start]);
   const selectedSensors = useMemo(
-    () => (activeSegment ? sensorsInPointRange(sensors, selectedPoints) : sensors),
-    [activeSegment, selectedPoints, sensors],
+    () => (activeSegment || visiblePoints ? sensorsInPointRange(sensors, selectedPoints) : sensors),
+    [activeSegment, selectedPoints, sensors, visiblePoints],
   );
   const exportStats = useMemo(
-    () => (activeSegment || visiblePoints ? summarizeVisiblePoints(file, selectedPoints) : stats),
-    [activeSegment, file, selectedPoints, stats, visiblePoints],
+    () => (activeSegment || visiblePoints ? summarizeVisiblePoints(file, selectedPoints, selectedSensors.length) : stats),
+    [activeSegment, file, selectedPoints, selectedSensors.length, stats, visiblePoints],
   );
   const count = points.length ? end - start + 1 : 0;
   const validationRows = useMemo(() => buildValidationRows(selectedPoints), [selectedPoints]);
@@ -225,7 +225,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function summarizeVisiblePoints(file: VtaFile, points: GpsPoint[]): SummaryStats {
+function summarizeVisiblePoints(file: VtaFile, points: GpsPoint[], sensorCount: number): SummaryStats {
   const speeds = points.map((point) => point.speedKmh);
   const movingSpeeds = speeds.filter((speed) => speed > 0.1);
   const altitudes = points.map((point) => point.altitudeMeters).filter(Number.isFinite);
@@ -248,7 +248,7 @@ function summarizeVisiblePoints(file: VtaFile, points: GpsPoint[]): SummaryStats
     endTime,
     gpsCount: points.filter((point) => file.gpsPoints.includes(point)).length,
     enhancedCount: points.filter((point) => file.enhancedPoints.includes(point)).length,
-    sensorCount: file.sensorPoints.length,
+    sensorCount,
   };
 }
 

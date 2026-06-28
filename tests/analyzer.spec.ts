@@ -93,14 +93,59 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(metricValue(panelByHeading(analysisMain, "Averages"), "Selected points")).toHaveText(String(rawGpsCount));
 
   await page.getByRole("button", { name: "Calibration" }).click();
+  await page.getByRole("button", { name: "Estimate from current file" }).click();
   await page.getByLabel("Preset name").fill("Static pad");
   await page.getByRole("button", { name: "Save preset" }).click();
   await expect(page.getByText("Static pad")).toBeVisible();
+  await page.getByLabel("Low-pass filter").selectOption("on");
+  await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Filtered" }).click();
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.getByLabel("Line endings").selectOption("crlf");
   await expect(page.getByRole("button", { name: "Export validation CSV" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export transformed segment .Vta" })).toBeVisible();
   await expect(page.getByText("Selected points")).toBeVisible();
+  await page.getByLabel("Segment start point").fill("2");
+  await page.getByLabel("Segment end point").fill("4");
+  await expect(metricValue(analysisMain, "Selected points")).toHaveText("3");
+
+  const transformedVta = await downloadTextByButton(
+    page,
+    "Export transformed segment .Vta",
+    "OpenVTA_sample_transformed_segment.Vta",
+  );
+  expect(transformedVta).toContain("\r\n");
+  expect(transformedVta).not.toMatch(/[^\r]\n/);
+  expect(transformedVta).toContain("%% OpenVTA Analyzer Transformed Segment Export");
+  expect(transformedVta).toContain("%% SegmentPointIndexes: 2-4");
+  expect(transformedVta).toContain("%% TransformMode: filtered");
+  expect(transformedVta).toContain("%% Calibration: unit=mps2; samples=185;");
+  expect(transformedVta).toContain("source=OpenVTA_sample.Vta");
+  expect(transformedVta).toContain("%% Filter: enabled=true; cutoffHz=5; channels=XYZ");
+
+  const validationCsv = await downloadTextByButton(page, "Export validation CSV", "validation.csv");
+  expect(validationCsv).toContain("\r\n");
+  expect(validationCsv).not.toMatch(/[^\r]\n/);
+  const validationLines = validationCsv.split("\r\n");
+  expect(validationLines[0]).toBe("index,elapsedSeconds,speedKmh,deltaSpeedKmh,derivedAccelMps2");
+  expect(validationLines).toHaveLength(3);
+  expect(validationLines[1]).toMatch(/^3,1,\d+,\d+,/);
+
+  const summaryJson = await downloadTextByButton(page, "Export Summary JSON", "summary.json");
+  expect(summaryJson).toContain("\r\n");
+  expect(summaryJson).not.toMatch(/[^\r]\n/);
+  const summary = JSON.parse(summaryJson) as { stats: { gpsCount: number; enhancedCount: number; sensorCount: number } };
+  expect(summary.stats.gpsCount).toBe(3);
+  expect(summary.stats.enhancedCount).toBe(0);
+  expect(summary.stats.sensorCount).toBe(10);
+
+  const sensorCsv = await downloadTextByButton(page, "Export Sensor CSV", "sensor-points.csv");
+  const sensorLines = sensorCsv.split("\r\n");
+  expect(sensorLines[0]).toBe(
+    "index,elapsedSeconds,eventCode,accelUnit,accelX,accelY,accelZ,orientationXDegrees,orientationYDegrees,orientationZDegrees",
+  );
+  expect(sensorLines.slice(1)).toHaveLength(10);
+  await page.getByLabel("Segment start point").fill("0");
+  await page.getByLabel("Segment end point").fill(String(rawGpsCount - 1));
 
   await page.getByRole("button", { name: "Tables" }).click();
   await page.getByRole("tab", { name: "Validation" }).click();
@@ -240,4 +285,16 @@ async function tableStatusCounts(page: Page): Promise<{ visibleRows: number; tot
 
 async function firstValidationTableCell(validationTable: Locator): Promise<string> {
   return (await validationTable.locator("tbody tr").first().locator("td").first().textContent())?.trim() ?? "";
+}
+
+async function downloadTextByButton(page: Page, buttonName: string, expectedFilename: string): Promise<string> {
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: buttonName }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(expectedFilename);
+  const path = await download.path();
+  if (!path) {
+    throw new Error(`Expected ${expectedFilename} download to have a filesystem path.`);
+  }
+  return readFile(path, "utf8");
 }
