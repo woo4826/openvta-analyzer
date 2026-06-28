@@ -73,10 +73,15 @@ function isCalibrationPreset(value: unknown): value is CalibrationPreset {
   return (
     isRecord(offsets) &&
     typeof offsets.x === "number" &&
+    Number.isFinite(offsets.x) &&
     typeof offsets.y === "number" &&
+    Number.isFinite(offsets.y) &&
     typeof offsets.z === "number" &&
+    Number.isFinite(offsets.z) &&
     (offsets.unit === "mps2" || offsets.unit === "g") &&
-    typeof offsets.sampleCount === "number"
+    typeof offsets.sampleCount === "number" &&
+    Number.isInteger(offsets.sampleCount) &&
+    offsets.sampleCount >= 0
   );
 }
 

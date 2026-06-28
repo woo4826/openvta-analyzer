@@ -49,4 +49,25 @@ describe("settings helpers", () => {
     expect(importCalibrationPresets(exportCalibrationPresets([preset]))).toEqual([preset]);
     expect(importCalibrationPresets("{")).toEqual([]);
   });
+
+  it("rejects calibration presets with non-finite offsets or invalid sample counts", () => {
+    expect(
+      importCalibrationPresets(
+        String.raw`[
+          {
+            "id": "bad-offset",
+            "name": "Bad offset",
+            "createdAt": 1700000000000,
+            "offsets": { "x": 1e999, "y": 0, "z": 0, "unit": "mps2", "sampleCount": 30 }
+          },
+          {
+            "id": "bad-sample-count",
+            "name": "Bad sample count",
+            "createdAt": 1700000000000,
+            "offsets": { "x": 0, "y": 0, "z": 0, "unit": "mps2", "sampleCount": 1.5 }
+          }
+        ]`,
+      ),
+    ).toEqual([]);
+  });
 });

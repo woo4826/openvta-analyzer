@@ -99,19 +99,13 @@ export function buildValidationRows(points: GpsPoint[]): ValidationRow[] {
 
 export function summarizeAxisAlignedRegion(points: GpsPoint[], region: AxisAlignedRegion): RegionSummary {
   const bounds = normalizeRegion(region);
-  const selected = points.filter(
-    (point) =>
-      point.latitude >= bounds.minLatitude &&
-      point.latitude <= bounds.maxLatitude &&
-      point.longitude >= bounds.minLongitude &&
-      point.longitude <= bounds.maxLongitude,
-  );
+  const selected = points.filter((point) => isPointInRegion(point, bounds));
   const speeds = selected.map((point) => point.speedKmh).filter(Number.isFinite);
   const altitudes = selected.map((point) => point.altitudeMeters).filter(Number.isFinite);
 
   return {
     pointCount: selected.length,
-    distanceKm: routeDistanceKm(selected),
+    distanceKm: regionDistanceKm(points, bounds),
     averageSpeedKmh: average(speeds) ?? 0,
     maxSpeedKmh: speeds.length ? Math.max(...speeds) : 0,
     minAltitudeMeters: altitudes.length ? Math.min(...altitudes) : undefined,
@@ -168,11 +162,11 @@ function countWarningsInPointRange(file: VtaFile, selectedPoints: GpsPoint[]): n
 }
 
 function elapsedSecondsBetween(left: GpsPoint, right: GpsPoint): number {
-  if (left.epochMillis !== undefined && right.epochMillis !== undefined) {
-    return Math.max(0, (right.epochMillis - left.epochMillis) / 1000);
-  }
   if (left.elapsedRealtimeNanos !== undefined && right.elapsedRealtimeNanos !== undefined) {
     return Math.max(0, (right.elapsedRealtimeNanos - left.elapsedRealtimeNanos) / 1_000_000_000);
+  }
+  if (left.epochMillis !== undefined && right.epochMillis !== undefined) {
+    return Math.max(0, (right.epochMillis - left.epochMillis) / 1000);
   }
   return Math.max(0, right.index - left.index);
 }
@@ -192,6 +186,27 @@ function normalizeRegion(region: AxisAlignedRegion): AxisAlignedRegion {
     minLongitude: Math.min(region.minLongitude, region.maxLongitude),
     maxLongitude: Math.max(region.minLongitude, region.maxLongitude),
   };
+}
+
+function regionDistanceKm(points: GpsPoint[], bounds: AxisAlignedRegion): number {
+  let distanceKm = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const point = points[index];
+    if (isPointInRegion(previous, bounds) && isPointInRegion(point, bounds)) {
+      distanceKm += routeDistanceKm([previous, point]);
+    }
+  }
+  return distanceKm;
+}
+
+function isPointInRegion(point: GpsPoint, bounds: AxisAlignedRegion): boolean {
+  return (
+    point.latitude >= bounds.minLatitude &&
+    point.latitude <= bounds.maxLatitude &&
+    point.longitude >= bounds.minLongitude &&
+    point.longitude <= bounds.maxLongitude
+  );
 }
 
 function average(values: number[]): number | undefined {

@@ -8,6 +8,7 @@ import {
   summarizeAxisAlignedRegion,
   summarizeSegment,
 } from "../analysis";
+import type { GpsPoint } from "../types";
 
 describe("analysis helpers", () => {
   const trace = parseVtaText(
@@ -45,6 +46,16 @@ describe("analysis helpers", () => {
     expect(validation[1].derivedAccelMps2).toBeGreaterThan(0);
   });
 
+  it("uses sub-second elapsed realtime deltas for validation acceleration before coarse epoch milliseconds", () => {
+    const validation = buildValidationRows([
+      gpsPoint({ index: 0, speedKmh: 0, epochMillis: 1_700_000_000_000, elapsedRealtimeNanos: 10_000_000_000 }),
+      gpsPoint({ index: 1, speedKmh: 36, epochMillis: 1_700_000_000_000, elapsedRealtimeNanos: 10_500_000_000 }),
+    ]);
+
+    expect(validation[0].elapsedSeconds).toBe(0.5);
+    expect(validation[0].derivedAccelMps2).toBeCloseTo(20);
+  });
+
   it("summarizes points inside an axis-aligned map region", () => {
     const points = displayGpsPointsWithSources(trace, { rawGps: true, enhancedGps: false });
     const summary = summarizeAxisAlignedRegion(points, {
@@ -56,4 +67,42 @@ describe("analysis helpers", () => {
     expect(summary.pointCount).toBe(3);
     expect(summary.maxSpeedKmh).toBe(72);
   });
+
+  it("does not bridge region distance across outside points", () => {
+    const summary = summarizeAxisAlignedRegion(
+      [
+        gpsPoint({ index: 0, latitude: 0, longitude: 0 }),
+        gpsPoint({ index: 1, latitude: 0, longitude: 1 }),
+        gpsPoint({ index: 2, latitude: 0, longitude: 0.01 }),
+      ],
+      {
+        minLatitude: -0.1,
+        maxLatitude: 0.1,
+        minLongitude: -0.1,
+        maxLongitude: 0.1,
+      },
+    );
+
+    expect(summary.pointCount).toBe(2);
+    expect(summary.distanceKm).toBe(0);
+  });
 });
+
+function gpsPoint(overrides: Partial<GpsPoint>): GpsPoint {
+  return {
+    index: 0,
+    lineNumber: 1,
+    rawLine: "",
+    date: "01012026",
+    time: "000000",
+    latitude: 0,
+    longitude: 0,
+    altitudeMeters: 0,
+    speedKmh: 0,
+    bearingDegrees: 0,
+    satelliteCount: 0,
+    source: "RawGps",
+    confidence: 1,
+    ...overrides,
+  };
+}
