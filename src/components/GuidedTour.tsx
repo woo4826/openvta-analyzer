@@ -281,14 +281,25 @@ function keepFocusInDialog(event: KeyboardEvent, dialog: HTMLDivElement | null):
 
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
+  const activeElement = document.activeElement;
 
-  if (event.shiftKey && document.activeElement === first) {
+  if (activeElement === dialog || !dialog.contains(activeElement)) {
+    event.preventDefault();
+    if (event.shiftKey) {
+      last.focus();
+      return;
+    }
+    first.focus();
+    return;
+  }
+
+  if (event.shiftKey && activeElement === first) {
     event.preventDefault();
     last.focus();
     return;
   }
 
-  if (!event.shiftKey && document.activeElement === last) {
+  if (!event.shiftKey && activeElement === last) {
     event.preventDefault();
     first.focus();
   }

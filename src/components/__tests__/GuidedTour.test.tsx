@@ -109,6 +109,26 @@ describe("GuidedTour", () => {
     await user.keyboard("{Escape}");
     expect(onSkip).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps shift tab inside the dialog from initial dialog focus", async () => {
+    const user = userEvent.setup();
+
+    renderTour(
+      <GuidedTour
+        steps={steps}
+        activeIndex={1}
+        onIndexChange={vi.fn()}
+        onSkip={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Export the result" })).toHaveFocus();
+
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+
+    expect(screen.getByRole("button", { name: "Done" })).toHaveFocus();
+  });
 });
 
 function renderTour(element: React.ReactElement) {
