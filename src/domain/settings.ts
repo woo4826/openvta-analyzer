@@ -3,6 +3,14 @@ import type { CalibrationPreset } from "./types";
 type JsonStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export const CALIBRATION_PRESETS_STORAGE_KEY = "openvta.calibrationPresets.v1";
+export const ONBOARDING_TOUR_STORAGE_KEY = "openvta.onboardingTour.v1";
+
+export interface OnboardingTourState {
+  status: "new" | "skipped" | "completed";
+  version: 1;
+  skippedAt?: number;
+  completedAt?: number;
+}
 
 export function loadJsonSetting<T>(key: string, fallback: T, storage: JsonStorage = defaultStorage()): T {
   try {
@@ -33,6 +41,31 @@ export function saveCalibrationPresets(
   storage: JsonStorage = defaultStorage(),
 ): void {
   saveJsonSetting(CALIBRATION_PRESETS_STORAGE_KEY, presets, storage);
+}
+
+export function loadOnboardingTourState(storage: JsonStorage = defaultStorage()): OnboardingTourState {
+  return coerceOnboardingTourState(
+    loadJsonSetting<unknown>(ONBOARDING_TOUR_STORAGE_KEY, defaultOnboardingTourState(), storage),
+  );
+}
+
+export function saveOnboardingTourState(
+  state: OnboardingTourState,
+  storage: JsonStorage = defaultStorage(),
+): void {
+  saveJsonSetting(ONBOARDING_TOUR_STORAGE_KEY, state, storage);
+}
+
+export function skippedOnboardingTourState(timestamp = Date.now()): OnboardingTourState {
+  return { status: "skipped", skippedAt: timestamp, version: 1 };
+}
+
+export function completedOnboardingTourState(timestamp = Date.now()): OnboardingTourState {
+  return { status: "completed", completedAt: timestamp, version: 1 };
+}
+
+export function defaultOnboardingTourState(): OnboardingTourState {
+  return { status: "new", version: 1 };
 }
 
 export function upsertCalibrationPreset(
@@ -84,6 +117,38 @@ function coerceCalibrationPresets(value: unknown): CalibrationPreset[] {
     return value.filter(isCalibrationPreset);
   }
   return [];
+}
+
+function coerceOnboardingTourState(value: unknown): OnboardingTourState {
+  if (!isRecord(value) || value.version !== 1) {
+    return defaultOnboardingTourState();
+  }
+
+  if (value.status === "new") {
+    return defaultOnboardingTourState();
+  }
+
+  if (value.status === "skipped" && isOptionalFiniteNumber(value.skippedAt)) {
+    return {
+      status: "skipped",
+      skippedAt: value.skippedAt,
+      version: 1,
+    };
+  }
+
+  if (value.status === "completed" && isOptionalFiniteNumber(value.completedAt)) {
+    return {
+      status: "completed",
+      completedAt: value.completedAt,
+      version: 1,
+    };
+  }
+
+  return defaultOnboardingTourState();
+}
+
+function isOptionalFiniteNumber(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === "number" && Number.isFinite(value));
 }
 
 function defaultStorage(): JsonStorage {

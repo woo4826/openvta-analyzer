@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CALIBRATION_PRESETS_STORAGE_KEY,
+  ONBOARDING_TOUR_STORAGE_KEY,
+  completedOnboardingTourState,
   exportCalibrationPresets,
   importCalibrationPresets,
   loadCalibrationPresets,
   loadJsonSetting,
+  loadOnboardingTourState,
   mergeImportedCalibrationPresets,
   removeCalibrationPreset,
   saveCalibrationPresets,
   saveJsonSetting,
+  saveOnboardingTourState,
+  skippedOnboardingTourState,
   upsertCalibrationPreset,
 } from "../settings";
 import type { CalibrationPreset } from "../types";
@@ -152,6 +157,56 @@ describe("settings helpers", () => {
         ]`,
       ),
     ).toEqual([]);
+  });
+
+  it("loads default onboarding tour state when storage is missing or invalid", () => {
+    const emptyStorage = {
+      getItem: () => null,
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    const invalidStorage = {
+      getItem: () => "{",
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+
+    expect(loadOnboardingTourState(emptyStorage)).toEqual({ status: "new", version: 1 });
+    expect(loadOnboardingTourState(invalidStorage)).toEqual({ status: "new", version: 1 });
+  });
+
+  it("saves skipped and completed onboarding tour states", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: vi.fn(),
+    };
+
+    saveOnboardingTourState(skippedOnboardingTourState(1700000000000), storage);
+    expect(loadOnboardingTourState(storage)).toEqual({
+      status: "skipped",
+      skippedAt: 1700000000000,
+      version: 1,
+    });
+
+    saveOnboardingTourState(completedOnboardingTourState(1700000001000), storage);
+    expect(loadOnboardingTourState(storage)).toEqual({
+      status: "completed",
+      completedAt: 1700000001000,
+      version: 1,
+    });
+    expect(store.has(ONBOARDING_TOUR_STORAGE_KEY)).toBe(true);
+  });
+
+  it("rejects malformed onboarding tour states", () => {
+    const storage = {
+      getItem: () => JSON.stringify({ status: "completed", completedAt: "soon", version: 1 }),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+
+    expect(loadOnboardingTourState(storage)).toEqual({ status: "new", version: 1 });
   });
 });
 
