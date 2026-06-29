@@ -85,6 +85,11 @@ describe("i18n language helpers", () => {
       expect(isSupportedLanguage(language)).toBe(true);
     }
   });
+
+  it("includes primary Korean onboarding tour labels", () => {
+    expect(translations.ko["tour.step.welcome.title"]).toBe("VTA 파일을 브라우저에서 분석");
+    expect(translations.ko["settings.restartGuide"]).toBe("가이드 다시 보기");
+  });
 });
 
 describe("I18nProvider", () => {

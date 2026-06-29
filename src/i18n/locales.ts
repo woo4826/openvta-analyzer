@@ -1253,6 +1253,272 @@ const germanAnalysisTranslations = {
   "export.unavailable": "n/a",
 } satisfies Record<keyof typeof englishAnalysisTranslations, string>;
 
+const englishTourTranslations = {
+  "settings.menu": "Settings",
+  "settings.restartGuide": "Restart guide",
+  "settings.closeMenu": "Close settings",
+  "tour.progress": "Step {current} of {total}",
+  "tour.skip": "Skip",
+  "tour.back": "Back",
+  "tour.next": "Next",
+  "tour.done": "Done",
+  "tour.loadSample": "Load sample for tour",
+  "tour.step.welcome.title": "Analyze VTA files locally",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer reads route, GPS, sensor, calibration, and export data in this browser. Your files are not uploaded by the app.",
+  "tour.step.openData.title": "Start with your data or the sample",
+  "tour.step.openData.body":
+    "Choose VTA or ZIP files, drop them here, or load the built-in sample to follow the guided workflow without preparing a file.",
+  "tour.step.openData.loadedBody":
+    "You can add more VTA or ZIP files from the top bar at any time, or use the sample buttons to test the workflow.",
+  "tour.step.fileWorkspace.title": "Check the active file",
+  "tour.step.fileWorkspace.body":
+    "The file rail shows the active session, detected format, row counts, warnings, and quick switching when multiple files are open.",
+  "tour.step.overview.title": "Inspect the route overview",
+  "tour.step.overview.body":
+    "The overview combines the route plot, summary metrics, selected point details, segment summaries, and parser warnings.",
+  "tour.step.workspace.title": "Control sources and transforms",
+  "tour.step.workspace.body":
+    "Use the workspace inspector to switch raw/enhanced GPS sources and compare raw, calibrated, filtered, or combined sensor views.",
+  "tour.step.charts.title": "Read charts and selected ranges",
+  "tour.step.charts.body":
+    "Charts show velocity, distance, acceleration, orientation, and friction circle views. Selected ranges can drive segment analysis.",
+  "tour.step.calibration.title": "Calibrate and filter sensors",
+  "tour.step.calibration.body":
+    "Load CAL data, estimate offsets, save presets, and preview raw, calibrated, or filtered acceleration before exporting.",
+  "tour.step.export.title": "Export the result",
+  "tour.step.export.body":
+    "Export original or transformed VTA segments, GPS and sensor CSV files, validation rows, and summary JSON locally from the browser.",
+} as const;
+
+const koreanTourTranslations = {
+  "settings.menu": "설정",
+  "settings.restartGuide": "가이드 다시 보기",
+  "settings.closeMenu": "설정 닫기",
+  "tour.progress": "{current}/{total}단계",
+  "tour.skip": "건너뛰기",
+  "tour.back": "이전",
+  "tour.next": "다음",
+  "tour.done": "완료",
+  "tour.loadSample": "가이드용 샘플 불러오기",
+  "tour.step.welcome.title": "VTA 파일을 브라우저에서 분석",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer는 경로, GPS, 센서, 보정, 내보내기 데이터를 이 브라우저에서 읽습니다. 앱이 파일을 업로드하지 않습니다.",
+  "tour.step.openData.title": "내 데이터 또는 샘플로 시작",
+  "tour.step.openData.body":
+    "VTA 또는 ZIP 파일을 선택하거나 여기에 놓을 수 있습니다. 준비된 파일이 없으면 내장 샘플로 흐름을 따라가세요.",
+  "tour.step.openData.loadedBody":
+    "상단에서 언제든 VTA 또는 ZIP 파일을 더 열 수 있고, 샘플 버튼으로 워크플로를 확인할 수 있습니다.",
+  "tour.step.fileWorkspace.title": "활성 파일 확인",
+  "tour.step.fileWorkspace.body":
+    "파일 영역은 활성 세션, 감지된 형식, 행 개수, 경고, 여러 파일 간 전환을 보여줍니다.",
+  "tour.step.overview.title": "경로 개요 살펴보기",
+  "tour.step.overview.body":
+    "개요는 경로 플롯, 요약 지표, 선택한 포인트, 구간 요약, 파서 경고를 함께 보여줍니다.",
+  "tour.step.workspace.title": "소스와 변환 제어",
+  "tour.step.workspace.body":
+    "작업 공간 패널에서 원본/향상 GPS 소스를 전환하고 원본, 보정, 필터, 비교 센서 뷰를 선택합니다.",
+  "tour.step.charts.title": "차트와 선택 범위 읽기",
+  "tour.step.charts.body":
+    "차트는 속도, 거리, 가속도, 자세, 마찰원 뷰를 보여줍니다. 선택 범위는 구간 분석에 사용할 수 있습니다.",
+  "tour.step.calibration.title": "센서 보정과 필터링",
+  "tour.step.calibration.body":
+    "CAL 데이터를 불러오고, 오프셋을 추정하고, 프리셋을 저장하며, 내보내기 전에 원본/보정/필터 가속도를 미리 봅니다.",
+  "tour.step.export.title": "결과 내보내기",
+  "tour.step.export.body":
+    "원본 또는 변환된 VTA 구간, GPS/센서 CSV, 검증 행, 요약 JSON을 브라우저에서 로컬로 내보냅니다.",
+} satisfies Record<keyof typeof englishTourTranslations, string>;
+
+const japaneseTourTranslations = {
+  "settings.menu": "設定",
+  "settings.restartGuide": "ガイドを再開",
+  "settings.closeMenu": "設定を閉じる",
+  "tour.progress": "{current}/{total} ステップ",
+  "tour.skip": "スキップ",
+  "tour.back": "戻る",
+  "tour.next": "次へ",
+  "tour.done": "完了",
+  "tour.loadSample": "ガイド用サンプルを読み込む",
+  "tour.step.welcome.title": "VTA ファイルをローカルで解析",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer はルート、GPS、センサー、キャリブレーション、エクスポートデータをこのブラウザーで読み込みます。ファイルはアップロードされません。",
+  "tour.step.openData.title": "データまたはサンプルで開始",
+  "tour.step.openData.body":
+    "VTA または ZIP ファイルを選択、ドロップ、または内蔵サンプルを読み込んで、ファイルなしでガイドを試せます。",
+  "tour.step.openData.loadedBody":
+    "上部バーからいつでも VTA または ZIP ファイルを追加でき、サンプルボタンで動作を確認できます。",
+  "tour.step.fileWorkspace.title": "アクティブファイルを確認",
+  "tour.step.fileWorkspace.body":
+    "ファイル欄にはアクティブなセッション、検出形式、行数、警告、複数ファイルの切り替えが表示されます。",
+  "tour.step.overview.title": "ルート概要を確認",
+  "tour.step.overview.body":
+    "概要にはルート表示、サマリー指標、選択ポイント、区間サマリー、解析警告がまとまっています。",
+  "tour.step.workspace.title": "ソースと変換を制御",
+  "tour.step.workspace.body":
+    "ワークスペースで raw/enhanced GPS ソースを切り替え、raw、calibrated、filtered、compare のセンサービューを選びます。",
+  "tour.step.charts.title": "チャートと範囲を読む",
+  "tour.step.charts.body":
+    "チャートは速度、距離、加速度、姿勢、フリクションサークルを表示します。選択範囲は区間解析に使えます。",
+  "tour.step.calibration.title": "センサーを補正・フィルター",
+  "tour.step.calibration.body":
+    "CAL データを読み込み、オフセットを推定し、プリセットを保存し、エクスポート前に加速度をプレビューします。",
+  "tour.step.export.title": "結果をエクスポート",
+  "tour.step.export.body":
+    "元または変換済み VTA 区間、GPS/センサー CSV、検証行、サマリー JSON をブラウザーからローカルに保存します。",
+} satisfies Record<keyof typeof englishTourTranslations, string>;
+
+const simplifiedChineseTourTranslations = {
+  "settings.menu": "设置",
+  "settings.restartGuide": "重新开始指南",
+  "settings.closeMenu": "关闭设置",
+  "tour.progress": "第 {current} / {total} 步",
+  "tour.skip": "跳过",
+  "tour.back": "上一步",
+  "tour.next": "下一步",
+  "tour.done": "完成",
+  "tour.loadSample": "加载指南示例",
+  "tour.step.welcome.title": "在本地分析 VTA 文件",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer 会在此浏览器中读取路线、GPS、传感器、校准和导出数据。应用不会上传你的文件。",
+  "tour.step.openData.title": "从你的数据或示例开始",
+  "tour.step.openData.body":
+    "选择或拖放 VTA/ZIP 文件，也可以加载内置示例，在没有准备文件时跟随指南。",
+  "tour.step.openData.loadedBody":
+    "你可以随时从顶部栏添加更多 VTA 或 ZIP 文件，也可以用示例按钮测试流程。",
+  "tour.step.fileWorkspace.title": "检查活动文件",
+  "tour.step.fileWorkspace.body":
+    "文件栏显示活动会话、检测格式、行数、警告，以及多个文件之间的快速切换。",
+  "tour.step.overview.title": "查看路线概览",
+  "tour.step.overview.body":
+    "概览集合了路线图、摘要指标、选中点详情、区间摘要和解析警告。",
+  "tour.step.workspace.title": "控制来源和转换",
+  "tour.step.workspace.body":
+    "使用工作区检查器切换原始/增强 GPS 来源，并比较原始、校准、过滤或组合传感器视图。",
+  "tour.step.charts.title": "查看图表和选择范围",
+  "tour.step.charts.body":
+    "图表显示速度、距离、加速度、姿态和摩擦圆。选择范围可用于区间分析。",
+  "tour.step.calibration.title": "校准并过滤传感器",
+  "tour.step.calibration.body":
+    "加载 CAL 数据、估算偏移、保存预设，并在导出前预览原始、校准或过滤后的加速度。",
+  "tour.step.export.title": "导出结果",
+  "tour.step.export.body":
+    "从浏览器本地导出原始或转换后的 VTA 区间、GPS 和传感器 CSV、验证行以及摘要 JSON。",
+} satisfies Record<keyof typeof englishTourTranslations, string>;
+
+const spanishTourTranslations = {
+  "settings.menu": "Configuración",
+  "settings.restartGuide": "Reiniciar guía",
+  "settings.closeMenu": "Cerrar configuración",
+  "tour.progress": "Paso {current} de {total}",
+  "tour.skip": "Omitir",
+  "tour.back": "Atrás",
+  "tour.next": "Siguiente",
+  "tour.done": "Listo",
+  "tour.loadSample": "Cargar muestra para la guía",
+  "tour.step.welcome.title": "Analiza archivos VTA localmente",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer lee ruta, GPS, sensores, calibración y datos de exportación en este navegador. La app no sube tus archivos.",
+  "tour.step.openData.title": "Empieza con tus datos o la muestra",
+  "tour.step.openData.body":
+    "Elige o suelta archivos VTA/ZIP, o carga la muestra integrada para seguir el flujo guiado sin preparar un archivo.",
+  "tour.step.openData.loadedBody":
+    "Puedes agregar más archivos VTA o ZIP desde la barra superior en cualquier momento, o usar los botones de muestra para probar el flujo.",
+  "tour.step.fileWorkspace.title": "Revisa el archivo activo",
+  "tour.step.fileWorkspace.body":
+    "El panel de archivos muestra la sesión activa, formato detectado, conteos de filas, advertencias y cambio rápido entre archivos.",
+  "tour.step.overview.title": "Inspecciona la vista general",
+  "tour.step.overview.body":
+    "La vista general combina la ruta, métricas, punto seleccionado, resúmenes de segmento y advertencias de análisis.",
+  "tour.step.workspace.title": "Controla fuentes y transformaciones",
+  "tour.step.workspace.body":
+    "Usa el inspector para cambiar fuentes GPS raw/enhanced y comparar vistas raw, calibradas, filtradas o combinadas.",
+  "tour.step.charts.title": "Lee gráficos y rangos",
+  "tour.step.charts.body":
+    "Los gráficos muestran velocidad, distancia, aceleración, orientación y círculo de fricción. Los rangos seleccionados ayudan al análisis de segmentos.",
+  "tour.step.calibration.title": "Calibra y filtra sensores",
+  "tour.step.calibration.body":
+    "Carga datos CAL, estima offsets, guarda presets y previsualiza aceleración raw, calibrada o filtrada antes de exportar.",
+  "tour.step.export.title": "Exporta el resultado",
+  "tour.step.export.body":
+    "Exporta segmentos VTA originales o transformados, CSV de GPS y sensores, filas de validación y JSON de resumen localmente.",
+} satisfies Record<keyof typeof englishTourTranslations, string>;
+
+const frenchTourTranslations = {
+  "settings.menu": "Paramètres",
+  "settings.restartGuide": "Relancer le guide",
+  "settings.closeMenu": "Fermer les paramètres",
+  "tour.progress": "Étape {current} sur {total}",
+  "tour.skip": "Ignorer",
+  "tour.back": "Retour",
+  "tour.next": "Suivant",
+  "tour.done": "Terminer",
+  "tour.loadSample": "Charger l'exemple du guide",
+  "tour.step.welcome.title": "Analyser les fichiers VTA localement",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer lit les données de route, GPS, capteurs, calibration et export dans ce navigateur. L'app ne téléverse pas vos fichiers.",
+  "tour.step.openData.title": "Commencer avec vos données ou l'exemple",
+  "tour.step.openData.body":
+    "Choisissez ou déposez des fichiers VTA/ZIP, ou chargez l'exemple intégré pour suivre le flux guidé sans préparer de fichier.",
+  "tour.step.openData.loadedBody":
+    "Vous pouvez ajouter d'autres fichiers VTA ou ZIP depuis la barre supérieure, ou utiliser les boutons d'exemple pour tester le flux.",
+  "tour.step.fileWorkspace.title": "Vérifier le fichier actif",
+  "tour.step.fileWorkspace.body":
+    "Le rail de fichiers affiche la session active, le format détecté, les nombres de lignes, les avertissements et le changement rapide de fichier.",
+  "tour.step.overview.title": "Inspecter la vue d'ensemble",
+  "tour.step.overview.body":
+    "La vue d'ensemble regroupe le tracé, les métriques, le point sélectionné, les résumés de segment et les avertissements d'analyse.",
+  "tour.step.workspace.title": "Contrôler les sources et transformations",
+  "tour.step.workspace.body":
+    "Utilisez l'inspecteur pour changer les sources GPS raw/enhanced et comparer les vues raw, calibrées, filtrées ou combinées.",
+  "tour.step.charts.title": "Lire les graphiques et plages",
+  "tour.step.charts.body":
+    "Les graphiques affichent vitesse, distance, accélération, orientation et cercle de friction. Les plages sélectionnées alimentent l'analyse de segment.",
+  "tour.step.calibration.title": "Calibrer et filtrer les capteurs",
+  "tour.step.calibration.body":
+    "Chargez des données CAL, estimez les offsets, enregistrez des préréglages et prévisualisez l'accélération avant export.",
+  "tour.step.export.title": "Exporter le résultat",
+  "tour.step.export.body":
+    "Exportez localement les segments VTA originaux ou transformés, les CSV GPS/capteurs, les lignes de validation et le JSON de résumé.",
+} satisfies Record<keyof typeof englishTourTranslations, string>;
+
+const germanTourTranslations = {
+  "settings.menu": "Einstellungen",
+  "settings.restartGuide": "Guide neu starten",
+  "settings.closeMenu": "Einstellungen schließen",
+  "tour.progress": "Schritt {current} von {total}",
+  "tour.skip": "Überspringen",
+  "tour.back": "Zurück",
+  "tour.next": "Weiter",
+  "tour.done": "Fertig",
+  "tour.loadSample": "Beispiel für Guide laden",
+  "tour.step.welcome.title": "VTA-Dateien lokal analysieren",
+  "tour.step.welcome.body":
+    "OpenVTA Analyzer liest Routen-, GPS-, Sensor-, Kalibrierungs- und Exportdaten in diesem Browser. Die App lädt Ihre Dateien nicht hoch.",
+  "tour.step.openData.title": "Mit eigenen Daten oder Beispiel starten",
+  "tour.step.openData.body":
+    "Wählen oder ziehen Sie VTA/ZIP-Dateien hierher, oder laden Sie das integrierte Beispiel, um dem geführten Ablauf ohne Datei zu folgen.",
+  "tour.step.openData.loadedBody":
+    "Sie können jederzeit weitere VTA- oder ZIP-Dateien über die obere Leiste hinzufügen oder die Beispielschaltflächen zum Testen nutzen.",
+  "tour.step.fileWorkspace.title": "Aktive Datei prüfen",
+  "tour.step.fileWorkspace.body":
+    "Die Dateileiste zeigt aktive Sitzung, erkanntes Format, Zeilenzahlen, Warnungen und schnellen Wechsel zwischen Dateien.",
+  "tour.step.overview.title": "Routenübersicht prüfen",
+  "tour.step.overview.body":
+    "Die Übersicht kombiniert Routenplot, Kennzahlen, ausgewählten Punkt, Segmentzusammenfassungen und Parserwarnungen.",
+  "tour.step.workspace.title": "Quellen und Transformationen steuern",
+  "tour.step.workspace.body":
+    "Im Workspace-Inspektor wechseln Sie raw/enhanced GPS-Quellen und vergleichen rohe, kalibrierte, gefilterte oder kombinierte Sensoransichten.",
+  "tour.step.charts.title": "Diagramme und Bereiche lesen",
+  "tour.step.charts.body":
+    "Diagramme zeigen Geschwindigkeit, Distanz, Beschleunigung, Orientierung und Friction Circle. Ausgewählte Bereiche unterstützen die Segmentanalyse.",
+  "tour.step.calibration.title": "Sensoren kalibrieren und filtern",
+  "tour.step.calibration.body":
+    "Laden Sie CAL-Daten, schätzen Sie Offsets, speichern Sie Presets und prüfen Sie rohe, kalibrierte oder gefilterte Beschleunigung vor dem Export.",
+  "tour.step.export.title": "Ergebnis exportieren",
+  "tour.step.export.body":
+    "Exportieren Sie originale oder transformierte VTA-Segmente, GPS- und Sensor-CSV, Validierungszeilen und Zusammenfassungs-JSON lokal.",
+} satisfies Record<keyof typeof englishTourTranslations, string>;
+
 const englishTranslations = {
   "app.title": "OpenVTA Analyzer",
   "app.subtitle": "Inspect vehicle telemetry, GPS tracks, and acceleration data.",
@@ -1361,6 +1627,7 @@ const englishTranslations = {
   "nav.charts": "Charts",
   "nav.map": "Map",
   "nav.settings": "Settings",
+  ...englishTourTranslations,
   ...englishAnalysisTranslations,
 } as const;
 
@@ -1478,6 +1745,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.charts": "차트",
     "nav.map": "지도",
     "nav.settings": "설정",
+    ...koreanTourTranslations,
     ...koreanAnalysisTranslations,
   },
   ja: {
@@ -1588,6 +1856,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.charts": "チャート",
     "nav.map": "地図",
     "nav.settings": "設定",
+    ...japaneseTourTranslations,
     ...japaneseAnalysisTranslations,
   },
   "zh-CN": {
@@ -1696,6 +1965,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.charts": "图表",
     "nav.map": "地图",
     "nav.settings": "设置",
+    ...simplifiedChineseTourTranslations,
     ...simplifiedChineseAnalysisTranslations,
   },
   es: {
@@ -1806,6 +2076,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.charts": "Gráficos",
     "nav.map": "Mapa",
     "nav.settings": "Configuración",
+    ...spanishTourTranslations,
     ...spanishAnalysisTranslations,
   },
   fr: {
@@ -1916,6 +2187,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.charts": "Graphiques",
     "nav.map": "Carte",
     "nav.settings": "Paramètres",
+    ...frenchTourTranslations,
     ...frenchAnalysisTranslations,
   },
   de: {
@@ -2026,6 +2298,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.charts": "Diagramme",
     "nav.map": "Karte",
     "nav.settings": "Einstellungen",
+    ...germanTourTranslations,
     ...germanAnalysisTranslations,
   },
 };
