@@ -54,7 +54,7 @@ export function Overview({
 
   return (
     <section className="overview-grid">
-      <div className="panel">
+      <div className="panel" data-tour="overview-panel">
         <div className="panel-header">
           <h2>{file.sourceName}</h2>
           <span>{file.detectedFormat}</span>

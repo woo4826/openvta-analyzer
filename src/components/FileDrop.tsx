@@ -14,6 +14,7 @@ export function FileDrop({ onFiles, loadError, onSample }: FileDropProps) {
   const [dragging, setDragging] = useState(false);
   return (
     <section
+      data-tour="file-drop"
       className={dragging ? "dropzone dragging" : "dropzone"}
       onDragEnter={(event) => {
         event.preventDefault();

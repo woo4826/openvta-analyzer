@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileUp, Gauge, Settings, TestTube2 } from "lucide-react";
+import { Download, FileUp, Gauge, HelpCircle, Settings, TestTube2 } from "lucide-react";
 import { sampleCalibrationName, sampleCalibrationText, sampleVtaName, sampleVtaText } from "./sampleData";
+import { buildTourSteps, nextAvailableTourStepIndex } from "./tourSteps";
 import { displayGpsPointsWithSources } from "../domain/analysis";
 import { applyCalibration, estimateCalibrationOffsets } from "../domain/calibration";
 import { defaultFilterSettings, applyAccelerationFilter } from "../domain/filtering";
 import { parseVtaText } from "../domain/parser";
 import { summarizeVta } from "../domain/statistics";
 import { loadTextFilesFromInput } from "../domain/zip";
+import {
+  completedOnboardingTourState,
+  loadOnboardingTourState,
+  saveOnboardingTourState,
+  skippedOnboardingTourState,
+} from "../domain/settings";
 import type { LineEnding } from "../domain/export";
 import type {
   ActiveSegment,
@@ -27,6 +34,7 @@ import { Charts, type AccelerationSensorSet } from "../components/Charts";
 import { Tables } from "../components/Tables";
 import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ExportPanel } from "../components/ExportPanel";
+import { GuidedTour } from "../components/GuidedTour";
 import { WorkspaceStatus } from "../components/WorkspaceStatus";
 import { FilePickerButton, Tabs } from "../components/ui";
 import { formatLocalizedMessage, type LocalizedMessage } from "../i18n/messages";
@@ -66,6 +74,10 @@ export function App() {
   const [transformMode, setTransformMode] = useState<TransformMode>("raw");
   const [lineEnding, setLineEnding] = useState<LineEnding>("lf");
   const [loadError, setLoadError] = useState<LocalizedMessage | undefined>();
+  const [tourPersistenceState, setTourPersistenceState] = useState(() => loadOnboardingTourState());
+  const [tourActive, setTourActive] = useState(() => tourPersistenceState.status === "new");
+  const [tourIndex, setTourIndex] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
 
   const activeFile = files[activeIndex];
@@ -103,6 +115,7 @@ export function App() {
     [calibratedSensors, rawSensors, transformedSensors, transformMode],
   );
   const stats = useMemo(() => (activeFile ? summarizeVta(activeFile) : undefined), [activeFile]);
+  const tourSteps = useMemo(() => buildTourSteps(Boolean(activeFile)), [activeFile]);
 
   useEffect(() => {
     if (!activeFile) {
@@ -216,6 +229,40 @@ export function App() {
     setRegion(undefined);
   }
 
+  function setTourStep(index: number) {
+    const nextIndex = nextAvailableTourStepIndex(tourSteps, index, Boolean(activeFile));
+    const nextStep = tourSteps[nextIndex];
+    if (nextStep?.requiredTab) {
+      setActiveTab(nextStep.requiredTab);
+    }
+    setTourIndex(nextIndex);
+  }
+
+  function skipTour() {
+    const nextState = skippedOnboardingTourState();
+    saveOnboardingTourState(nextState);
+    setTourPersistenceState(nextState);
+    setTourActive(false);
+  }
+
+  function completeTour() {
+    const nextState = completedOnboardingTourState();
+    saveOnboardingTourState(nextState);
+    setTourPersistenceState(nextState);
+    setTourActive(false);
+  }
+
+  function restartTour() {
+    setSettingsOpen(false);
+    setTourIndex(0);
+    setTourActive(true);
+  }
+
+  function loadSampleForTour() {
+    loadSample();
+    setTourIndex(2);
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -223,7 +270,7 @@ export function App() {
           <strong>OpenVTA Analyzer</strong>
           <span>{t("app.brand.subtitle")}</span>
         </div>
-        <div className="topbar-actions">
+        <div className="topbar-actions" data-tour="topbar-file-actions">
           <label className="language-selector">
             <span>{t("language.selector.label")}</span>
             <select
@@ -273,11 +320,31 @@ export function App() {
             <Settings size={16} aria-hidden />
             {t("app.sampleCalibration")}
           </button>
+          <div className="settings-menu-wrap">
+            <button
+              type="button"
+              className="button ghost"
+              aria-haspopup="menu"
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              <Settings size={16} aria-hidden />
+              {t("settings.menu")}
+            </button>
+            {settingsOpen ? (
+              <div className="settings-popover" role="menu">
+                <button type="button" className="button ghost" role="menuitem" onClick={restartTour}>
+                  <HelpCircle size={16} aria-hidden />
+                  {t("settings.restartGuide")}
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
       <main className="workspace">
-        <div className="privacy-note">
+        <div className="privacy-note" data-tour="privacy-note">
           {t("app.privacyNote")}
         </div>
 
@@ -289,7 +356,7 @@ export function App() {
           />
         ) : (
           <div className="workspace-grid">
-            <aside className="file-rail">
+            <aside className="file-rail" data-tour="file-rail">
               <FileTray
                 files={files}
                 activeFileId={activeFile.id}
@@ -299,14 +366,16 @@ export function App() {
             </aside>
 
             <section className="analysis-main">
-              <Tabs
-                ariaLabel={t("app.sectionsAria")}
-                items={tabs.map((tab) => ({ id: tab.key, label: t(tab.labelKey) }))}
-                value={activeTab}
-                onChange={(value) => setActiveTab(value as TabKey)}
-                getTabId={analysisTabId}
-                getPanelId={analysisPanelId}
-              />
+              <div data-tour="analysis-tabs">
+                <Tabs
+                  ariaLabel={t("app.sectionsAria")}
+                  items={tabs.map((tab) => ({ id: tab.key, label: t(tab.labelKey) }))}
+                  value={activeTab}
+                  onChange={(value) => setActiveTab(value as TabKey)}
+                  getTabId={analysisTabId}
+                  getPanelId={analysisPanelId}
+                />
+              </div>
 
               {tabs.map((tab) => (
                 <div
@@ -395,14 +464,16 @@ export function App() {
             </section>
 
             <aside className="analysis-inspector">
-              <WorkspaceStatus
-                sourceVisibility={effectiveSourceVisibility}
-                onSourceVisibility={updateSourceVisibility}
-                transformMode={transformMode}
-                onTransformMode={setTransformMode}
-                activeSegment={activeSegment}
-                onActiveSegment={setActiveSegment}
-              />
+              <div data-tour="workspace-status">
+                <WorkspaceStatus
+                  sourceVisibility={effectiveSourceVisibility}
+                  onSourceVisibility={updateSourceVisibility}
+                  transformMode={transformMode}
+                  onTransformMode={setTransformMode}
+                  activeSegment={activeSegment}
+                  onActiveSegment={setActiveSegment}
+                />
+              </div>
             </aside>
           </div>
         )}
@@ -411,6 +482,16 @@ export function App() {
           <Gauge size={15} aria-hidden /> {t("app.footerNote")} <Download size={15} aria-hidden />
         </footer>
       </main>
+      {tourActive ? (
+        <GuidedTour
+          steps={tourSteps}
+          activeIndex={tourIndex}
+          onIndexChange={setTourStep}
+          onSkip={skipTour}
+          onDone={completeTour}
+          onLoadSample={loadSampleForTour}
+        />
+      ) : null}
     </div>
   );
 }

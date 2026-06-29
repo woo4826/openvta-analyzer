@@ -94,10 +94,16 @@ export function nextAvailableTourStepIndex(
   startIndex: number,
   hasActiveFile: boolean,
 ): number {
-  for (let index = startIndex; index < steps.length; index += 1) {
+  const boundedStartIndex = Math.min(Math.max(0, startIndex), Math.max(0, steps.length - 1));
+  for (let index = boundedStartIndex; index < steps.length; index += 1) {
     if (!steps[index].requiresFile || hasActiveFile) {
       return index;
     }
   }
-  return Math.max(0, steps.length - 1);
+  for (let index = boundedStartIndex; index >= 0; index -= 1) {
+    if (!steps[index].requiresFile || hasActiveFile) {
+      return index;
+    }
+  }
+  return 0;
 }
