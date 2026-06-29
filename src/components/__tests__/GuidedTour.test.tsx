@@ -79,6 +79,36 @@ describe("GuidedTour", () => {
 
     expect(screen.getByRole("dialog", { name: "Export the result" })).toHaveClass("tour-callout-fallback");
   });
+
+  it("keeps keyboard focus in the dialog and skips on escape", async () => {
+    const user = userEvent.setup();
+    const onSkip = vi.fn();
+
+    renderTour(
+      <GuidedTour
+        steps={steps}
+        activeIndex={1}
+        onIndexChange={vi.fn()}
+        onSkip={onSkip}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Skip" })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Back" })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Done" })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Skip" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(onSkip).toHaveBeenCalledTimes(1);
+  });
 });
 
 function renderTour(element: React.ReactElement) {

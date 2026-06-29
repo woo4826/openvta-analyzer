@@ -74,8 +74,8 @@ export function App() {
   const [transformMode, setTransformMode] = useState<TransformMode>("raw");
   const [lineEnding, setLineEnding] = useState<LineEnding>("lf");
   const [loadError, setLoadError] = useState<LocalizedMessage | undefined>();
-  const [tourPersistenceState, setTourPersistenceState] = useState(() => loadOnboardingTourState());
-  const [tourActive, setTourActive] = useState(() => tourPersistenceState.status === "new");
+  const [initialTourState] = useState(() => loadOnboardingTourState());
+  const [tourActive, setTourActive] = useState(() => initialTourState.status === "new");
   const [tourIndex, setTourIndex] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
@@ -241,14 +241,12 @@ export function App() {
   function skipTour() {
     const nextState = skippedOnboardingTourState();
     saveOnboardingTourState(nextState);
-    setTourPersistenceState(nextState);
     setTourActive(false);
   }
 
   function completeTour() {
     const nextState = completedOnboardingTourState();
     saveOnboardingTourState(nextState);
-    setTourPersistenceState(nextState);
     setTourActive(false);
   }
 
@@ -265,7 +263,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className="topbar" aria-hidden={tourActive ? true : undefined}>
         <div className="brand">
           <strong>OpenVTA Analyzer</strong>
           <span>{t("app.brand.subtitle")}</span>
@@ -343,7 +341,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="workspace">
+      <main className="workspace" aria-hidden={tourActive ? true : undefined}>
         <div className="privacy-note" data-tour="privacy-note">
           {t("app.privacyNote")}
         </div>

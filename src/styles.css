@@ -914,13 +914,14 @@ tbody tr:hover {
   position: fixed;
   inset: 0;
   z-index: 100;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .tour-scrim {
   position: fixed;
   inset: 0;
   background: rgba(16, 24, 32, 0.48);
+  pointer-events: auto;
 }
 
 .tour-highlight {
