@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+const onboardingTourStorageKey = "openvta.onboardingTour.v1";
+const languageStorageKey = "openvta.language.v1";
+
 test("loads the sample and renders core analysis views", async ({ page }) => {
+  await markTourCompleted(page);
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open a VTA or ZIP file" })).toBeVisible();
@@ -199,6 +203,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
 });
 
 test("persists Korean language and keeps the sample workflow usable", async ({ page }) => {
+  await markTourCompleted(page);
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
 
@@ -255,6 +260,7 @@ test("persists Korean language and keeps the sample workflow usable", async ({ p
 });
 
 test("applies sample calibration and exports summary", async ({ page }) => {
+  await markTourCompleted(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Load built-in sample" }).click();
   await page.getByRole("button", { name: "Sample CAL" }).click();
@@ -309,6 +315,7 @@ test("applies sample calibration and exports summary", async ({ page }) => {
 });
 
 test("keeps unavailable source toggles unpressed", async ({ page }) => {
+  await markTourCompleted(page);
   await page.goto("/");
 
   await page.locator(".dropzone input[type=file]").setInputFiles({
@@ -344,6 +351,54 @@ test("keeps unavailable source toggles unpressed", async ({ page }) => {
   await expect(analysisMain.getByRole("heading", { name: "enhanced-only.Vta" })).toBeVisible();
   await expect(workspace.getByRole("button", { name: "Raw GPS" })).toHaveAttribute("aria-pressed", "false");
   await expect(workspace.getByRole("button", { name: "Enhanced" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("guided tour can be skipped and replayed from settings", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("dialog", { name: "Analyze VTA files locally" })).toBeVisible();
+  await page.getByRole("button", { name: "Skip" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("menuitem", { name: "Restart guide" }).click();
+  await expect(page.getByRole("dialog", { name: "Analyze VTA files locally" })).toBeVisible();
+});
+
+test("guided tour loads sample and completes without reappearing", async ({ page }) => {
+  await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Load sample for tour" }).click();
+  await expect(page.locator(".analysis-main h2").filter({ hasText: "OpenVTA_sample.Vta" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Check the active file" })).toBeVisible();
+
+  for (let index = 0; index < 5; index += 1) {
+    await page.getByRole("button", { name: "Next" }).click();
+  }
+  await expect(page.getByRole("dialog", { name: "Export the result" })).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("guided tour supports Korean and mobile layout", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript((key) => {
+    window.localStorage.setItem(key, "ko");
+  }, languageStorageKey);
+  await page.goto("/");
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "ko");
+  await expect(page.getByRole("dialog", { name: "VTA 파일을 브라우저에서 분석" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "건너뛰기" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });
 
 function panelByHeading(scope: Locator, name: string | RegExp): Locator {
@@ -416,4 +471,13 @@ async function downloadTextByButton(page: Page, buttonName: string, expectedFile
     throw new Error(`Expected ${expectedFilename} download to have a filesystem path.`);
   }
   return readFile(path, "utf8");
+}
+
+async function markTourCompleted(page: Page): Promise<void> {
+  await page.addInitScript((key) => {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({ status: "completed", completedAt: 1700000000000, version: 1 }),
+    );
+  }, onboardingTourStorageKey);
 }
