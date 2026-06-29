@@ -41,6 +41,42 @@ describe("Tables localization", () => {
     expect(csv).not.toContain(translations.ko["tables.summary.sourceName"]);
     expect(csv).not.toContain(translations.ko["tables.summary.scope.allVisiblePoints"]);
   });
+
+  it("localizes parse warnings in the table while keeping warning CSV canonical", async () => {
+    const user = userEvent.setup();
+    const rawMessage = "Invalid coordinate latitude=bad longitude=151.";
+
+    renderWithKoreanI18n(
+      <Tables
+        file={file({
+          parseWarnings: [
+            {
+              lineNumber: 7,
+              code: "invalid-coordinate",
+              message: rawMessage,
+              params: { latitude: "bad", longitude: "151" },
+            },
+          ],
+        })}
+        sensors={[]}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: translations.ko["tables.tab.warnings"] }));
+    expect(screen.getByText("좌표가 올바르지 않습니다. latitude=bad longitude=151")).toBeVisible();
+    await user.type(screen.getByLabelText(translations.ko["tables.searchAria"]), "Invalid coordinate");
+    expect(screen.getByText("좌표가 올바르지 않습니다. latitude=bad longitude=151")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: translations.ko["tables.exportVisibleRows"] }));
+
+    expect(downloadText).toHaveBeenCalledOnce();
+    const [filename, csv, type] = vi.mocked(downloadText).mock.calls[0];
+    expect(filename).toBe("warnings-visible.csv");
+    expect(type).toBe("text/csv");
+    expect(csv).toContain("lineNumber,code,message\n");
+    expect(csv).toContain(`7,invalid-coordinate,${rawMessage}`);
+    expect(csv).not.toContain("좌표가 올바르지 않습니다");
+  });
 });
 
 function renderWithKoreanI18n(children: ReactElement) {
@@ -58,7 +94,7 @@ function renderWithKoreanI18n(children: ReactElement) {
   );
 }
 
-function file(): VtaFile {
+function file(overrides: Partial<VtaFile> = {}): VtaFile {
   return {
     sourceName: "test.Vta",
     detectedFormat: "modern-openvta",
@@ -68,5 +104,6 @@ function file(): VtaFile {
     enhancedPoints: [],
     sensorPoints: [],
     parseWarnings: [],
+    ...overrides,
   };
 }

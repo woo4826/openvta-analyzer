@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileArchive, FileText } from "lucide-react";
 import { useI18n } from "../i18n/useI18n";
+import { FilePickerButton } from "./ui";
 
 interface FileDropProps {
   onFiles: (files: File[]) => void;
@@ -31,25 +32,24 @@ export function FileDrop({ onFiles, loadError, onSample }: FileDropProps) {
         <h1>{t("fileDrop.title")}</h1>
         <p>{t("fileDrop.body")}</p>
         <div className="row-actions">
-          <label className="button primary">
-            <FileText size={16} aria-hidden />
+          <FilePickerButton
+            accept=".vta,.Vta,.zip"
+            multiple
+            onFiles={onFiles}
+            variant="primary"
+            icon={<FileText size={16} aria-hidden />}
+          >
             {t("fileDrop.chooseFiles")}
-            <input
-              hidden
-              type="file"
-              multiple
-              accept=".vta,.Vta,.zip"
-              onChange={(event) => {
-                onFiles(Array.from(event.target.files ?? []));
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+          </FilePickerButton>
           <button type="button" className="button" onClick={onSample}>
             {t("fileDrop.loadBuiltInSample")}
           </button>
         </div>
-        {loadError ? <div className="warning-item">{loadError}</div> : null}
+        {loadError ? (
+          <div className="warning-item" role="alert">
+            {loadError}
+          </div>
+        ) : null}
       </div>
     </section>
   );

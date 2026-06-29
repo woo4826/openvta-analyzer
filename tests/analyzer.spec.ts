@@ -5,10 +5,23 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open a VTA or ZIP file" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose files" })).toBeVisible();
 
   await page.getByRole("button", { name: "Load built-in sample" }).click();
   const analysisMain = page.locator(".analysis-main");
   await expect(analysisMain.getByRole("heading", { name: "OpenVTA_sample.Vta" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open VTA/ZIP" })).toBeVisible();
+  await expect(analysisMain.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+  await expectTabControlsPanel(page, analysisMain.getByRole("tab", { name: "Overview" }));
+  await analysisMain.getByRole("tab", { name: "Overview" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(analysisMain.getByRole("tab", { name: "Charts" })).toHaveAttribute("aria-selected", "true");
+  await expect(analysisMain.getByRole("tab", { name: "Charts" })).toBeFocused();
+  await expectTabControlsPanel(page, analysisMain.getByRole("tab", { name: "Charts" }));
+  await page.keyboard.press("End");
+  await expect(analysisMain.getByRole("tab", { name: "Export", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Home");
+  await expect(analysisMain.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
   await expect(analysisMain.getByText("modern-openvta")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Files" })).toBeVisible();
   const fileTray = page.locator(".file-rail");
@@ -83,7 +96,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
   await expect(enhancedButton).toHaveAttribute("aria-pressed", "false");
 
-  await page.getByRole("button", { name: "Charts" }).click();
+  await page.getByRole("tab", { name: "Charts" }).click();
   await expect(page.getByRole("img", { name: "Velocity chart" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Distance over time chart" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Velocity-derived acceleration chart" })).toBeVisible();
@@ -92,14 +105,14 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(metricValue(workspace, "Segment")).toHaveText(`0-${rawGpsCount - 1}`);
   await expect(metricValue(panelByHeading(analysisMain, "Averages"), "Selected points")).toHaveText(String(rawGpsCount));
 
-  await page.getByRole("button", { name: "Calibration" }).click();
+  await page.getByRole("tab", { name: "Calibration" }).click();
   await page.getByRole("button", { name: "Estimate from current file" }).click();
   await page.getByLabel("Preset name").fill("Static pad");
   await page.getByRole("button", { name: "Save preset" }).click();
   await expect(page.getByText("Static pad")).toBeVisible();
   await page.getByLabel("Low-pass filter").selectOption("on");
   await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Filtered" }).click();
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("tab", { name: "Export", exact: true }).click();
   await page.getByLabel("Line endings").selectOption("crlf");
   await expect(page.getByRole("button", { name: "Export validation CSV" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export transformed segment .Vta" })).toBeVisible();
@@ -147,10 +160,10 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await page.getByLabel("Segment start point").fill("0");
   await page.getByLabel("Segment end point").fill(String(rawGpsCount - 1));
 
-  await page.getByRole("button", { name: "Tables" }).click();
+  await page.getByRole("tab", { name: "Tables" }).click();
   await page.getByRole("tab", { name: "Validation" }).click();
   await expect(page.getByRole("columnheader", { name: "Derived accel" })).toBeVisible();
-  const validationTable = page.getByRole("tabpanel", { name: "Validation table" });
+  const validationTable = page.getByRole("tabpanel", { name: "Validation" });
   const initialTableCounts = await tableStatusCounts(page);
   const validationIndexes = await validationTable.locator("tbody tr td:first-child").allTextContents();
   const filterQuery = await applyReducingFilter(page, validationIndexes, initialTableCounts.totalRows);
@@ -198,6 +211,8 @@ test("persists Korean language and keeps the sample workflow usable", async ({ p
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
   await expect(page.getByRole("heading", { name: "VTA 또는 ZIP 파일 열기" })).toBeVisible();
   await expect(page.getByLabel("언어")).toHaveValue("ko");
+  await expect(page.getByRole("button", { name: "파일 선택" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
@@ -207,26 +222,36 @@ test("persists Korean language and keeps the sample workflow usable", async ({ p
   await page.getByRole("button", { name: "내장 샘플 불러오기" }).click();
   const analysisMain = page.locator(".analysis-main");
   await expect(analysisMain.getByRole("heading", { name: "OpenVTA_sample.Vta" })).toBeVisible();
-  await expect(analysisMain.getByRole("button", { name: "개요" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "VTA/ZIP 열기" })).toBeVisible();
+  await expect(analysisMain.getByRole("tab", { name: "개요" })).toHaveAttribute("aria-selected", "true");
+  await expectTabControlsPanel(page, analysisMain.getByRole("tab", { name: "개요" }));
   await expect(analysisMain.getByRole("heading", { name: "요약" })).toBeVisible();
-  await expect(analysisMain.getByText("GPS / 보강")).toBeVisible();
+  await expect(analysisMain.getByText("GPS / 향상 GPS")).toBeVisible();
   await expect(analysisMain.getByRole("heading", { name: "선택한 포인트" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 
-  await analysisMain.getByRole("button", { name: "보정" }).click();
+  await analysisMain.getByRole("tab", { name: "보정" }).click();
+  await expect(analysisMain.getByRole("tab", { name: "보정" })).toHaveAttribute("aria-selected", "true");
   await expect(analysisMain.getByRole("heading", { name: "보정 및 필터링" })).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "CAL 파일 불러오기" })).toBeVisible();
   await expect(analysisMain.getByRole("button", { name: "현재 파일에서 추정" })).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "프리셋 JSON 가져오기" })).toBeVisible();
+  await analysisMain.getByRole("button", { name: "현재 파일에서 추정" }).click();
+  await expect(analysisMain.getByRole("status")).toContainText("현재 파일에서 샘플");
   await expect(analysisMain.getByLabel("저역 통과 필터")).toBeVisible();
   await analysisMain.getByLabel("저역 통과 필터").selectOption("on");
-  await analysisMain.getByLabel("컷오프 Hz").fill("9999");
+  await analysisMain.getByLabel("차단 주파수(Hz)").fill("9999");
+  await expectNoHorizontalOverflow(page);
 
-  await analysisMain.getByRole("button", { name: "개요" }).click();
-  await expect(analysisMain.getByText("컷오프 주파수가 유효 범위를 벗어나 필터를 건너뛰었습니다.")).toBeVisible();
+  await analysisMain.getByRole("tab", { name: "개요" }).click();
+  await expect(analysisMain.getByText("차단 주파수가 유효 범위를 벗어나 필터를 건너뛰었습니다.")).toBeVisible();
 
-  await analysisMain.getByRole("button", { name: "내보내기", exact: true }).click();
+  await analysisMain.getByRole("tab", { name: "내보내기", exact: true }).click();
   await expect(analysisMain.getByRole("heading", { name: "내보내기" })).toBeVisible();
   await expect(analysisMain.getByLabel("줄 끝 형식")).toBeVisible();
   await expect(analysisMain.getByText("선택한 포인트")).toBeVisible();
   await expect(analysisMain.getByRole("button", { name: "검증 CSV 내보내기" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
 });
 
 test("applies sample calibration and exports summary", async ({ page }) => {
@@ -237,7 +262,7 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Calibration and Filtering" })).toBeVisible();
   await expect(page.getByText("CAL_sample.Vta")).toBeVisible();
 
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("tab", { name: "Export", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Export" })).toBeVisible();
   const rawVta = await downloadTextByButton(
     page,
@@ -259,11 +284,11 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   expect(calibratedVta).toContain("source=CAL_sample.Vta");
   expect(calibratedVta).toContain("%% Filter: none");
 
-  await page.getByRole("button", { name: "Calibration" }).click();
+  await page.getByRole("tab", { name: "Calibration" }).click();
   await page.getByLabel("Low-pass filter").selectOption("on");
   await expect(page.getByLabel("Cutoff Hz")).toBeVisible();
   await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Filtered" }).click();
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("tab", { name: "Export", exact: true }).click();
   const filteredVta = await downloadTextByButton(
     page,
     "Export transformed segment .Vta",
@@ -365,6 +390,20 @@ async function tableStatusCounts(page: Page): Promise<{ visibleRows: number; tot
 
 async function firstValidationTableCell(validationTable: Locator): Promise<string> {
   return (await validationTable.locator("tbody tr").first().locator("td").first().textContent())?.trim() ?? "";
+}
+
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1),
+    )
+    .toBe(true);
+}
+
+async function expectTabControlsPanel(page: Page, tab: Locator): Promise<void> {
+  const panelId = await tab.getAttribute("aria-controls");
+  expect(panelId).toBeTruthy();
+  await expect(page.locator(`#${panelId}`)).toHaveCount(1);
 }
 
 async function downloadTextByButton(page: Page, buttonName: string, expectedFilename: string): Promise<string> {

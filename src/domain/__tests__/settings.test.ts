@@ -42,6 +42,18 @@ describe("settings helpers", () => {
     expect(loadJsonSetting<CalibrationPreset[]>("presets", [], storage)[0].name).toBe("Static pad");
   });
 
+  it("does not throw when setting storage is blocked", () => {
+    const storage = {
+      getItem: vi.fn(),
+      setItem: vi.fn(() => {
+        throw new DOMException("Blocked", "SecurityError");
+      }),
+      removeItem: vi.fn(),
+    };
+
+    expect(() => saveJsonSetting("presets", [calibrationPreset()], storage)).not.toThrow();
+  });
+
   it("loads and saves calibration presets through the versioned storage key", () => {
     const store = new Map<string, string>();
     const storage = {
@@ -55,6 +67,25 @@ describe("settings helpers", () => {
 
     expect(store.has(CALIBRATION_PRESETS_STORAGE_KEY)).toBe(true);
     expect(loadCalibrationPresets(storage)).toEqual([preset]);
+  });
+
+  it("falls back to no-op storage when localStorage access is blocked", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get: () => {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
+
+    try {
+      expect(loadCalibrationPresets()).toEqual([]);
+      expect(() => saveCalibrationPresets([calibrationPreset()])).not.toThrow();
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(globalThis, "localStorage", descriptor);
+      }
+    }
   });
 
   it("removes and imports calibration presets", () => {

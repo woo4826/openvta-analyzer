@@ -15,6 +15,7 @@ export interface ParseWarning {
   lineNumber?: number;
   code: string;
   message: string;
+  params?: Record<string, string | number>;
 }
 
 export interface GpsPoint {

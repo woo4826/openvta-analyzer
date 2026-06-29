@@ -60,6 +60,57 @@ describe("parseVtaText", () => {
     expect(trace.gpsPoints[0].speedKmh).toBeCloseTo(12.8968);
     expect(trace.sensorPoints[0].accelUnit).toBe("g");
   });
+
+  it("attaches localization params to parse warnings", () => {
+    expect(
+      parseVtaText("unknown-row.Vta", ["not,a,vta,row"].join("\n")).parseWarnings[0],
+    ).toMatchObject({
+      code: "unknown-row",
+      params: { prefix: "not,a,vta,row" },
+    });
+
+    expect(
+      parseVtaText("short-gps.Vta", ["$17062026,152258,-33"].join("\n")).parseWarnings[0],
+    ).toMatchObject({
+      code: "short-gps-row",
+      params: { minimum: 8 },
+    });
+
+    expect(
+      parseVtaText("invalid-coordinate.Vta", ["$17062026,152258,bad,151.224998333,12,26,0,6"].join("\n"))
+        .parseWarnings[0],
+    ).toMatchObject({
+      code: "invalid-coordinate",
+      message: "Invalid coordinate latitude=bad longitude=151.224998333.",
+      params: { latitude: "bad", longitude: "151.224998333" },
+    });
+
+    expect(
+      parseVtaText("low-satellite.Vta", ["$17062026,152258,-33.875000000,151.224998333,12,26,0,3"].join("\n"))
+        .parseWarnings[0],
+    ).toMatchObject({
+      code: "low-satellite-count",
+      params: { count: 3, minimum: 4 },
+    });
+
+    expect(
+      parseVtaText("short-sensor.Vta", ["%% VTALogger Kotlin Version: 0.0.3", "#1,0,0"].join("\n"))
+        .parseWarnings[0],
+    ).toMatchObject({
+      code: "short-sensor-row",
+      params: { minimum: 9, sensorKind: "generic" },
+    });
+
+    expect(
+      parseVtaText(
+        "short-standalone-sensor.Vta",
+        ["$81116,5435800,-37896827,145042923,3270,700,10849,9", "#1,0,0"].join("\n"),
+      ).parseWarnings[0],
+    ).toMatchObject({
+      code: "short-sensor-row",
+      params: { minimum: 8, sensorKind: "standalone" },
+    });
+  });
 });
 
 describe("statistics, calibration, filtering, export", () => {

@@ -49,6 +49,7 @@ export function parseVtaText(sourceName: string, text: string): VtaFile {
       lineNumber,
       code: "unknown-row",
       message: `Ignored row with unknown prefix: ${line.slice(0, 24)}`,
+      params: { prefix: line.slice(0, 24) },
     });
   });
 
@@ -128,6 +129,7 @@ function parseGpsLine(
           lineNumber,
           code: "short-gps-row",
           message: "GPS row has fewer than 8 fields.",
+          params: { minimum: 8 },
         },
       ],
     };
@@ -143,6 +145,7 @@ function parseGpsLine(
           lineNumber,
           code: "invalid-coordinate",
           message: `Invalid coordinate latitude=${parts[2]} longitude=${parts[3]}.`,
+          params: { latitude: parts[2], longitude: parts[3] },
         },
       ],
     };
@@ -159,6 +162,7 @@ function parseGpsLine(
       lineNumber,
       code: "low-satellite-count",
       message: `GPS row has ${satelliteCount} satellites; 4 or more is preferred for 3D fixes.`,
+      params: { count: satelliteCount, minimum: 4 },
     });
   }
 
@@ -215,6 +219,7 @@ function parseSensorLine(
             lineNumber,
             code: "short-sensor-row",
             message: "Standalone IMU sensor row has fewer than 8 fields.",
+            params: { minimum: 8, sensorKind: "standalone" },
           },
         ],
       };
@@ -245,6 +250,7 @@ function parseSensorLine(
           lineNumber,
           code: "short-sensor-row",
           message: "Sensor row has fewer than 9 fields.",
+          params: { minimum: 9, sensorKind: "generic" },
         },
       ],
     };
@@ -350,4 +356,3 @@ function parseUtcMillis(date: string, time: string): number | undefined {
   const utc = Date.UTC(year, month - 1, day, hour, minute, second, millis);
   return Number.isFinite(utc) ? utc : undefined;
 }
-

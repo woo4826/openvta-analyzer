@@ -17,7 +17,11 @@ export function loadJsonSetting<T>(key: string, fallback: T, storage: JsonStorag
 }
 
 export function saveJsonSetting<T>(key: string, value: T, storage: JsonStorage = defaultStorage()): void {
-  storage.setItem(key, JSON.stringify(value));
+  try {
+    storage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Persisted settings are optional. The app must remain usable when storage is blocked.
+  }
 }
 
 export function loadCalibrationPresets(storage: JsonStorage = defaultStorage()): CalibrationPreset[] {
@@ -83,15 +87,21 @@ function coerceCalibrationPresets(value: unknown): CalibrationPreset[] {
 }
 
 function defaultStorage(): JsonStorage {
-  if ("localStorage" in globalThis) {
-    return globalThis.localStorage;
+  try {
+    if ("localStorage" in globalThis) {
+      return globalThis.localStorage;
+    }
+  } catch {
+    // Accessing localStorage can throw in restricted browser contexts.
   }
-  return {
-    getItem: () => null,
-    setItem: () => undefined,
-    removeItem: () => undefined,
-  };
+  return noopStorage;
 }
+
+const noopStorage: JsonStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+};
 
 function isCalibrationPreset(value: unknown): value is CalibrationPreset {
   if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") {

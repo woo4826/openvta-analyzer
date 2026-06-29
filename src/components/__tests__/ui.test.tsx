@@ -63,6 +63,44 @@ describe("UI primitives", () => {
     expect(onChange).toHaveBeenCalledWith("warnings");
   });
 
+  it("moves tab focus with arrow, home, and end keys", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <Tabs
+        ariaLabel="Analyzer sections"
+        value="overview"
+        onChange={onChange}
+        getTabId={(id) => `tab-${id}`}
+        getPanelId={(id) => `panel-${id}`}
+        items={[
+          { id: "overview", label: "Overview" },
+          { id: "charts", label: "Charts" },
+          { id: "tables", label: "Tables" },
+        ]}
+      />,
+    );
+
+    const overview = screen.getByRole("tab", { name: "Overview" });
+    overview.focus();
+    expect(overview).toHaveAttribute("tabIndex", "0");
+    expect(screen.getByRole("tab", { name: "Charts" })).toHaveAttribute("tabIndex", "-1");
+
+    await user.keyboard("{ArrowRight}");
+    expect(onChange).toHaveBeenLastCalledWith("charts");
+    expect(screen.getByRole("tab", { name: "Charts" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Charts" })).toHaveAttribute("aria-controls", "panel-charts");
+
+    await user.keyboard("{End}");
+    expect(onChange).toHaveBeenLastCalledWith("tables");
+    expect(screen.getByRole("tab", { name: "Tables" })).toHaveFocus();
+
+    await user.keyboard("{Home}");
+    expect(onChange).toHaveBeenLastCalledWith("overview");
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveFocus();
+  });
+
   it("renders field label, hint, and alert error", () => {
     render(
       <Field label="Coordinate source" htmlFor="coordinate-source" hint="Choose the imported track source." error="Source is required">

@@ -1,5 +1,6 @@
 import type { ParseWarning } from "../domain/types";
 import { localizeFilterWarning } from "../i18n/filterWarnings";
+import { localizeParseWarning } from "../i18n/parseWarnings";
 import { useI18n } from "../i18n/useI18n";
 
 interface WarningListProps {
@@ -20,7 +21,7 @@ export function WarningList({ warnings, extraWarning }: WarningListProps) {
       {warnings.slice(0, 12).map((warning, index) => (
         <div className="warning-item" key={`${warning.code}-${warning.lineNumber ?? index}`}>
           {warning.lineNumber ? `${t("warnings.line", { line: warning.lineNumber })}: ` : null}
-          {warning.message}
+          {localizeParseWarning(warning, t)}
         </div>
       ))}
       {warnings.length > 12 ? (

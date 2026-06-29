@@ -2,6 +2,10 @@ import type { FilterResult, FilterSettings, SensorPoint } from "./types";
 
 const DEFAULT_CHANNELS = { x: true, y: true, z: true };
 
+export const FILTER_WARNING_CUTOFF_OUT_OF_RANGE = "Filter skipped because the cutoff frequency is outside the valid range.";
+export const FILTER_WARNING_IRREGULAR_TIMESTAMPS =
+  "Sensor timestamps are irregular; an effective sample rate was estimated for filtering.";
+
 export const defaultFilterSettings: FilterSettings = {
   enabled: false,
   cutoffHz: 5,
@@ -21,7 +25,7 @@ export function applyAccelerationFilter(
     return {
       sensors,
       sampleRateHz: sample.sampleRateHz,
-      warning: "Filter skipped because the cutoff frequency is outside the valid range.",
+      warning: FILTER_WARNING_CUTOFF_OUT_OF_RANGE,
     };
   }
 
@@ -39,9 +43,7 @@ export function applyAccelerationFilter(
   return {
     sensors: filtered,
     sampleRateHz: sample.sampleRateHz,
-    warning: sample.regular
-      ? undefined
-      : "Sensor timestamps are irregular; an effective sample rate was estimated for filtering.",
+    warning: sample.regular ? undefined : FILTER_WARNING_IRREGULAR_TIMESTAMPS,
   };
 }
 
@@ -116,4 +118,3 @@ function median(values: number[]): number {
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
-

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type * as React from "react";
 
 type Tone = "neutral" | "success" | "warning" | "danger" | "info";
@@ -77,6 +78,54 @@ export function ToolbarButton({ icon, variant = "default", className, children, 
   );
 }
 
+export interface FilePickerButtonProps {
+  children: React.ReactNode;
+  accept: string;
+  onFiles: (files: File[]) => void;
+  className?: string;
+  icon?: React.ReactNode;
+  multiple?: boolean;
+  variant?: ButtonVariant;
+}
+
+export function FilePickerButton({
+  children,
+  accept,
+  onFiles,
+  className,
+  icon,
+  multiple = false,
+  variant = "default",
+}: FilePickerButtonProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        className={cx("button", variant !== "default" && variant, className)}
+        onClick={() => inputRef.current?.click()}
+      >
+        {icon}
+        {children}
+      </button>
+      <input
+        ref={inputRef}
+        className="visually-hidden-file-input"
+        tabIndex={-1}
+        aria-hidden="true"
+        type="file"
+        multiple={multiple}
+        accept={accept}
+        onChange={(event) => {
+          onFiles(Array.from(event.target.files ?? []));
+          event.currentTarget.value = "";
+        }}
+      />
+    </>
+  );
+}
+
 export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
   icon: React.ReactNode;
@@ -110,20 +159,65 @@ export interface TabsProps {
   onChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
+  getPanelId?: (id: string) => string;
+  getTabId?: (id: string) => string;
 }
 
-export function Tabs({ items, value, onChange, ariaLabel, className }: TabsProps) {
+export function Tabs({ items, value, onChange, ariaLabel, className, getPanelId, getTabId }: TabsProps) {
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  function moveFocus(currentIndex: number, direction: 1 | -1) {
+    const nextIndex = nextEnabledTabIndex(items, currentIndex, direction);
+    if (nextIndex === -1) {
+      return;
+    }
+    onChange(items[nextIndex].id);
+    tabRefs.current[nextIndex]?.focus();
+  }
+
+  function focusTab(index: number) {
+    if (!items[index] || items[index].disabled) {
+      return;
+    }
+    onChange(items[index].id);
+    tabRefs.current[index]?.focus();
+  }
+
   return (
     <div className={cx("tabs", className)} role="tablist" aria-label={ariaLabel}>
-      {items.map((item) => (
+      {items.map((item, index) => (
         <button
           type="button"
           key={item.id}
           role="tab"
+          ref={(element) => {
+            tabRefs.current[index] = element;
+          }}
+          id={getTabId?.(item.id)}
+          aria-controls={getPanelId?.(item.id)}
           aria-selected={item.id === value}
+          tabIndex={item.id === value ? 0 : -1}
           className={cx("tab", item.id === value && "active")}
           disabled={item.disabled}
           onClick={() => onChange(item.id)}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+              event.preventDefault();
+              moveFocus(index, 1);
+            }
+            if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+              event.preventDefault();
+              moveFocus(index, -1);
+            }
+            if (event.key === "Home") {
+              event.preventDefault();
+              focusTab(firstEnabledTabIndex(items));
+            }
+            if (event.key === "End") {
+              event.preventDefault();
+              focusTab(lastEnabledTabIndex(items));
+            }
+          }}
         >
           <span>{item.label}</span>
           {item.badge ? <span className="tab-badge">{item.badge}</span> : null}
@@ -131,6 +225,32 @@ export function Tabs({ items, value, onChange, ariaLabel, className }: TabsProps
       ))}
     </div>
   );
+}
+
+function firstEnabledTabIndex(items: TabItem[]): number {
+  return items.findIndex((item) => !item.disabled);
+}
+
+function lastEnabledTabIndex(items: TabItem[]): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (!items[index].disabled) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function nextEnabledTabIndex(items: TabItem[], currentIndex: number, direction: 1 | -1): number {
+  if (!items.length) {
+    return -1;
+  }
+  for (let offset = 1; offset <= items.length; offset += 1) {
+    const index = (currentIndex + offset * direction + items.length) % items.length;
+    if (!items[index].disabled) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 export interface SegmentedOption {

@@ -20,9 +20,10 @@ import type {
   VtaFile,
 } from "../domain/types";
 import { localizeFilterWarning } from "../i18n/filterWarnings";
+import { formatLocalizedMessage, type LocalizedMessage } from "../i18n/messages";
 import { useI18n } from "../i18n/useI18n";
 import { Charts, type AccelerationSensorSet } from "./Charts";
-import { SegmentedControl } from "./ui";
+import { FilePickerButton, SegmentedControl } from "./ui";
 
 interface CalibrationPanelProps {
   file: VtaFile;
@@ -59,7 +60,7 @@ export function CalibrationPanel({
   const [presetName, setPresetName] = useState("");
   const [presets, setPresets] = useState<CalibrationPreset[]>(() => loadCalibrationPresets());
   const [selectedPresetId, setSelectedPresetId] = useState("");
-  const [statusMessage, setStatusMessage] = useState<string | undefined>();
+  const [statusMessage, setStatusMessage] = useState<LocalizedMessage | undefined>();
   const transformOptions = useMemo<Array<{ value: TransformMode; label: string }>>(
     () => [
       { value: "raw", label: t("workspace.transform.raw") },
@@ -88,6 +89,7 @@ export function CalibrationPanel({
     return accelerationSensorSets(sensors, calibratedSensors, filteredSensors, t);
   }, [calibration, sensors, t, transformMode, transformedSensors]);
   const localizedFilterWarning = filterWarning ? localizeFilterWarning(filterWarning, t) : undefined;
+  const localizedStatusMessage = statusMessage ? formatLocalizedMessage(statusMessage, t) : undefined;
 
   function updateOffset(key: "x" | "y" | "z", value: number) {
     const base = calibration ?? estimatedFromSession;
@@ -98,20 +100,20 @@ export function CalibrationPanel({
   function estimateSelectedWindow() {
     const offsets = estimateCalibrationOffsets(sensors, parseWindow(windowStart, windowEnd), file.sourceName);
     if (!offsets) {
-      setStatusMessage(t("calibration.status.noSamplesStaticWindow"));
+      setStatusMessage({ key: "calibration.status.noSamplesStaticWindow" });
       return;
     }
     onCalibration(offsets);
-    setStatusMessage(t("calibration.status.estimatedSelectedWindow", { count: offsets.sampleCount }));
+    setStatusMessage({ key: "calibration.status.estimatedSelectedWindow", values: { count: offsets.sampleCount } });
   }
 
   function estimateCurrentFile() {
     if (!estimatedFromSession) {
-      setStatusMessage(t("calibration.status.noSamplesCurrentFile"));
+      setStatusMessage({ key: "calibration.status.noSamplesCurrentFile" });
       return;
     }
     onCalibration(estimatedFromSession);
-    setStatusMessage(t("calibration.status.estimatedCurrentFile", { count: estimatedFromSession.sampleCount }));
+    setStatusMessage({ key: "calibration.status.estimatedCurrentFile", values: { count: estimatedFromSession.sampleCount } });
   }
 
   function updatePresets(nextPresets: CalibrationPreset[]) {
@@ -122,12 +124,12 @@ export function CalibrationPanel({
   function savePreset() {
     const name = presetName.trim();
     if (!name) {
-      setStatusMessage(t("calibration.status.enterPresetName"));
+      setStatusMessage({ key: "calibration.status.enterPresetName" });
       return;
     }
     const offsets = calibration ?? estimatedFromSession;
     if (!offsets) {
-      setStatusMessage(t("calibration.status.noOffsetsToSave"));
+      setStatusMessage({ key: "calibration.status.noOffsetsToSave" });
       return;
     }
     const existingPreset =
@@ -141,34 +143,34 @@ export function CalibrationPanel({
     };
     updatePresets(upsertCalibrationPreset(presets, preset));
     setSelectedPresetId(preset.id);
-    setStatusMessage(t("calibration.status.presetSaved"));
+    setStatusMessage({ key: "calibration.status.presetSaved" });
   }
 
   function applyPreset() {
     if (!selectedPreset) {
-      setStatusMessage(t("calibration.status.choosePresetToApply"));
+      setStatusMessage({ key: "calibration.status.choosePresetToApply" });
       return;
     }
     onCalibration(selectedPreset.offsets);
     setPresetName(selectedPreset.name);
-    setStatusMessage(t("calibration.status.appliedPreset", { name: selectedPreset.name }));
+    setStatusMessage({ key: "calibration.status.appliedPreset", values: { name: selectedPreset.name } });
   }
 
   function deletePreset() {
     if (!selectedPreset) {
-      setStatusMessage(t("calibration.status.choosePresetToDelete"));
+      setStatusMessage({ key: "calibration.status.choosePresetToDelete" });
       return;
     }
     const nextPresets = removeCalibrationPreset(presets, selectedPreset.id);
     updatePresets(nextPresets);
     setSelectedPresetId(nextPresets[0]?.id ?? "");
-    setStatusMessage(t("calibration.status.deletedPreset", { name: selectedPreset.name }));
+    setStatusMessage({ key: "calibration.status.deletedPreset", values: { name: selectedPreset.name } });
   }
 
   async function importPresetFile(file: File) {
     const imported = importCalibrationPresets(await file.text());
     if (!imported.length) {
-      setStatusMessage(t("calibration.status.noValidPresets"));
+      setStatusMessage({ key: "calibration.status.noValidPresets" });
       return;
     }
     setPresets((current) => {
@@ -177,11 +179,10 @@ export function CalibrationPanel({
       return nextPresets;
     });
     setSelectedPresetId(imported[imported.length - 1].id);
-    setStatusMessage(
-      t(imported.length === 1 ? "calibration.status.importedPresets.one" : "calibration.status.importedPresets.other", {
-        count: imported.length,
-      }),
-    );
+    setStatusMessage({
+      key: imported.length === 1 ? "calibration.status.importedPresets.one" : "calibration.status.importedPresets.other",
+      values: { count: imported.length },
+    });
   }
 
   return (
@@ -193,19 +194,9 @@ export function CalibrationPanel({
         </div>
         <div className="panel-body content-band">
           <div className="row-actions">
-            <label className="button">
+            <FilePickerButton accept=".cal,.CAL,.vta,.Vta" onFiles={(files) => files[0] && onCalibrationFile(files[0])}>
               {t("calibration.loadCalFile")}
-              <input
-                hidden
-                type="file"
-                accept=".cal,.CAL,.vta,.Vta"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) onCalibrationFile(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
+            </FilePickerButton>
             <button type="button" className="button" onClick={estimateCurrentFile}>
               {t("calibration.estimateFromCurrentFile")}
             </button>
@@ -289,19 +280,14 @@ export function CalibrationPanel({
             >
               {t("calibration.exportPresetsJson")}
             </button>
-            <label className="button">
+            <FilePickerButton
+              accept=".json,application/json"
+              onFiles={(files) => {
+                if (files[0]) void importPresetFile(files[0]);
+              }}
+            >
               {t("calibration.importPresetsJson")}
-              <input
-                hidden
-                type="file"
-                accept=".json,application/json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void importPresetFile(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
+            </FilePickerButton>
           </div>
 
           {presets.length ? (
@@ -358,8 +344,16 @@ export function CalibrationPanel({
             </label>
           </div>
 
-          {localizedFilterWarning ? <div className="warning-item">{localizedFilterWarning}</div> : null}
-          {statusMessage ? <div className="warning-item">{statusMessage}</div> : null}
+          {localizedFilterWarning ? (
+            <div className="warning-item">
+              {localizedFilterWarning}
+            </div>
+          ) : null}
+          {localizedStatusMessage ? (
+            <div className="warning-item" role="status" aria-live="polite">
+              {localizedStatusMessage}
+            </div>
+          ) : null}
         </div>
       </div>
 

@@ -28,6 +28,8 @@ import { Tables } from "../components/Tables";
 import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ExportPanel } from "../components/ExportPanel";
 import { WorkspaceStatus } from "../components/WorkspaceStatus";
+import { FilePickerButton, Tabs } from "../components/ui";
+import { formatLocalizedMessage, type LocalizedMessage } from "../i18n/messages";
 import { useI18n } from "../i18n/useI18n";
 import type { LanguageCode, TranslationKey } from "../i18n/locales";
 
@@ -63,7 +65,7 @@ export function App() {
   const [region, setRegion] = useState<AxisAlignedRegion | undefined>();
   const [transformMode, setTransformMode] = useState<TransformMode>("raw");
   const [lineEnding, setLineEnding] = useState<LineEnding>("lf");
-  const [loadError, setLoadError] = useState<string | undefined>();
+  const [loadError, setLoadError] = useState<LocalizedMessage | undefined>();
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
 
   const activeFile = files[activeIndex];
@@ -126,7 +128,7 @@ export function App() {
     try {
       const loaded = (await Promise.all(inputFiles.map(loadTextFilesFromInput))).flat();
       if (!loaded.length) {
-        setLoadError(t("app.loadError.noVtaFiles"));
+        setLoadError({ key: "app.loadError.noVtaFiles" });
         return;
       }
       const parsed = loaded.map((file, index) => toWorkspaceFile(parseVtaText(file.name, file.text), index));
@@ -141,8 +143,8 @@ export function App() {
       setRegion(undefined);
       setTransformMode("raw");
       setLineEnding("lf");
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : t("app.loadError.unable"));
+    } catch {
+      setLoadError({ key: "app.loadError.unable" });
     }
   }
 
@@ -254,20 +256,15 @@ export function App() {
               ))}
             </select>
           ) : null}
-          <label className="button ghost">
-            <FileUp size={16} aria-hidden />
+          <FilePickerButton
+            accept=".vta,.Vta,.zip"
+            multiple
+            onFiles={(incoming) => void loadFiles(incoming)}
+            variant="ghost"
+            icon={<FileUp size={16} aria-hidden />}
+          >
             {t("app.openFile")}
-            <input
-              hidden
-              type="file"
-              multiple
-              accept=".vta,.Vta,.zip"
-              onChange={(event) => {
-                void loadFiles(Array.from(event.target.files ?? []));
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+          </FilePickerButton>
           <button type="button" className="button ghost" onClick={loadSample}>
             <TestTube2 size={16} aria-hidden />
             {t("app.loadSample")}
@@ -285,7 +282,11 @@ export function App() {
         </div>
 
         {!activeFile ? (
-          <FileDrop onFiles={(incoming) => void loadFiles(incoming)} loadError={loadError} onSample={loadSample} />
+          <FileDrop
+            onFiles={(incoming) => void loadFiles(incoming)}
+            loadError={loadError ? formatLocalizedMessage(loadError, t) : undefined}
+            onSample={loadSample}
+          />
         ) : (
           <div className="workspace-grid">
             <aside className="file-rail">
@@ -298,92 +299,99 @@ export function App() {
             </aside>
 
             <section className="analysis-main">
-              <nav className="tabs" aria-label={t("app.sectionsAria")}>
-                {tabs.map((tab) => (
-                  <button
-                    type="button"
-                    key={tab.key}
-                    className={tab.key === activeTab ? "tab active" : "tab"}
-                    onClick={() => setActiveTab(tab.key)}
-                  >
-                    {t(tab.labelKey)}
-                  </button>
-                ))}
-              </nav>
+              <Tabs
+                ariaLabel={t("app.sectionsAria")}
+                items={tabs.map((tab) => ({ id: tab.key, label: t(tab.labelKey) }))}
+                value={activeTab}
+                onChange={(value) => setActiveTab(value as TabKey)}
+                getTabId={analysisTabId}
+                getPanelId={analysisPanelId}
+              />
 
-              {activeTab === "overview" && stats ? (
-                <Overview
-                  file={activeFile}
-                  stats={stats}
-                  selectedPointIndex={selectedPointIndex}
-                  onSelectedPointIndex={setSelectedPointIndex}
-                  sourceVisibility={effectiveSourceVisibility}
-                  mapSettings={mapSettings}
-                  activeSegment={activeSegment}
-                  region={region}
-                  onSegmentChange={setActiveSegment}
-                  onRegionChange={setRegion}
-                  onMapSettingsChange={setMapSettings}
-                  visiblePoints={visibleGpsPoints}
-                  filterWarning={filterResult.warning}
-                />
-              ) : null}
+              {tabs.map((tab) => (
+                <div
+                  key={tab.key}
+                  role="tabpanel"
+                  id={analysisPanelId(tab.key)}
+                  aria-labelledby={analysisTabId(tab.key)}
+                  hidden={activeTab !== tab.key}
+                  tabIndex={0}
+                >
+                  {tab.key === "overview" && activeTab === "overview" && stats ? (
+                    <Overview
+                      file={activeFile}
+                      stats={stats}
+                      selectedPointIndex={selectedPointIndex}
+                      onSelectedPointIndex={setSelectedPointIndex}
+                      sourceVisibility={effectiveSourceVisibility}
+                      mapSettings={mapSettings}
+                      activeSegment={activeSegment}
+                      region={region}
+                      onSegmentChange={setActiveSegment}
+                      onRegionChange={setRegion}
+                      onMapSettingsChange={setMapSettings}
+                      visiblePoints={visibleGpsPoints}
+                      filterWarning={filterResult.warning}
+                    />
+                  ) : null}
 
-              {activeTab === "charts" ? (
-                <Charts
-                  file={activeFile}
-                  sensors={chartSensors}
-                  accelerationSensorSets={chartAccelerationSensorSets}
-                  selectedPointIndex={selectedPointIndex}
-                  onSelectedPointIndex={setSelectedPointIndex}
-                  activeSegment={activeSegment}
-                  onActiveSegment={setActiveSegment}
-                  transformMode={transformMode}
-                  visiblePoints={visibleGpsPoints}
-                />
-              ) : null}
+                  {tab.key === "charts" && activeTab === "charts" ? (
+                    <Charts
+                      file={activeFile}
+                      sensors={chartSensors}
+                      accelerationSensorSets={chartAccelerationSensorSets}
+                      selectedPointIndex={selectedPointIndex}
+                      onSelectedPointIndex={setSelectedPointIndex}
+                      activeSegment={activeSegment}
+                      onActiveSegment={setActiveSegment}
+                      transformMode={transformMode}
+                      visiblePoints={visibleGpsPoints}
+                    />
+                  ) : null}
 
-              {activeTab === "tables" ? (
-                <Tables
-                  file={activeFile}
-                  sensors={transformedSensors}
-                  visiblePoints={visibleGpsPoints}
-                  activeSegment={activeSegment}
-                />
-              ) : null}
+                  {tab.key === "tables" && activeTab === "tables" ? (
+                    <Tables
+                      file={activeFile}
+                      sensors={transformedSensors}
+                      visiblePoints={visibleGpsPoints}
+                      activeSegment={activeSegment}
+                    />
+                  ) : null}
 
-              {activeTab === "calibration" ? (
-                <CalibrationPanel
-                  file={activeFile}
-                  sensors={activeFile.sensorPoints}
-                  transformedSensors={transformedSensors}
-                  calibration={calibration}
-                  onCalibration={setCalibration}
-                  onCalibrationFile={(file) => void loadCalibrationFile(file)}
-                  filterSettings={filterSettings}
-                  onFilterSettings={setFilterSettings}
-                  filterWarning={filterResult.warning}
-                  sampleRateHz={filterResult.sampleRateHz}
-                  transformMode={transformMode}
-                  onTransformMode={setTransformMode}
-                />
-              ) : null}
+                  {tab.key === "calibration" && activeTab === "calibration" ? (
+                    <CalibrationPanel
+                      file={activeFile}
+                      sensors={activeFile.sensorPoints}
+                      transformedSensors={transformedSensors}
+                      calibration={calibration}
+                      onCalibration={setCalibration}
+                      onCalibrationFile={(file) => void loadCalibrationFile(file)}
+                      filterSettings={filterSettings}
+                      onFilterSettings={setFilterSettings}
+                      filterWarning={filterResult.warning}
+                      sampleRateHz={filterResult.sampleRateHz}
+                      transformMode={transformMode}
+                      onTransformMode={setTransformMode}
+                    />
+                  ) : null}
 
-              {activeTab === "export" && stats ? (
-                <ExportPanel
-                  file={activeFile}
-                  sensors={exportSensors}
-                  stats={stats}
-                  visiblePoints={visibleGpsPoints}
-                  activeSegment={activeSegment}
-                  onActiveSegment={setActiveSegment}
-                  lineEnding={lineEnding}
-                  onLineEnding={setLineEnding}
-                  transformMode={transformMode}
-                  calibration={calibration}
-                  filterSettings={filterSettings}
-                />
-              ) : null}
+                  {tab.key === "export" && activeTab === "export" && stats ? (
+                    <ExportPanel
+                      file={activeFile}
+                      sensors={exportSensors}
+                      stats={stats}
+                      visiblePoints={visibleGpsPoints}
+                      activeSegment={activeSegment}
+                      onActiveSegment={setActiveSegment}
+                      lineEnding={lineEnding}
+                      onLineEnding={setLineEnding}
+                      transformMode={transformMode}
+                      calibration={calibration}
+                      filterSettings={filterSettings}
+                    />
+                  ) : null}
+                </div>
+              ))}
             </section>
 
             <aside className="analysis-inspector">
@@ -459,6 +467,14 @@ function sensorsForTransformMode(
     return calibratedSensors;
   }
   return filteredSensors;
+}
+
+function analysisTabId(tab: string): string {
+  return `analysis-tab-${tab}`;
+}
+
+function analysisPanelId(tab: string): string {
+  return `analysis-panel-${tab}`;
 }
 
 function accelerationSensorSets(

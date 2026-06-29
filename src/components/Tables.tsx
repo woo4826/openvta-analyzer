@@ -14,6 +14,7 @@ import {
 import { displayGpsPoints } from "../domain/statistics";
 import type { ActiveSegment, GpsPoint, ParseWarning, SensorPoint, ValidationRow, VtaFile } from "../domain/types";
 import type { TranslationKey } from "../i18n/locales";
+import { localizeParseWarning } from "../i18n/parseWarnings";
 import { useI18n } from "../i18n/useI18n";
 import { Panel, Tabs, ToolbarButton } from "./ui";
 
@@ -44,11 +45,13 @@ interface ColumnTemplate<T> {
   labelKey: TranslationKey;
   numeric?: boolean;
   value: (item: T) => TableValue;
+  searchValue?: (item: T) => string;
   render?: (item: T) => ReactNode;
 }
 
 interface ColumnBuilder<T> extends TableColumn {
   value: (item: T) => TableValue;
+  searchValue?: (item: T) => string;
   render?: (item: T) => ReactNode;
 }
 
@@ -182,16 +185,23 @@ const sensorColumnTemplates: Array<ColumnTemplate<SensorPoint>> = [
   },
 ];
 
-const warningColumnTemplates: Array<ColumnTemplate<ParseWarning>> = [
-  {
-    id: "lineNumber",
-    labelKey: "tables.column.line",
-    numeric: true,
-    value: (warning) => warning.lineNumber ?? "",
-  },
-  { id: "code", labelKey: "tables.column.code", value: (warning) => warning.code },
-  { id: "message", labelKey: "tables.column.message", value: (warning) => warning.message },
-];
+function warningColumnTemplates(t: ReturnType<typeof useI18n>["t"]): Array<ColumnTemplate<ParseWarning>> {
+  return [
+    {
+      id: "lineNumber",
+      labelKey: "tables.column.line",
+      numeric: true,
+      value: (warning) => warning.lineNumber ?? "",
+    },
+    { id: "code", labelKey: "tables.column.code", value: (warning) => warning.code },
+    {
+      id: "message",
+      labelKey: "tables.column.message",
+      value: (warning) => localizeParseWarning(warning, t),
+      searchValue: (warning) => `${warning.message} ${localizeParseWarning(warning, t)}`,
+    },
+  ];
+}
 
 const summaryColumnTemplates: Array<ColumnTemplate<SummaryTableRow>> = [
   { id: "metric", labelKey: "tables.column.metric", value: (row) => row.metric },
@@ -249,7 +259,7 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
   );
   const gpsColumns = useMemo(() => localizeColumns(gpsColumnTemplates, t), [t]);
   const sensorColumns = useMemo(() => localizeColumns(sensorColumnTemplates, t), [t]);
-  const warningColumns = useMemo(() => localizeColumns(warningColumnTemplates, t), [t]);
+  const warningColumns = useMemo(() => localizeColumns(warningColumnTemplates(t), t), [t]);
   const summaryColumns = useMemo(() => localizeColumns(summaryColumnTemplates, t), [t]);
   const validationColumns = useMemo(() => localizeColumns(validationColumnTemplates, t), [t]);
   const points = useMemo(() => visiblePoints ?? displayGpsPoints(file), [file, visiblePoints]);
@@ -414,6 +424,8 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
             items={tableOrder.map((id) => ({ id, label: tableLabels[id] }))}
             value={activeTab}
             onChange={(value) => setActiveTab(value as TableTab)}
+            getTabId={tableTabId}
+            getPanelId={tablePanelId}
           />
 
           <div className="table-status" aria-live="polite">
@@ -424,20 +436,39 @@ export function Tables({ file, sensors, visiblePoints, activeSegment }: TablesPr
             })}
           </div>
 
-          <div role="tabpanel" aria-label={t("tables.tabPanelAria", { label: activeDefinition.label })}>
-            <SortableTable
-              definition={activeDefinition}
-              rows={visibleRows}
-              sort={activeSort}
-              onSort={updateSort}
-              noRowsLabel={t("tables.noRows")}
-              sortByLabel={(label) => t("tables.sortBy", { label })}
-            />
-          </div>
+          {tableOrder.map((id) => (
+            <div
+              key={id}
+              role="tabpanel"
+              id={tablePanelId(id)}
+              aria-labelledby={tableTabId(id)}
+              hidden={activeTab !== id}
+              tabIndex={0}
+            >
+              {activeTab === id ? (
+                <SortableTable
+                  definition={activeDefinition}
+                  rows={visibleRows}
+                  sort={activeSort}
+                  onSort={updateSort}
+                  noRowsLabel={t("tables.noRows")}
+                  sortByLabel={(label) => t("tables.sortBy", { label })}
+                />
+              ) : null}
+            </div>
+          ))}
         </div>
       </Panel>
     </section>
   );
+}
+
+function tableTabId(tab: string): string {
+  return `table-tab-${tab}`;
+}
+
+function tablePanelId(tab: string): string {
+  return `table-panel-${tab}`;
 }
 
 function SortableTable({
@@ -533,7 +564,10 @@ function createRows<T>(
       exportItem: getExportItem?.(item),
       values,
       cells,
-      searchText: Object.values(values).join(" ").toLowerCase(),
+      searchText: columns
+        .map((column) => column.searchValue?.(item) ?? values[column.id])
+        .join(" ")
+        .toLowerCase(),
     };
   });
 }

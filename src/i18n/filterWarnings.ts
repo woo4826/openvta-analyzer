@@ -1,12 +1,11 @@
-import type { TranslationKey } from "./locales";
-
-type Translate = (key: TranslationKey, values?: Record<string, string | number>) => string;
+import { FILTER_WARNING_CUTOFF_OUT_OF_RANGE, FILTER_WARNING_IRREGULAR_TIMESTAMPS } from "../domain/filtering";
+import type { Translate } from "./messages";
 
 export function localizeFilterWarning(message: string, t: Translate): string {
-  if (message === "Filter skipped because the cutoff frequency is outside the valid range.") {
+  if (message === FILTER_WARNING_CUTOFF_OUT_OF_RANGE) {
     return t("calibration.filterWarning.cutoffOutOfRange");
   }
-  if (message === "Sensor timestamps are irregular; an effective sample rate was estimated for filtering.") {
+  if (message === FILTER_WARNING_IRREGULAR_TIMESTAMPS) {
     return t("calibration.filterWarning.irregularTimestamps");
   }
   return message;
