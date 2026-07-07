@@ -2,6 +2,10 @@
 
 OpenVTA Analyzer is a zero-backend Web/PWA workspace for VTA trajectory files. It parses `.Vta` and `.zip` session exports locally in the browser, visualizes route and sensor data, supports segment export, and includes calibration and low-pass filtering tools.
 
+## Project handoff docs
+
+For the current product plan, architecture, deployment workflow, and next-development handoff notes, start with [`docs/project-handoff/README.md`](docs/project-handoff/README.md).
+
 ## Features
 
 - Modern OpenVTA, legacy phone, and standalone IMU box VTA parsing.

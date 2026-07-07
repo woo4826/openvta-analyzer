@@ -5,3 +5,7 @@ test-results/
 .DS_Store
 *.local
 .superpowers/
+
+# Local agent instructions.
+AGENTS.md
+Agent.md
