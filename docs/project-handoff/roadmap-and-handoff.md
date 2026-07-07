@@ -141,6 +141,8 @@ Last updated: 2026-07-08
 - domain-only 변경: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`.
 - UI interaction 변경: 위 명령 + `pnpm test:e2e`.
 - 배포 변경: GitHub Actions CI/Pages 결과와 live URL 확인.
+- Latest local baseline as of 2026-07-08 KST on commit `ffc5f31`: typecheck,
+  lint, 66 Vitest tests, production build, and 14 Playwright tests passed.
 
 문서:
 

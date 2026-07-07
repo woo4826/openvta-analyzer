@@ -34,6 +34,20 @@ pnpm test:e2e
 
 UI, 접근성, tour, map/chart/table/export 흐름을 바꾸면 E2E까지 실행하는 것이 기준입니다.
 
+## 최신 로컬 검증 증거
+
+2026-07-08 KST, commit `ffc5f31`:
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed.
+- `pnpm test` passed with 13 Vitest files and 66 tests.
+- `pnpm build` passed and produced the static Vite bundle under `dist/`.
+- `pnpm test:e2e` passed with 14 Playwright tests across desktop Chromium and
+  the configured mobile project.
+- This verification does not add a backend, account system, telemetry,
+  database, object storage, or hosted file upload path. OpenVTA Live consumes
+  Analyzer source through the private `openvta-live` sync/inline path.
+
 ## CI
 
 `.github/workflows/ci.yml`
