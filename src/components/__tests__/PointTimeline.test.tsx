@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { GpsPoint } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
-import { PointTimeline } from "../Overview";
+import { PointTimeline } from "../PointTimeline";
 
 vi.mock("maplibre-gl", () => ({ default: {} }));
 
