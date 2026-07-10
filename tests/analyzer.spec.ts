@@ -35,6 +35,8 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(page.getByText("Enhanced 35")).toBeVisible();
   const rawGpsCountText = await fileTray.getByText(/^GPS \d+$/).textContent();
   const rawGpsCount = Number(rawGpsCountText?.match(/\d+/)?.[0] ?? 0);
+  const enhancedGpsCountText = await fileTray.getByText(/^Enhanced \d+$/).textContent();
+  const enhancedGpsCount = Number(enhancedGpsCountText?.match(/\d+/)?.[0] ?? 0);
   expect(rawGpsCount).toBeGreaterThan(0);
   await expect(fileTray.getByText("Sensor 185")).toBeVisible();
   await expect(fileTray.getByText("Warnings 0")).toBeVisible();
@@ -63,6 +65,16 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(fallbackPoints.nth(0)).toHaveAttribute("r", "5");
 
   const selectedPointPanel = panelByHeading(analysisMain, "Selected Point");
+  const pointTimeline = page.getByRole("slider", { name: "Point timeline" });
+  await expect(pointTimeline).toHaveValue("0");
+  await expect(pointTimeline).toHaveAttribute("max", String(rawGpsCount + enhancedGpsCount - 1));
+  await pointTimeline.fill("10");
+  await expect(pointTimeline).toHaveAttribute("aria-valuetext", new RegExp(`Point 11 of ${rawGpsCount + enhancedGpsCount}`));
+  await expect(metricValue(selectedPointPanel, "Index")).toHaveText("10");
+  await pointTimeline.press("ArrowRight");
+  await expect(metricValue(selectedPointPanel, "Index")).toHaveText("11");
+  await pointTimeline.fill("0");
+  await expect(metricValue(selectedPointPanel, "Index")).toHaveText("0");
   await page.getByRole("button", { name: "Set segment start" }).click();
   await fallbackPoints.nth(10).click();
   await expect(metricValue(selectedPointPanel, "Index")).toHaveText("10");
@@ -95,6 +107,8 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(panelByHeading(analysisMain, "Segment")).toHaveCount(0);
   await expect(panelByHeading(analysisMain, "Region")).toHaveCount(0);
   await expect(metricValue(selectedPointPanel, "Index")).toHaveText("0");
+  await expect(pointTimeline).toHaveAttribute("max", String(rawGpsCount - 1));
+  await expect(pointTimeline).toHaveValue("0");
   await expect(metricValue(workspace, "Segment")).toHaveText("All points");
   await rawGpsButton.click();
   await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");

@@ -36,8 +36,28 @@ export function RouteMap({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
   const [styleLoaded, setStyleLoaded] = useState(false);
+  const focusFrameRef = useRef<number>();
   const bounds = useMemo(() => coordinateBounds(points), [points]);
   const segmentPoints = useMemo(() => selectedSegmentPoints(points, segment), [points, segment]);
+  const routePolyline = useMemo(() => bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, points]);
+  const segmentPolyline = useMemo(() => bounds ? segmentPoints.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, segmentPoints]);
+  const regionRect = useMemo(() => bounds && region ? regionToSvgRect(region, bounds) : undefined, [bounds, region]);
+  const routePointMarkers = useMemo(() => bounds ? points.map((point, index) => {
+    const [cx, cy] = toSvgPointArray(point, bounds);
+    return (
+      <circle
+        key={`${point.source}-${point.index}-${point.lineNumber}`}
+        cx={cx}
+        cy={cy}
+        r={settings.pointSize}
+        fill={speedColor(point.speedKmh, settings.speedThresholds)}
+        stroke="#0c1b22"
+        strokeWidth="1.5"
+        onClick={() => onSelectedIndex(index)}
+        style={{ pointerEvents: "auto", cursor: "pointer" }}
+      />
+    );
+  }) : [], [bounds, onSelectedIndex, points, settings.pointSize, settings.speedThresholds]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !points.length) {
@@ -120,15 +140,32 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, selectedIndex, segment, region, settings);
-    const selected = points[selectedIndex];
-    if (selected) {
-      mapRef.current.easeTo({
-        center: [selected.longitude, selected.latitude],
-        duration: 250,
-      });
+    updateMapRoute(mapRef.current, points, segment, region, settings);
+  }, [points, segment, region, settings, styleLoaded]);
+
+  useEffect(() => {
+    if (!mapRef.current || !styleLoaded) {
+      return;
     }
-  }, [points, selectedIndex, segment, region, settings, styleLoaded]);
+    const selected = points[selectedIndex];
+    if (focusFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(focusFrameRef.current);
+    }
+    focusFrameRef.current = window.requestAnimationFrame(() => {
+      if (!mapRef.current) return;
+      updateSelectedPoint(mapRef.current, selected);
+      if (selected) {
+        mapRef.current.jumpTo({
+          center: [selected.longitude, selected.latitude],
+        });
+      }
+    });
+    return () => {
+      if (focusFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(focusFrameRef.current);
+      }
+    };
+  }, [points, selectedIndex, styleLoaded]);
 
   function fitRoute() {
     if (!mapRef.current || !points.length) {
@@ -188,10 +225,6 @@ export function RouteMap({
   }
 
   const selected = points[selectedIndex];
-  const routePolyline = points.map((point) => toSvgPoint(point, bounds)).join(" ");
-  const segmentPolyline = segmentPoints.map((point) => toSvgPoint(point, bounds)).join(" ");
-  const regionRect = region ? regionToSvgRect(region, bounds) : undefined;
-
   return (
     <div className="map-shell" data-source-visibility={sourceVisibilityState(sourceVisibility)}>
       {!mapFailed ? <div className="map-container" ref={containerRef} /> : null}
@@ -251,22 +284,7 @@ export function RouteMap({
               />
             </>
           ) : null}
-          {points.map((point, index) => {
-            const [cx, cy] = toSvgPointArray(point, bounds);
-            return (
-              <circle
-                key={`${point.source}-${point.index}-${point.lineNumber}`}
-                cx={cx}
-                cy={cy}
-                r={settings.pointSize}
-                fill={speedColor(point.speedKmh, settings.speedThresholds)}
-                stroke="#0c1b22"
-                strokeWidth="1.5"
-                onClick={() => onSelectedIndex(index)}
-                style={{ pointerEvents: "auto", cursor: "pointer" }}
-              />
-            );
-          })}
+          {routePointMarkers}
           {selected ? (
             <SelectedPointMarker point={selected} bounds={bounds} pointSize={settings.pointSize} />
           ) : null}
@@ -389,7 +407,6 @@ function speedColor(speedKmh: number, thresholds: MapSettings["speedThresholds"]
 function updateMapRoute(
   map: maplibregl.Map,
   points: GpsPoint[],
-  selectedIndex: number,
   segment: ActiveSegment | undefined,
   region: AxisAlignedRegion | undefined,
   settings: MapSettings,
@@ -426,18 +443,9 @@ function updateMapRoute(
       geometry: { type: "Point", coordinates: [point.longitude, point.latitude] },
     })),
   };
-  const selected = points[selectedIndex];
   const selectedData: FeatureCollection<Point> = {
     type: "FeatureCollection",
-    features: selected
-      ? [
-          {
-            type: "Feature",
-            properties: {},
-            geometry: { type: "Point", coordinates: [selected.longitude, selected.latitude] },
-          },
-        ]
-      : [],
+    features: [],
   };
   const regionData: FeatureCollection<Polygon> = {
     type: "FeatureCollection",
@@ -456,7 +464,9 @@ function updateMapRoute(
   setGeoJsonSource(map, "route-line-source", routeData);
   setGeoJsonSource(map, "segment-line-source", segmentData);
   setGeoJsonSource(map, "route-points-source", pointData);
-  setGeoJsonSource(map, "selected-point-source", selectedData);
+  if (!map.getSource("selected-point-source")) {
+    setGeoJsonSource(map, "selected-point-source", selectedData);
+  }
 
   if (!map.getLayer("region-fill")) {
     map.addLayer({
@@ -594,6 +604,20 @@ function updateMapRoute(
   map.setPaintProperty("route-points", "circle-color", speedColorExpression(settings.speedThresholds));
   map.setPaintProperty("selected-point", "circle-radius", Math.max(settings.pointSize + 5, 10));
   map.setPaintProperty("selected-point-core", "circle-radius", Math.max(settings.pointSize - 1, 4));
+}
+
+function updateSelectedPoint(map: maplibregl.Map, selected?: GpsPoint) {
+  const selectedData: FeatureCollection<Point> = {
+    type: "FeatureCollection",
+    features: selected
+      ? [{
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: [selected.longitude, selected.latitude] },
+        }]
+      : [],
+  };
+  setGeoJsonSource(map, "selected-point-source", selectedData);
 }
 
 function lineCoordinates(points: GpsPoint[]): CoordinatePair[] {

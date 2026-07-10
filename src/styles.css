@@ -458,6 +458,51 @@ footer.privacy-note {
   align-items: start;
 }
 
+.point-timeline {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.point-timeline-header,
+.point-timeline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.point-timeline-header label {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.point-timeline-header output,
+.point-timeline-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.point-timeline input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.point-timeline input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.point-timeline-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
