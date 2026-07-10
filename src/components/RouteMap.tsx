@@ -42,7 +42,7 @@ export function RouteMap({
   const routePolyline = useMemo(() => bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, points]);
   const segmentPolyline = useMemo(() => bounds ? segmentPoints.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, segmentPoints]);
   const regionRect = useMemo(() => bounds && region ? regionToSvgRect(region, bounds) : undefined, [bounds, region]);
-  const routePointMarkers = useMemo(() => bounds ? points.map((point, index) => {
+  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds ? points.map((point, index) => {
     const [cx, cy] = toSvgPointArray(point, bounds);
     return (
       <circle
@@ -57,7 +57,7 @@ export function RouteMap({
         style={{ pointerEvents: "auto", cursor: "pointer" }}
       />
     );
-  }) : [], [bounds, onSelectedIndex, points, settings.pointSize, settings.speedThresholds]);
+  }) : [], [bounds, mapFailed, onSelectedIndex, points, settings.pointSize, settings.speedThresholds]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !points.length) {
@@ -284,7 +284,7 @@ export function RouteMap({
               />
             </>
           ) : null}
-          {routePointMarkers}
+          {fallbackRoutePointMarkers}
           {selected ? (
             <SelectedPointMarker point={selected} bounds={bounds} pointSize={settings.pointSize} />
           ) : null}
