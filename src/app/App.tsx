@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileUp, Gauge, HelpCircle, Settings, TestTube2 } from "lucide-react";
 import { sampleCalibrationName, sampleCalibrationText, sampleVtaName, sampleVtaText } from "./sampleData";
 import { buildTourSteps, nextAvailableTourStepIndex } from "./tourSteps";
+import { lapWorkspaceKey, selectLapGpsSource, type LapGpsSourceKey } from "./lapGpsSource";
+import { useLapWorkspace } from "./useLapWorkspace";
+import { isFilterTransformReady, normalizeTransformMode } from "./workspaceCapabilities";
 import { displayGpsPointsWithSources } from "../domain/analysis";
 import { applyCalibration, estimateCalibrationOffsets } from "../domain/calibration";
 import { defaultFilterSettings, applyAccelerationFilter } from "../domain/filtering";
@@ -30,6 +33,7 @@ import type {
 import { FileDrop } from "../components/FileDrop";
 import { FileTray } from "../components/FileTray";
 import { Overview } from "../components/Overview";
+import { LapAnalysis } from "../components/LapAnalysis";
 import { Charts, type AccelerationSensorSet } from "../components/Charts";
 import { Tables } from "../components/Tables";
 import { CalibrationPanel } from "../components/CalibrationPanel";
@@ -41,10 +45,11 @@ import { formatLocalizedMessage, type LocalizedMessage } from "../i18n/messages"
 import { useI18n } from "../i18n/useI18n";
 import type { LanguageCode, TranslationKey } from "../i18n/locales";
 
-type TabKey = "overview" | "charts" | "tables" | "calibration" | "export";
+type TabKey = "overview" | "laps" | "charts" | "tables" | "calibration" | "export";
 
 const tabs: Array<{ key: TabKey; labelKey: TranslationKey }> = [
   { key: "overview", labelKey: "app.tab.overview" },
+  { key: "laps", labelKey: "app.tab.laps" },
   { key: "charts", labelKey: "app.tab.charts" },
   { key: "tables", labelKey: "app.tab.tables" },
   { key: "calibration", labelKey: "app.tab.calibration" },
@@ -68,6 +73,7 @@ export function App() {
   const [calibration, setCalibration] = useState<CalibrationOffsets | undefined>();
   const [filterSettings, setFilterSettings] = useState<FilterSettings>(defaultFilterSettings);
   const [sourceVisibility, setSourceVisibility] = useState<SourceVisibility>(defaultSourceVisibility);
+  const [lapSourcePreferences, setLapSourcePreferences] = useState<Record<string, LapGpsSourceKey>>({});
   const [mapSettings, setMapSettings] = useState<MapSettings>(defaultMapSettings);
   const [activeSegment, setActiveSegment] = useState<ActiveSegment | undefined>();
   const [region, setRegion] = useState<AxisAlignedRegion | undefined>();
@@ -81,13 +87,33 @@ export function App() {
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
 
   const activeFile = files[activeIndex];
-  const effectiveSourceVisibility = useMemo(
+  const normalizedSourceVisibility = useMemo(
     () => (activeFile ? normalizeSourceVisibility(activeFile, sourceVisibility) : sourceVisibility),
     [activeFile, sourceVisibility],
   );
+  const lapGpsSource = useMemo(() => {
+    if (!activeFile) return undefined;
+    const preferred = lapSourcePreferences[activeFile.id];
+    const requested = preferred
+      ? { rawGps: preferred === "rawGps", enhancedGps: preferred === "enhancedGps" }
+      : normalizedSourceVisibility;
+    return selectLapGpsSource(activeFile, requested);
+  }, [activeFile, lapSourcePreferences, normalizedSourceVisibility]);
+  const effectiveSourceVisibility = activeTab === "laps" && lapGpsSource
+    ? lapGpsSource.visibility
+    : normalizedSourceVisibility;
   const visibleGpsPoints = useMemo(
-    () => (activeFile ? displayGpsPointsWithSources(activeFile, effectiveSourceVisibility) : []),
-    [activeFile, effectiveSourceVisibility],
+    () => activeTab === "laps" && lapGpsSource
+      ? lapGpsSource.points
+      : activeFile
+        ? displayGpsPointsWithSources(activeFile, effectiveSourceVisibility)
+        : [],
+    [activeFile, activeTab, effectiveSourceVisibility, lapGpsSource],
+  );
+  const lapWorkspace = useLapWorkspace(
+    lapWorkspaceKey(activeFile?.id, lapGpsSource?.key),
+    activeFile?.sourceName,
+    lapGpsSource?.points ?? [],
   );
   const calibratedSensors = useMemo(
     () => applyCalibration(activeFile?.sensorPoints ?? [], calibration),
@@ -99,6 +125,7 @@ export function App() {
   );
   const transformedSensors = filterResult.sensors;
   const rawSensors = activeFile?.sensorPoints ?? emptySensors;
+  const filterTransformReady = isFilterTransformReady(filterSettings.enabled, calibratedSensors, transformedSensors);
   const chartSensors = useMemo(
     () => sensorsForTransformMode(transformMode, rawSensors, calibratedSensors, transformedSensors),
     [calibratedSensors, rawSensors, transformedSensors, transformMode],
@@ -114,8 +141,20 @@ export function App() {
     () => sensorsForTransformMode(transformMode, rawSensors, calibratedSensors, transformedSensors),
     [calibratedSensors, rawSensors, transformedSensors, transformMode],
   );
+  const tableSensors = useMemo(
+    () => sensorsForTransformMode(transformMode, rawSensors, calibratedSensors, transformedSensors),
+    [calibratedSensors, rawSensors, transformedSensors, transformMode],
+  );
   const stats = useMemo(() => (activeFile ? summarizeVta(activeFile) : undefined), [activeFile]);
   const tourSteps = useMemo(() => buildTourSteps(Boolean(activeFile)), [activeFile]);
+
+  useEffect(() => {
+    setTransformMode((mode) => normalizeTransformMode(
+      mode,
+      Boolean(calibration) && rawSensors.length > 0,
+      rawSensors.length > 0 && filterTransformReady,
+    ));
+  }, [calibration, filterTransformReady, rawSensors.length]);
 
   useEffect(() => {
     if (!activeFile) {
@@ -152,6 +191,7 @@ export function App() {
       setCalibration(undefined);
       setFilterSettings(defaultFilterSettings);
       setSourceVisibility(defaultSourceVisibility);
+      setLapSourcePreferences({});
       setActiveSegment(undefined);
       setRegion(undefined);
       setTransformMode("raw");
@@ -169,6 +209,7 @@ export function App() {
     setCalibration(undefined);
     setFilterSettings(defaultFilterSettings);
     setSourceVisibility(defaultSourceVisibility);
+    setLapSourcePreferences({});
     setActiveSegment(undefined);
     setRegion(undefined);
     setTransformMode("raw");
@@ -223,6 +264,16 @@ export function App() {
   }
 
   function updateSourceVisibility(nextVisibility: SourceVisibility) {
+    if (activeTab === "laps" && activeFile) {
+      const selected = selectLapGpsSource(activeFile, nextVisibility);
+      if (selected.key) {
+        setLapSourcePreferences((previous) => ({ ...previous, [activeFile.id]: selected.key! }));
+      }
+      setSelectedPointIndex(0);
+      setActiveSegment(undefined);
+      setRegion(undefined);
+      return;
+    }
     setSourceVisibility(nextVisibility);
     setSelectedPointIndex(0);
     setActiveSegment(undefined);
@@ -416,10 +467,25 @@ export function App() {
                     />
                   ) : null}
 
+                  {tab.key === "laps" && activeTab === "laps" ? (
+                    <LapAnalysis
+                      fileName={activeFile.sourceName}
+                      points={lapGpsSource?.points ?? []}
+                      selectedPointIndex={selectedPointIndex}
+                      onSelectedPointIndex={setSelectedPointIndex}
+                      sourceVisibility={lapGpsSource?.visibility ?? effectiveSourceVisibility}
+                      mapSettings={mapSettings}
+                      onMapSettingsChange={setMapSettings}
+                      activeSegment={activeSegment}
+                      onActiveSegment={setActiveSegment}
+                      workspace={lapWorkspace}
+                    />
+                  ) : null}
+
                   {tab.key === "tables" && activeTab === "tables" ? (
                     <Tables
                       file={activeFile}
-                      sensors={transformedSensors}
+                      sensors={tableSensors}
                       visiblePoints={visibleGpsPoints}
                       activeSegment={activeSegment}
                     />
@@ -466,10 +532,18 @@ export function App() {
                 <WorkspaceStatus
                   sourceVisibility={effectiveSourceVisibility}
                   onSourceVisibility={updateSourceVisibility}
+                  rawGpsCount={activeFile.gpsPoints.length}
+                  enhancedGpsCount={activeFile.enhancedPoints.length}
+                  sensorCount={activeFile.sensorPoints.length}
                   transformMode={transformMode}
                   onTransformMode={setTransformMode}
+                  calibrationReady={Boolean(calibration)}
+                  filterReady={filterTransformReady}
+                  onOpenCalibration={() => setActiveTab("calibration")}
                   activeSegment={activeSegment}
+                  visiblePointCount={visibleGpsPoints.length}
                   onActiveSegment={setActiveSegment}
+                  singleSourceMode={activeTab === "laps"}
                 />
               </div>
             </aside>

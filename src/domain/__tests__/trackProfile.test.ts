@@ -27,7 +27,75 @@ describe("track profile schema", () => {
       }).error,
     ).toMatch(/source/);
   });
+
+  it("requires valid element ids, fetch time, attribution, and ODbL for OSM profiles", () => {
+    const profile = validOsmProfile();
+    expect(validateTrackProfile(profile)).toEqual({ profile });
+    const offsetProfile = {
+      ...profile,
+      source: { ...profile.source, fetchedAt: "2026-07-13T09:00:00+09:00" },
+    };
+    expect(validateTrackProfile(offsetProfile)).toEqual({ profile: offsetProfile });
+
+    for (const source of [
+      { ...profile.source, osmElementIds: [] },
+      { ...profile.source, osmElementIds: ["way/not-a-number"] },
+      { ...profile.source, fetchedAt: "not-a-date" },
+      { ...profile.source, attribution: "" },
+      { ...profile.source, attribution: "Some map provider" },
+      { ...profile.source, license: undefined },
+    ]) {
+      expect(validateTrackProfile({ ...profile, source }).error).toMatch(/source/);
+    }
+  });
+
+  it("rejects a section whose end precedes its start", () => {
+    expect(validateTrackProfile({
+      ...validProfile(),
+      sections: [{
+        id: "reversed",
+        name: "Reversed section",
+        kind: "straight",
+        startDistanceMeters: 50,
+        endDistanceMeters: 10,
+      }],
+    }).error).toMatch(/section/);
+  });
+
+  it("enforces contextual gate kinds and unique gate ids", () => {
+    const profile = validProfile();
+    expect(validateTrackProfile({
+      ...profile,
+      startFinish: { ...profile.startFinish!, kind: "pit-in" },
+    }).error).toMatch(/startFinish/);
+    expect(validateTrackProfile({
+      ...profile,
+      sectorGates: [{ ...profile.startFinish!, id: "sector-1", kind: "start-finish" }],
+    }).error).toMatch(/sector/);
+    expect(validateTrackProfile({
+      ...profile,
+      pitLane: { inGate: { ...profile.startFinish!, id: "pit-in", kind: "sector" } },
+    }).error).toMatch(/pitLane/);
+    expect(validateTrackProfile({
+      ...profile,
+      sectorGates: [{ ...profile.startFinish!, kind: "sector" }],
+    }).error).toMatch(/unique/);
+  });
 });
+
+function validOsmProfile(): TrackProfileV1 {
+  const profile = validProfile();
+  return {
+    ...profile,
+    source: {
+      kind: "osm",
+      osmElementIds: ["way/123"],
+      fetchedAt: "2026-07-13T00:00:00.000Z",
+      attribution: "© OpenStreetMap contributors",
+      license: "ODbL-1.0",
+    },
+  };
+}
 
 function validProfile(): TrackProfileV1 {
   return {

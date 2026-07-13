@@ -20,7 +20,31 @@ describe("lap detection", () => {
       minimumRearmSeconds: 0,
     });
     expect(crossings).toHaveLength(1);
+    expect(crossings[0].id).toBe("auto-start-finish-0.500");
     expect(crossings[0].elapsedSeconds).toBeCloseTo(0.5, 5);
+  });
+
+  it("flags a reverse crossing inside the finite start gate without creating a lap boundary", () => {
+    const points = [gps(0.0001, 0, 0), gps(-0.0001, 0, 1)];
+    const result = detectLaps(points, startGate(), {
+      minimumRearmDistanceMeters: 1,
+      minimumRearmSeconds: 0,
+    });
+
+    expect(result.boundaries).toHaveLength(0);
+    expect(result.laps).toHaveLength(1);
+    expect(result.laps[0].flags).toContain("reverse-crossing");
+    expect(result.warnings).toContain("One or more laps crossed the start/finish gate in the reverse direction.");
+  });
+
+  it("does not flag a reverse crossing outside the finite start gate", () => {
+    const points = [gps(0.0001, 0.001, 0), gps(-0.0001, 0.001, 1)];
+    const result = detectLaps(points, startGate(), {
+      minimumRearmDistanceMeters: 1,
+      minimumRearmSeconds: 0,
+    });
+
+    expect(result.laps[0].flags).not.toContain("reverse-crossing");
   });
 
   it("keeps start/end fragments and complete laps", () => {
@@ -68,6 +92,16 @@ describe("lap detection", () => {
       validityOverrides: [{ lapId: target!.id, validity: "excluded" }],
     });
     expect(excluded.laps.find((lap) => lap.id === target!.id)?.validity).toBe("excluded");
+  });
+
+  it("retains opening and closing session fragments shorter than one second", () => {
+    const points = [gps(-0.00001, 0, 0), gps(0.0001, 0, 0.1), gps(0.0005, 0, 0.2)];
+    const result = detectLaps(points, startGate(), {
+      minimumRearmDistanceMeters: 1,
+      minimumRearmSeconds: 0,
+    });
+    expect(result.laps.map((lap) => lap.completion)).toEqual(["partial-start", "partial-end"]);
+    expect(result.laps.every((lap) => (lap.durationSeconds ?? 1) < 1)).toBe(true);
   });
 });
 

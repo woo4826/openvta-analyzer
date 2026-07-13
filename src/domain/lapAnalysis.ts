@@ -7,6 +7,7 @@ import type {
   LapComparisonSample,
   LapDistanceSample,
   LapResult,
+  TimingSectorAnalysisResult,
   TimingSectorResult,
   TrackSection,
   TrackProfileV1,
@@ -52,6 +53,36 @@ export function resampleLapByDistance(
   return result;
 }
 
+export function lapLineString(
+  points: GpsPoint[],
+  lap: LapResult,
+  spacingMeters = 5,
+): LineString | undefined {
+  const coordinates = resampleLapByDistance(points, lap, spacingMeters)
+    .map((sample): Position => [sample.longitude, sample.latitude]);
+  return coordinates.length >= 2 ? { type: "LineString", coordinates } : undefined;
+}
+
+export interface TrackSectionGeometry extends Pick<TrackSection, "id" | "name" | "kind"> {
+  line: LineString;
+}
+
+export function deriveTrackSectionGeometry(
+  centerline: LineString,
+  sections: TrackSection[],
+): TrackSectionGeometry[] {
+  if (centerline.coordinates.length < 2 || !sections.length) return [];
+  const distances = cumulativeDistances(centerline.coordinates);
+  const totalDistance = distances.at(-1) ?? 0;
+  return sections.flatMap((section) => {
+    const startDistance = Math.min(totalDistance, Math.max(0, section.startDistanceMeters));
+    const endDistance = Math.min(totalDistance, Math.max(0, section.endDistanceMeters));
+    if (endDistance <= startDistance) return [];
+    const line = lineBetweenDistances(centerline.coordinates, distances, startDistance, endDistance);
+    return line ? [{ id: section.id, name: section.name, kind: section.kind, line }] : [];
+  });
+}
+
 export function compareLapToReference(
   points: GpsPoint[],
   lap: LapResult,
@@ -82,27 +113,47 @@ export function analyzeTimingSectors(
   profile: TrackProfileV1,
   includePartialLapSectors: boolean,
 ): TimingSectorResult[] {
+  return analyzeTimingSectorsDetailed(points, laps, profile, includePartialLapSectors).sectors;
+}
+
+export function analyzeTimingSectorsDetailed(
+  points: GpsPoint[],
+  laps: LapResult[],
+  profile: TrackProfileV1,
+  includePartialLapSectors: boolean,
+): TimingSectorAnalysisResult {
   if (!profile.startFinish || !profile.sectorGates.length) {
-    return [];
+    return { sectors: [], missedSectorLapIds: [], warnings: [] };
   }
   const gates = [profile.startFinish, ...profile.sectorGates];
-  const crossings = new Map(gates.map((gate) => [gate.id, detectGateCrossings(points, gate)]));
+  const crossings = new Map(profile.sectorGates.map((gate) => [gate.id, detectGateCrossings(points, gate)]));
   const results: TimingSectorResult[] = [];
+  const missedSectorLapIds: string[] = [];
   for (const lap of laps) {
     if (lap.validity !== "valid") {
       continue;
     }
-    const events = gates.flatMap((gate, gateIndex) => {
+    const events = profile.sectorGates.flatMap((gate, sectorOffset) => {
+      const gateIndex = sectorOffset + 1;
       const withinLap = (crossings.get(gate.id) ?? [])
         .filter((boundary) => boundary.elapsedSeconds >= lap.start.elapsedSeconds && boundary.elapsedSeconds <= lap.end.elapsedSeconds)
         .map((boundary) => ({ gate, gateIndex, boundary }));
       return withinLap;
     });
-    if (lap.completion === "complete") {
+    if (lap.start.source !== "session-start") {
       events.push({ gate: profile.startFinish, gateIndex: 0, boundary: lap.start });
+    }
+    if (lap.end.source !== "session-end") {
       events.push({ gate: profile.startFinish, gateIndex: 0, boundary: lap.end });
     }
     events.sort((left, right) => left.boundary.elapsedSeconds - right.boundary.elapsedSeconds);
+    const wrongOrder = events.slice(1).some(
+      (event, index) => event.gateIndex !== (events[index].gateIndex + 1) % gates.length,
+    );
+    const incompleteCompleteLap = lap.completion === "complete" && events.length !== gates.length + 1;
+    if (wrongOrder || incompleteCompleteLap) {
+      missedSectorLapIds.push(lap.id);
+    }
     for (let index = 1; index < events.length; index += 1) {
       const start = events[index - 1];
       const end = events[index];
@@ -125,10 +176,19 @@ export function analyzeTimingSectors(
       });
     }
   }
-  return dedupeSectorResults(results);
+  return {
+    sectors: dedupeSectorResults(results),
+    missedSectorLapIds,
+    warnings: missedSectorLapIds.length
+      ? ["One or more laps crossed timing sector gates in the wrong order."]
+      : [],
+  };
 }
 
 export function theoreticalBestSeconds(results: TimingSectorResult[], sectorCount: number): number | undefined {
+  if (!Number.isInteger(sectorCount) || sectorCount <= 0) {
+    return undefined;
+  }
   const bestBySector = new Map<number, number>();
   for (const result of results) {
     if (!result.eligibleForBest || result.durationSeconds <= 0) {
@@ -229,7 +289,7 @@ export function analyzeCorners(
   }
   return sections
     .filter((section) => section.kind !== "straight")
-    .map((section) => {
+    .map((section): CornerAnalysisResult | undefined => {
       const selected = samples.filter(
         (sample) => sample.distanceMeters >= section.startDistanceMeters && sample.distanceMeters <= section.endDistanceMeters,
       );
@@ -245,9 +305,46 @@ export function analyzeCorners(
         entrySpeedKmh: selected[0].speedKmh,
         minimumSpeedKmh: Math.min(...selected.map((sample) => sample.speedKmh)),
         exitSpeedKmh: selected.at(-1)!.speedKmh,
-      } satisfies CornerAnalysisResult;
+        maxLateralG: maximumLateralG(selected),
+        maxDecelerationG: maximumDerivedDecelerationG(selected),
+      };
     })
     .filter((result): result is CornerAnalysisResult => Boolean(result));
+}
+
+function maximumDerivedDecelerationG(samples: LapDistanceSample[]): number | undefined {
+  let maximum = 0;
+  let found = false;
+  for (let index = 1; index < samples.length; index += 1) {
+    const elapsed = samples[index].elapsedSeconds - samples[index - 1].elapsedSeconds;
+    if (elapsed <= 0) continue;
+    const accelerationMps2 = ((samples[index].speedKmh - samples[index - 1].speedKmh) / 3.6) / elapsed;
+    if (accelerationMps2 < 0) {
+      found = true;
+      maximum = Math.max(maximum, -accelerationMps2 / 9.80665);
+    }
+  }
+  return found ? maximum : 0;
+}
+
+function maximumLateralG(samples: LapDistanceSample[]): number | undefined {
+  if (samples.length < 3) return undefined;
+  let maximum = 0;
+  let found = false;
+  for (let index = 1; index < samples.length - 1; index += 1) {
+    const previous: Position = [samples[index - 1].longitude, samples[index - 1].latitude];
+    const current: Position = [samples[index].longitude, samples[index].latitude];
+    const next: Position = [samples[index + 1].longitude, samples[index + 1].latitude];
+    const incomingDistance = haversineMeters(previous, current);
+    const outgoingDistance = haversineMeters(current, next);
+    const span = (incomingDistance + outgoingDistance) / 2;
+    if (span <= 0) continue;
+    const turnRadians = Math.abs(signedHeadingDelta(bearingDegrees(previous, current), bearingDegrees(current, next))) * Math.PI / 180;
+    const speedMps = samples[index].speedKmh / 3.6;
+    found = true;
+    maximum = Math.max(maximum, speedMps * speedMps * turnRadians / span / 9.80665);
+  }
+  return found ? maximum : undefined;
 }
 
 function interpolateSample(left: LapDistanceSample, right: LapDistanceSample, distanceMeters: number): LapDistanceSample {
@@ -293,6 +390,39 @@ function dedupeSectorResults(results: TimingSectorResult[]): TimingSectorResult[
 
 function cumulativeDistances(coordinates: Position[]): number[] {
   return coordinates.map((_, index) => routeDistanceMeters(coordinates.slice(0, index + 1)));
+}
+
+function lineBetweenDistances(
+  coordinates: Position[],
+  distances: number[],
+  startDistance: number,
+  endDistance: number,
+): LineString | undefined {
+  const selected: Position[] = [];
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const segmentStart = distances[index - 1];
+    const segmentEnd = distances[index];
+    if (segmentEnd < startDistance || segmentStart > endDistance || segmentEnd <= segmentStart) continue;
+    const visibleStart = Math.max(segmentStart, startDistance);
+    const visibleEnd = Math.min(segmentEnd, endDistance);
+    if (visibleEnd < visibleStart) continue;
+    const span = segmentEnd - segmentStart;
+    appendCoordinate(selected, interpolatePosition(coordinates[index - 1], coordinates[index], (visibleStart - segmentStart) / span));
+    appendCoordinate(selected, interpolatePosition(coordinates[index - 1], coordinates[index], (visibleEnd - segmentStart) / span));
+  }
+  return selected.length >= 2 ? { type: "LineString", coordinates: selected } : undefined;
+}
+
+function interpolatePosition(left: Position, right: Position, ratio: number): Position {
+  return [
+    left[0] + (right[0] - left[0]) * ratio,
+    left[1] + (right[1] - left[1]) * ratio,
+  ];
+}
+
+function appendCoordinate(coordinates: Position[], coordinate: Position): void {
+  const previous = coordinates.at(-1);
+  if (!previous || previous[0] !== coordinate[0] || previous[1] !== coordinate[1]) coordinates.push(coordinate);
 }
 
 function signedHeadingDelta(from: number, to: number): number {

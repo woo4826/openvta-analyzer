@@ -18,9 +18,10 @@ For the current product plan, architecture, deployment workflow, and next-develo
 - CAL-file, session, static-window, or manual calibration offset estimation.
 - Named calibration presets with JSON import/export.
 - 2nd-order low-pass Butterworth filtering for acceleration channels.
+- Track-aware or mapless lap analysis with complete and partial laps, up to five comparison overlays, timing sectors, editable corner/straight sections, and manual corrections.
 - Segment `.Vta`, transformed segment `.Vta`, GPS CSV, sensor CSV, validation CSV, and summary JSON export.
 - Multilingual UI with primary English and Korean translations plus secondary Japanese, Simplified Chinese, Spanish, French, and German translations.
-- Client-side only: traces are not uploaded by the app.
+- Client-side trace processing: raw VTA rows and GPS traces are not uploaded by the app. Optional automatic track lookup sends an expanded recording bounding box to OpenStreetMap Overpass.
 
 ## Language support
 
@@ -93,6 +94,39 @@ These are deferred because the public source material does not provide enough st
 6. Calibrate and filter when needed. Estimate offsets from a CAL file, the current session, a static window, or manual values; save reusable presets; then preview raw, calibrated, filtered, or comparison modes.
 7. Export the result. Choose LF or CRLF line endings, then download the original segment, transformed segment, GPS CSV, sensor CSV, validation CSV, visible table CSV, or summary JSON.
 
+## Lap Analysis workflow
+
+Lap Analysis works with a matched track profile, an imported profile, or no known track at all:
+
+1. Load one recording and open **Lap Analysis**. The app checks locally cached track profiles first. If no fresh match exists, it automatically searches OpenStreetMap raceway data around an expanded bounding box of the recording.
+2. Use the matched layout, choose among ambiguous candidates, or import an `.openvta-track.json` profile. If lookup is offline, fails, or finds no reliable match, select a route point and create a directional start/finish gate manually. The same manual workflow works without map tiles by using the coordinate fallback.
+3. Adjust the start/finish width and forward bearing. The detector keeps complete laps as well as opening, closing, and fully incomplete recording fragments instead of silently discarding them.
+4. Correct detection without changing the parsed VTA: split at the selected route point, remove a boundary to merge adjacent laps, and mark individual laps valid, invalid, or excluded.
+5. Select as many as five laps for simultaneous map and distance-based speed/Delta-T overlays. Choose separate primary and reference laps for metrics and comparisons.
+6. Add, move, reorder, resize, rename, or remove timing-sector gates, including in manual/trackless mode. Generate corner/straight proposals from the fastest valid complete lap, then edit each section's name, type, start distance, and end distance or remove it. Corner metrics use the primary lap and include GPS-derived lateral-G and deceleration-G estimates when enough samples exist.
+7. Export laps, sectors, and corners as separate CSV files or export the complete lap analysis as JSON. These downloads are generated locally and do not change the existing VTA, CSV, or summary export contracts.
+
+Completed sectors inside incomplete laps remain visible. By default they do **not** count toward Best Sector or theoretical best. The Lap Analysis checkbox can include them, and that global preference is remembered locally under `openvta.lapAnalysisSettings.v1`.
+
+### TrackProfile JSON v1
+
+Reusable track profiles are stable, versioned JSON documents. Version 1 contains:
+
+- `schemaVersion: 1`, a stable `id`, circuit `name`, and optional `layoutName`;
+- a WGS84 GeoJSON `centerline` using `[longitude, latitude]` coordinates and a travel `direction`;
+- optional start/finish, timing-sector, pit-in, and pit-out gates, each represented by a finite GeoJSON line plus forward bearing and width;
+- editable distance-based `sections` for left corners, right corners, and straights, plus an optional pit-lane line;
+- `source` provenance for user, recording, or OSM profiles, including OSM element IDs, fetch time, attribution, and ODbL metadata when applicable; and
+- an `updatedAt` timestamp.
+
+Malformed profiles and unsupported schema versions are rejected without replacing the active profile. **Save / export track** saves the current profile locally and downloads `<recording>.openvta-track.json`; importing that JSON makes it reusable for later recordings.
+
+### Track cache and automatic lookup
+
+Track profiles are cached in the browser's IndexedDB database `openvta-analyzer`, in the `track-profiles` object store. If IndexedDB is unavailable or blocked, an in-memory fallback keeps the profile usable for the current page session, and JSON import/export remains available. Cached profiles are scored against each new recording. A fresh OSM profile (less than 30 days old) avoids a network lookup; a stale match can remain visible while the app refreshes it.
+
+Automatic lookup posts a raceway query containing an expanded recording bounding box to a public OpenStreetMap Overpass endpoint, with one fallback endpoint and a 15-second timeout per attempt. It does not send raw VTA rows, individual GPS samples, sensor records, selected laps, or exports. Ambiguous, no-match, malformed-response, timeout, and offline results are non-fatal: users can choose a candidate where available, import a profile, or continue with the mapless manual gate workflow.
+
 ## Development
 
 ```bash
@@ -117,7 +151,9 @@ The app is designed for GitHub Pages. The `Deploy Pages` workflow builds `dist/`
 
 ## Privacy
 
-Files are opened through browser APIs and parsed in memory. The app does not send GPS traces, sensor rows, calibration files, or exports to a server. Map tiles are requested only for the visible interactive map viewport.
+Files are opened through browser APIs and parsed in memory. The app does not send raw VTA data, GPS traces, sensor rows, calibration files, or exports to a server.
+
+When automatic track lookup is used, the app sends an expanded bounding box around the recording to public OpenStreetMap Overpass endpoints. This reveals the approximate recording area, along with normal request metadata such as IP address, user agent, and request time, to the selected Overpass provider. The raw VTA rows and individual GPS samples stay in the browser. Lookup can be unavailable, blocked, or fail without preventing manual/mapless lap analysis.
 
 Interactive tiles are loaded from the configured tile URL, which defaults to OpenStreetMap-compatible tiles. Tile providers can see normal map tile requests for the visible viewport, such as tile coordinates, IP address, user agent, and request time. The VTA file contents, sensor rows, calibration values, selected segment, and exports are not sent to the tile provider by the app.
 

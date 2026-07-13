@@ -1,3 +1,13 @@
+import {
+  englishLapTranslations,
+  frenchLapTranslations,
+  germanLapTranslations,
+  japaneseLapTranslations,
+  koreanLapTranslations,
+  simplifiedChineseLapTranslations,
+  spanishLapTranslations,
+} from "./lapLocales";
+
 export const LANGUAGE_STORAGE_KEY = "openvta.language.v1";
 
 export type LanguageCode = "en" | "ko" | "ja" | "zh-CN" | "es" | "fr" | "de";
@@ -1527,7 +1537,7 @@ const englishTranslations = {
   "app.openFile": "Open VTA/ZIP",
   "app.loadSample": "Load sample",
   "app.sampleCalibration": "Sample CAL",
-  "app.privacyNote": "Files are parsed locally in this browser. No GPS traces or sensor records are uploaded by the app.",
+  "app.privacyNote": "Raw VTA data and GPS traces stay in this browser. Automatic track lookup sends an expanded recording bounding box to OpenStreetMap Overpass, and map tiles expose the approximate viewed location to the tile provider.",
   "app.footerNote":
     "Map tiles use the configured interactive tile source only for visible views. Exported files are generated locally with browser downloads.",
   "app.loadError.noVtaFiles": "No .Vta files were found in the selected input.",
@@ -1582,6 +1592,12 @@ const englishTranslations = {
   "workspace.transform.compare": "Compare",
   "workspace.segment": "Segment",
   "workspace.allPoints": "All points",
+  "workspace.sensorRows": "Sensor rows: {count}",
+  "workspace.transformScope": "Sensor transforms affect charts, tables, and exports, not GPS or lap geometry.",
+  "workspace.openCalibration": "Set up calibration and filtering",
+  "workspace.segmentRange": "{start}–{end} of {total}",
+  "workspace.allPointsCount": "All {count} points",
+  "workspace.resetSegment": "Reset segment",
   "map.toolbarAria": "Map analysis controls",
   "map.routeControlsAria": "Route controls",
   "map.fitRoute": "Fit route",
@@ -1631,6 +1647,7 @@ const englishTranslations = {
   "nav.settings": "Settings",
   ...englishTourTranslations,
   ...englishAnalysisTranslations,
+  ...englishLapTranslations,
 } as const;
 
 export type TranslationKey = keyof typeof englishTranslations;
@@ -1647,7 +1664,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "app.openFile": "VTA/ZIP 열기",
     "app.loadSample": "샘플 불러오기",
     "app.sampleCalibration": "샘플 CAL",
-    "app.privacyNote": "파일은 이 브라우저에서 로컬로 파싱됩니다. 앱이 GPS 트랙이나 센서 기록을 업로드하지 않습니다.",
+    "app.privacyNote": "원본 VTA 데이터와 GPS 트랙은 이 브라우저에 남습니다. 자동 트랙 탐색은 기록의 확장된 경계 상자를 OpenStreetMap Overpass로 보내며, 지도 타일은 대략적인 보기 위치를 타일 제공자에게 노출합니다.",
     "app.footerNote":
       "지도 타일은 보이는 화면에서만 설정된 대화형 타일 소스를 사용합니다. 내보낸 파일은 브라우저 다운로드로 로컬에서 생성됩니다.",
     "app.loadError.noVtaFiles": "선택한 입력에서 .Vta 파일을 찾지 못했습니다.",
@@ -1702,6 +1719,12 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "workspace.transform.compare": "비교",
     "workspace.segment": "구간",
     "workspace.allPoints": "전체 포인트",
+    "workspace.sensorRows": "센서 행: {count}",
+    "workspace.transformScope": "센서 변환은 차트, 테이블, 내보내기에만 적용되며 GPS나 랩 지오메트리에는 적용되지 않습니다.",
+    "workspace.openCalibration": "보정 및 필터링 설정",
+    "workspace.segmentRange": "전체 {total}개 중 {start}–{end}",
+    "workspace.allPointsCount": "전체 {count}개 포인트",
+    "workspace.resetSegment": "구간 재설정",
     "map.toolbarAria": "지도 분석 컨트롤",
     "map.routeControlsAria": "경로 컨트롤",
     "map.fitRoute": "경로 맞춤",
@@ -1751,6 +1774,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.settings": "설정",
     ...koreanTourTranslations,
     ...koreanAnalysisTranslations,
+    ...koreanLapTranslations,
   },
   ja: {
     "app.title": "OpenVTA アナライザー",
@@ -1760,7 +1784,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "app.openFile": "VTA/ZIP を開く",
     "app.loadSample": "サンプルを読み込む",
     "app.sampleCalibration": "サンプル CAL",
-    "app.privacyNote": "ファイルはこのブラウザー内でローカルに解析されます。GPS トレースやセンサー記録はアプリからアップロードされません。",
+    "app.privacyNote": "VTA の生データと GPS トレースはこのブラウザー内に留まります。自動トラック検索は拡張した記録範囲を OpenStreetMap Overpass に送信し、地図タイルは表示中のおおよその位置をタイル提供者に公開します。",
     "app.footerNote":
       "地図タイルは表示中のビューにのみ、設定されたインタラクティブなタイルソースを使用します。エクスポートファイルはブラウザーのダウンロードとしてローカルに生成されます。",
     "app.loadError.noVtaFiles": "選択した入力に .Vta ファイルが見つかりませんでした。",
@@ -1815,6 +1839,12 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "workspace.transform.compare": "比較",
     "workspace.segment": "セグメント",
     "workspace.allPoints": "すべてのポイント",
+    "workspace.sensorRows": "センサー行: {count}",
+    "workspace.transformScope": "センサー変換はチャート、テーブル、エクスポートに適用され、GPS やラップ形状には適用されません。",
+    "workspace.openCalibration": "キャリブレーションとフィルターを設定",
+    "workspace.segmentRange": "{total} 件中 {start}–{end}",
+    "workspace.allPointsCount": "全 {count} ポイント",
+    "workspace.resetSegment": "セグメントをリセット",
     "map.toolbarAria": "地図分析コントロール",
     "map.routeControlsAria": "ルートコントロール",
     "map.fitRoute": "ルートに合わせる",
@@ -1864,6 +1894,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.settings": "設定",
     ...japaneseTourTranslations,
     ...japaneseAnalysisTranslations,
+    ...japaneseLapTranslations,
   },
   "zh-CN": {
     "app.title": "OpenVTA 分析器",
@@ -1873,7 +1904,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "app.openFile": "打开 VTA/ZIP",
     "app.loadSample": "加载示例",
     "app.sampleCalibration": "示例 CAL",
-    "app.privacyNote": "文件会在此浏览器中本地解析。应用不会上传 GPS 轨迹或传感器记录。",
+    "app.privacyNote": "原始 VTA 数据和 GPS 轨迹保留在此浏览器中。自动赛道查找会将扩展后的记录边界发送到 OpenStreetMap Overpass，地图瓦片也会向瓦片提供商暴露大致浏览位置。",
     "app.footerNote": "地图瓦片仅在可见视图中使用已配置的交互式瓦片源。导出文件会在本地生成并通过浏览器下载。",
     "app.loadError.noVtaFiles": "所选输入中未找到 .Vta 文件。",
     "app.loadError.unable": "无法加载所选文件。",
@@ -1926,6 +1957,12 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "workspace.transform.compare": "比较",
     "workspace.segment": "片段",
     "workspace.allPoints": "所有点",
+    "workspace.sensorRows": "传感器行：{count}",
+    "workspace.transformScope": "传感器变换仅影响图表、表格和导出，不影响 GPS 或单圈几何。",
+    "workspace.openCalibration": "设置校准和滤波",
+    "workspace.segmentRange": "第 {start}–{end} 个，共 {total} 个",
+    "workspace.allPointsCount": "全部 {count} 个点",
+    "workspace.resetSegment": "重置片段",
     "map.toolbarAria": "地图分析控件",
     "map.routeControlsAria": "路线控件",
     "map.fitRoute": "适配路线",
@@ -1975,6 +2012,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.settings": "设置",
     ...simplifiedChineseTourTranslations,
     ...simplifiedChineseAnalysisTranslations,
+    ...simplifiedChineseLapTranslations,
   },
   es: {
     "app.title": "Analizador OpenVTA",
@@ -1984,7 +2022,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "app.openFile": "Abrir VTA/ZIP",
     "app.loadSample": "Cargar muestra",
     "app.sampleCalibration": "CAL de muestra",
-    "app.privacyNote": "Los archivos se analizan localmente en este navegador. La app no sube trazas GPS ni registros de sensores.",
+    "app.privacyNote": "Los datos VTA sin procesar y las trazas GPS permanecen en este navegador. La búsqueda automática envía a OpenStreetMap Overpass un límite ampliado de la grabación y los mosaicos revelan la ubicación aproximada al proveedor.",
     "app.footerNote":
       "Las teselas del mapa usan la fuente interactiva configurada solo en las vistas visibles. Los archivos exportados se generan localmente con descargas del navegador.",
     "app.loadError.noVtaFiles": "No se encontraron archivos .Vta en la entrada seleccionada.",
@@ -2039,6 +2077,12 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "workspace.transform.compare": "Comparar",
     "workspace.segment": "Segmento",
     "workspace.allPoints": "Todos los puntos",
+    "workspace.sensorRows": "Filas de sensores: {count}",
+    "workspace.transformScope": "Las transformaciones de sensores afectan a gráficos, tablas y exportaciones, no al GPS ni a la geometría de las vueltas.",
+    "workspace.openCalibration": "Configurar calibración y filtrado",
+    "workspace.segmentRange": "{start}–{end} de {total}",
+    "workspace.allPointsCount": "Los {count} puntos",
+    "workspace.resetSegment": "Restablecer segmento",
     "map.toolbarAria": "Controles de análisis del mapa",
     "map.routeControlsAria": "Controles de ruta",
     "map.fitRoute": "Ajustar ruta",
@@ -2088,6 +2132,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.settings": "Configuración",
     ...spanishTourTranslations,
     ...spanishAnalysisTranslations,
+    ...spanishLapTranslations,
   },
   fr: {
     "app.title": "Analyseur OpenVTA",
@@ -2097,7 +2142,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "app.openFile": "Ouvrir VTA/ZIP",
     "app.loadSample": "Charger l'exemple",
     "app.sampleCalibration": "CAL exemple",
-    "app.privacyNote": "Les fichiers sont analyses localement dans ce navigateur. L'app ne televerse aucune trace GPS ni aucun enregistrement de capteur.",
+    "app.privacyNote": "Les données VTA brutes et les traces GPS restent dans ce navigateur. La recherche automatique envoie une emprise élargie à OpenStreetMap Overpass et les tuiles révèlent la position approximative au fournisseur.",
     "app.footerNote":
       "Les tuiles cartographiques utilisent la source interactive configuree uniquement pour les vues visibles. Les fichiers exportes sont generes localement via les telechargements du navigateur.",
     "app.loadError.noVtaFiles": "Aucun fichier .Vta n'a été trouvé dans l'entrée sélectionnée.",
@@ -2152,6 +2197,12 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "workspace.transform.compare": "Comparer",
     "workspace.segment": "Segment",
     "workspace.allPoints": "Tous les points",
+    "workspace.sensorRows": "Lignes de capteurs : {count}",
+    "workspace.transformScope": "Les transformations des capteurs affectent les graphiques, tableaux et exports, pas le GPS ni la géométrie des tours.",
+    "workspace.openCalibration": "Configurer l’étalonnage et le filtrage",
+    "workspace.segmentRange": "{start}–{end} sur {total}",
+    "workspace.allPointsCount": "Les {count} points",
+    "workspace.resetSegment": "Réinitialiser le segment",
     "map.toolbarAria": "Commandes d'analyse de carte",
     "map.routeControlsAria": "Commandes d'itinéraire",
     "map.fitRoute": "Ajuster l'itinéraire",
@@ -2201,6 +2252,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.settings": "Paramètres",
     ...frenchTourTranslations,
     ...frenchAnalysisTranslations,
+    ...frenchLapTranslations,
   },
   de: {
     "app.title": "OpenVTA-Analyzer",
@@ -2210,7 +2262,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "app.openFile": "VTA/ZIP öffnen",
     "app.loadSample": "Beispiel laden",
     "app.sampleCalibration": "Beispiel-CAL",
-    "app.privacyNote": "Dateien werden lokal in diesem Browser analysiert. Die App ladt keine GPS-Spuren oder Sensordatensatze hoch.",
+    "app.privacyNote": "VTA-Rohdaten und GPS-Spuren bleiben in diesem Browser. Die automatische Streckensuche sendet einen erweiterten Aufzeichnungsbereich an OpenStreetMap Overpass; Kartenkacheln zeigen dem Anbieter den ungefähren Kartenausschnitt.",
     "app.footerNote":
       "Kartentiles verwenden die konfigurierte interaktive Tile-Quelle nur für sichtbare Ansichten. Exportdateien werden lokal als Browser-Downloads erstellt.",
     "app.loadError.noVtaFiles": "In der ausgewählten Eingabe wurden keine .Vta-Dateien gefunden.",
@@ -2265,6 +2317,12 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "workspace.transform.compare": "Vergleichen",
     "workspace.segment": "Segment",
     "workspace.allPoints": "Alle Punkte",
+    "workspace.sensorRows": "Sensorzeilen: {count}",
+    "workspace.transformScope": "Sensortransformationen wirken sich auf Diagramme, Tabellen und Exporte aus, nicht auf GPS- oder Rundengeometrie.",
+    "workspace.openCalibration": "Kalibrierung und Filterung einrichten",
+    "workspace.segmentRange": "{start}–{end} von {total}",
+    "workspace.allPointsCount": "Alle {count} Punkte",
+    "workspace.resetSegment": "Segment zurücksetzen",
     "map.toolbarAria": "Kartenanalyse-Steuerung",
     "map.routeControlsAria": "Routensteuerung",
     "map.fitRoute": "Route einpassen",
@@ -2314,6 +2372,7 @@ export const translations: Record<LanguageCode, TranslationDictionary> = {
     "nav.settings": "Einstellungen",
     ...germanTourTranslations,
     ...germanAnalysisTranslations,
+    ...germanLapTranslations,
   },
 };
 

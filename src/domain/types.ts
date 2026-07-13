@@ -253,7 +253,14 @@ export interface TrackProfileV1 {
 
 export type LapCompletion = "complete" | "partial-start" | "partial-end" | "partial-both";
 export type LapValidity = "valid" | "invalid" | "excluded";
-export type LapFlag = "out-lap" | "in-lap" | "pit" | "gps-gap" | "missed-sector" | "manual";
+export type LapFlag =
+  | "out-lap"
+  | "in-lap"
+  | "pit"
+  | "gps-gap"
+  | "missed-sector"
+  | "reverse-crossing"
+  | "manual";
 
 export interface TimedBoundary {
   id: string;
@@ -321,6 +328,12 @@ export interface TimingSectorResult {
   durationSeconds: number;
   fromPartialLap: boolean;
   eligibleForBest: boolean;
+}
+
+export interface TimingSectorAnalysisResult {
+  sectors: TimingSectorResult[];
+  missedSectorLapIds: string[];
+  warnings: string[];
 }
 
 export interface CornerAnalysisResult {

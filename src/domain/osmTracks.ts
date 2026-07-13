@@ -2,6 +2,7 @@ import type { LineString, Position } from "geojson";
 import {
   bearingDegrees,
   gateLine,
+  haversineMeters,
   pointToLineStringMeters,
   routeDistanceMeters,
 } from "./geometry";
@@ -9,7 +10,7 @@ import type { GpsPoint, TrackGate, TrackProfileV1 } from "./types";
 
 export const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
 ] as const;
 
 export type OsmLookupStatus = "matched" | "ambiguous" | "no-match" | "offline" | "invalid-route";
@@ -41,6 +42,7 @@ interface RacewayWay {
   id: string;
   name: string;
   coordinates: Position[];
+  isPitLane: boolean;
 }
 
 export async function lookupOsmTracks(
@@ -52,7 +54,6 @@ export async function lookupOsmTracks(
     return { status: "invalid-route", candidates: [], message: "At least two GPS points are required." };
   }
   const query = buildOverpassQuery(points);
-  let lastError: unknown;
   for (const endpoint of endpoints.slice(0, 2)) {
     const controller = new AbortController();
     const timeout = globalThis.setTimeout(() => controller.abort(), 15_000);
@@ -64,7 +65,11 @@ export async function lookupOsmTracks(
         headers: { Accept: "application/json" },
       });
       if (!response.ok) throw new Error(`Overpass responded with ${response.status}.`);
-      const candidates = parseOsmTrackCandidates(await response.json(), points);
+      const payload: unknown = await response.json();
+      if (!isOverpassPayload(payload)) {
+        throw new Error("Overpass returned a malformed payload.");
+      }
+      const candidates = parseOsmTrackCandidates(payload, points);
       const plausible = candidates.filter(
         (candidate) => candidate.medianDistanceMeters <= 80 && candidate.lengthRatio >= 0.65 && candidate.lengthRatio <= 1.35,
       );
@@ -74,8 +79,8 @@ export async function lookupOsmTracks(
       const best = plausible[0];
       const ambiguous = plausible.length > 1 && plausible[1].score <= best.score * 1.18;
       return { status: ambiguous ? "ambiguous" : "matched", candidates: plausible, endpoint };
-    } catch (error) {
-      lastError = error;
+    } catch {
+      // Try one fallback endpoint before returning the offline state.
     } finally {
       globalThis.clearTimeout(timeout);
     }
@@ -83,26 +88,28 @@ export async function lookupOsmTracks(
   return {
     status: "offline",
     candidates: [],
-    message: lastError instanceof Error ? lastError.message : "OpenStreetMap track lookup failed.",
+    message: "OpenStreetMap lookup is unavailable. Continue with a manual gate or imported track.",
   };
 }
 
 export function buildOverpassQuery(points: GpsPoint[], paddingMeters = 750): string {
   const bounds = expandedBounds(points, paddingMeters);
   const bbox = `${bounds.south.toFixed(7)},${bounds.west.toFixed(7)},${bounds.north.toFixed(7)},${bounds.east.toFixed(7)}`;
-  return `[out:json][timeout:15];(way(${bbox})["highway"="raceway"];node(${bbox})["raceway"~"^(start|finish|start-finish)$"];node(${bbox})["motorport"~"^(start|finish|start-finish)$"];);out tags geom;`;
+  return `[out:json][timeout:15];(way(${bbox})["highway"="raceway"];node(${bbox})["raceway"~"^(start|finish|start-finish)$"];);out tags geom;`;
 }
 
 export function parseOsmTrackCandidates(value: unknown, recording: GpsPoint[]): OsmTrackCandidate[] {
   if (!isRecord(value) || !Array.isArray(value.elements)) return [];
   const elements = value.elements.filter(isRecord) as OverpassElement[];
   const ways = elements.flatMap(parseRacewayWay);
-  const merged = mergeConnectedWays(ways);
+  const merged = mergeConnectedWays(ways.filter((way) => !way.isPitLane));
+  const pitLanes = mergeConnectedWays(ways.filter((way) => way.isPitLane));
   const startCoordinates = elements.flatMap(parseStartCoordinate);
   const recordingDistance = routeDistanceMeters(recording.map((point) => [point.longitude, point.latitude]));
-  return merged
+  const candidates = merged
     .map((wayGroup) => {
-      const centerline: LineString = { type: "LineString", coordinates: wayGroup.coordinates };
+      const orientation = orientCenterlineFromRecording(wayGroup.coordinates, recording);
+      const centerline: LineString = { type: "LineString", coordinates: orientation.coordinates };
       const length = routeDistanceMeters(centerline.coordinates);
       if (length < 150) return undefined;
       const estimatedLaps = Math.max(1, Math.round(recordingDistance / Math.max(1, length)));
@@ -124,7 +131,7 @@ export function parseOsmTrackCandidates(value: unknown, recording: GpsPoint[]): 
         id: `osm-${ids.join("-")}`,
         name: wayGroup.name || "OpenStreetMap raceway",
         centerline,
-        direction: "unknown",
+        direction: orientation.direction,
         startFinish,
         sectorGates: [],
         sections: [],
@@ -146,6 +153,28 @@ export function parseOsmTrackCandidates(value: unknown, recording: GpsPoint[]): 
     })
     .filter((candidate): candidate is OsmTrackCandidate => Boolean(candidate))
     .sort((left, right) => left.score - right.score);
+
+  if (!candidates.length || !pitLanes.length) return candidates;
+  const nearestPitLane = [...pitLanes].sort((left, right) =>
+    distanceBetweenLines(left.coordinates, candidates[0].profile.centerline.coordinates) -
+    distanceBetweenLines(right.coordinates, candidates[0].profile.centerline.coordinates)
+  )[0];
+  const primary = candidates[0];
+  candidates[0] = {
+    ...primary,
+    profile: {
+      ...primary.profile,
+      pitLane: { line: { type: "LineString", coordinates: nearestPitLane.coordinates } },
+      source: {
+        ...primary.profile.source,
+        osmElementIds: [
+          ...(primary.profile.source.osmElementIds ?? []),
+          ...nearestPitLane.ids.map((id) => `way/${id}`),
+        ],
+      },
+    },
+  };
+  return candidates;
 }
 
 export function scoreTrackProfile(profile: TrackProfileV1, recording: GpsPoint[]): OsmTrackCandidate {
@@ -185,13 +214,19 @@ function parseRacewayWay(element: OverpassElement): RacewayWay[] {
     return [[coordinate.lon, coordinate.lat] satisfies Position];
   });
   if (coordinates.length < 2) return [];
-  return [{ id: String(element.id), name: typeof tags.name === "string" ? tags.name : "", coordinates }];
+  const name = typeof tags.name === "string" ? tags.name : "";
+  return [{
+    id: String(element.id),
+    name,
+    coordinates,
+    isPitLane: tags.raceway === "pit_lane" || isPitLaneName(name),
+  }];
 }
 
 function parseStartCoordinate(element: OverpassElement): Position[] {
   if (element.type !== "node" || !finiteNumber(element.lon) || !finiteNumber(element.lat)) return [];
   const tags = isRecord(element.tags) ? element.tags : {};
-  const tag = tags.raceway ?? tags.motorport;
+  const tag = tags.raceway;
   return tag === "start" || tag === "finish" || tag === "start-finish" ? [[element.lon, element.lat]] : [];
 }
 
@@ -250,12 +285,93 @@ function gateAtNearestCenterlinePoint(centerline: LineString, coordinate: Positi
   };
 }
 
+function orientCenterlineFromRecording(
+  coordinates: Position[],
+  recording: GpsPoint[],
+): { coordinates: Position[]; direction: TrackProfileV1["direction"] } {
+  let alignment = 0;
+  let evidence = 0;
+  const sampleStep = Math.max(1, Math.floor(recording.length / 250));
+  for (let index = 1; index < recording.length; index += sampleStep) {
+    const previous = recording[index - 1];
+    const current = recording[index];
+    const recordingStart: Position = [previous.longitude, previous.latitude];
+    const recordingEnd: Position = [current.longitude, current.latitude];
+    if (haversineMeters(recordingStart, recordingEnd) < 1) continue;
+    const midpoint: Position = [
+      (recordingStart[0] + recordingEnd[0]) / 2,
+      (recordingStart[1] + recordingEnd[1]) / 2,
+    ];
+    const segment = nearestSegment(coordinates, midpoint);
+    if (!segment) continue;
+    const delta = shortestBearingDelta(
+      bearingDegrees(recordingStart, recordingEnd),
+      bearingDegrees(segment[0], segment[1]),
+    );
+    alignment += Math.cos((delta * Math.PI) / 180);
+    evidence += 1;
+  }
+
+  const oriented = alignment < 0 ? [...coordinates].reverse() : [...coordinates];
+  return {
+    coordinates: oriented,
+    direction: evidence > 0 && Math.abs(alignment) / evidence >= 0.25
+      ? loopDirection(oriented)
+      : "unknown",
+  };
+}
+
+function nearestSegment(coordinates: Position[], point: Position): [Position, Position] | undefined {
+  let nearest: [Position, Position] | undefined;
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const segment: LineString = { type: "LineString", coordinates: [coordinates[index - 1], coordinates[index]] };
+    const distance = pointToLineStringMeters(point, segment);
+    if (distance < minimum) {
+      minimum = distance;
+      nearest = [coordinates[index - 1], coordinates[index]];
+    }
+  }
+  return nearest;
+}
+
+function loopDirection(coordinates: Position[]): TrackProfileV1["direction"] {
+  if (coordinates.length < 4) return "unknown";
+  const length = routeDistanceMeters(coordinates);
+  if (haversineMeters(coordinates[0], coordinates.at(-1)!) > Math.max(30, length * 0.02)) return "unknown";
+  let signedArea = 0;
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const previous = coordinates[index - 1];
+    const current = coordinates[index];
+    signedArea += previous[0] * current[1] - current[0] * previous[1];
+  }
+  if (Math.abs(signedArea) < 1e-12) return "unknown";
+  return signedArea > 0 ? "counterclockwise" : "clockwise";
+}
+
+function shortestBearingDelta(left: number, right: number): number {
+  return ((left - right + 540) % 360) - 180;
+}
+
+function distanceBetweenLines(left: Position[], right: Position[]): number {
+  const line: LineString = { type: "LineString", coordinates: right };
+  return Math.min(...left.map((coordinate) => pointToLineStringMeters(coordinate, line)));
+}
+
+function isPitLaneName(name: string): boolean {
+  return /(?:\bpit(?:\s*lane)?\b|피트|ピット|維修|维修|voie\s+des\s+stands|boxengasse|corsia\s+dei\s+box|calle\s+de\s+boxes)/iu.test(name);
+}
+
 function endpointsTouch(left: Position, right: Position): boolean {
   return Math.abs(left[0] - right[0]) < 1e-7 && Math.abs(left[1] - right[1]) < 1e-7;
 }
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function isOverpassPayload(value: unknown): value is { elements: unknown[] } {
+  return isRecord(value) && Array.isArray(value.elements);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

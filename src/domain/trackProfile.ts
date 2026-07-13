@@ -35,14 +35,14 @@ export function validateTrackProfile(value: unknown): TrackProfileParseResult {
     return { error: "Track profile direction is invalid." };
   }
   const startFinish = value.startFinish === undefined ? undefined : parseGate(value.startFinish);
-  if (value.startFinish !== undefined && !startFinish) {
+  if (value.startFinish !== undefined && (!startFinish || startFinish.kind !== "start-finish")) {
     return { error: "Track profile startFinish gate is invalid." };
   }
   if (!Array.isArray(value.sectorGates)) {
     return { error: "Track profile sectorGates must be an array." };
   }
   const sectorGates = value.sectorGates.map(parseGate);
-  if (sectorGates.some((gate) => !gate)) {
+  if (sectorGates.some((gate) => !gate || gate.kind !== "sector")) {
     return { error: "Track profile contains an invalid sector gate." };
   }
   if (!Array.isArray(value.sections)) {
@@ -63,6 +63,12 @@ export function validateTrackProfile(value: unknown): TrackProfileParseResult {
   const pitLane = parsePitLane(value.pitLane);
   if (value.pitLane !== undefined && !pitLane) {
     return { error: "Track profile pitLane is invalid." };
+  }
+  const gateIds = [startFinish, ...(sectorGates as TrackGate[]), pitLane?.inGate, pitLane?.outGate]
+    .filter((gate): gate is TrackGate => Boolean(gate))
+    .map((gate) => gate.id);
+  if (new Set(gateIds).size !== gateIds.length) {
+    return { error: "Track profile gate ids must be unique." };
   }
 
   return {
@@ -122,7 +128,7 @@ function parseSection(value: unknown, centerlineLength: number): TrackSection | 
     value.endDistanceMeters < 0 ||
     value.startDistanceMeters > centerlineLength ||
     value.endDistanceMeters > centerlineLength ||
-    value.startDistanceMeters === value.endDistanceMeters
+    value.startDistanceMeters >= value.endDistanceMeters
   ) {
     return undefined;
   }
@@ -139,8 +145,25 @@ function parseSource(value: unknown): TrackProfileSource | undefined {
   if (!isRecord(value) || (value.kind !== "osm" && value.kind !== "recording" && value.kind !== "user")) {
     return undefined;
   }
-  if (value.kind === "osm" && (value.license !== "ODbL-1.0" || !nonEmptyString(value.attribution))) {
-    return undefined;
+  if (value.kind === "osm") {
+    if (
+      value.license !== "ODbL-1.0" ||
+      !nonEmptyString(value.attribution) ||
+      !/OpenStreetMap\s+contributors/i.test(value.attribution) ||
+      !Array.isArray(value.osmElementIds) ||
+      value.osmElementIds.length === 0 ||
+      !value.osmElementIds.every(isOsmElementId) ||
+      !isIsoTimestamp(value.fetchedAt)
+    ) {
+      return undefined;
+    }
+    return {
+      kind: "osm",
+      osmElementIds: value.osmElementIds,
+      fetchedAt: value.fetchedAt,
+      attribution: value.attribution,
+      license: value.license,
+    };
   }
   return {
     kind: value.kind,
@@ -149,6 +172,16 @@ function parseSource(value: unknown): TrackProfileSource | undefined {
     attribution: nonEmptyString(value.attribution) ? value.attribution : undefined,
     license: value.license === "ODbL-1.0" ? value.license : undefined,
   };
+}
+
+function isOsmElementId(value: unknown): value is string {
+  return typeof value === "string" && /^(?:node|way|relation)\/[1-9]\d*$/.test(value);
+}
+
+function isIsoTimestamp(value: unknown): value is string {
+  if (!nonEmptyString(value)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return false;
+  return !Number.isNaN(Date.parse(value));
 }
 
 function parsePitLane(value: unknown): TrackProfileV1["pitLane"] | undefined {
@@ -161,7 +194,11 @@ function parsePitLane(value: unknown): TrackProfileV1["pitLane"] | undefined {
   const line = value.line === undefined ? undefined : parseLineString(value.line);
   const inGate = value.inGate === undefined ? undefined : parseGate(value.inGate);
   const outGate = value.outGate === undefined ? undefined : parseGate(value.outGate);
-  if ((value.line !== undefined && !line) || (value.inGate !== undefined && !inGate) || (value.outGate !== undefined && !outGate)) {
+  if (
+    (value.line !== undefined && !line) ||
+    (value.inGate !== undefined && (!inGate || inGate.kind !== "pit-in")) ||
+    (value.outGate !== undefined && (!outGate || outGate.kind !== "pit-out"))
+  ) {
     return undefined;
   }
   return { line, inGate, outGate };

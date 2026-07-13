@@ -1,4 +1,3 @@
-import type { Position } from "geojson";
 import {
   bearingDegrees,
   coordinateOf,
@@ -25,6 +24,12 @@ export interface LapDetectionOptions {
   validityOverrides?: LapValidityOverride[];
   minimumRearmSeconds?: number;
   minimumRearmDistanceMeters?: number;
+}
+
+type GateCrossingDirection = "forward" | "reverse";
+
+interface GateCrossingEvent extends TimedBoundary {
+  direction: GateCrossingDirection;
 }
 
 export function createGateFromRoutePoint(points: GpsPoint[], selectedIndex: number, widthMeters = 50): TrackGate | undefined {
@@ -63,6 +68,16 @@ export function detectGateCrossings(
   gate: TrackGate,
   options: Pick<LapDetectionOptions, "minimumRearmSeconds" | "minimumRearmDistanceMeters"> = {},
 ): TimedBoundary[] {
+  return detectGateCrossingEvents(points, gate, options)
+    .filter((event) => event.direction === "forward")
+    .map(toTimedBoundary);
+}
+
+function detectGateCrossingEvents(
+  points: GpsPoint[],
+  gate: TrackGate,
+  options: Pick<LapDetectionOptions, "minimumRearmSeconds" | "minimumRearmDistanceMeters"> = {},
+): GateCrossingEvent[] {
   if (points.length < 2) {
     return [];
   }
@@ -73,7 +88,7 @@ export function detectGateCrossings(
   const forward = { x: Math.sin(headingRadians), y: Math.cos(headingRadians) };
   const lateral = { x: -forward.y, y: forward.x };
   const halfWidth = gate.widthMeters / 2;
-  const boundaries: TimedBoundary[] = [];
+  const events: GateCrossingEvent[] = [];
   let armed = true;
   let lastCrossingSeconds = Number.NEGATIVE_INFINITY;
 
@@ -96,7 +111,12 @@ export function detectGateCrossings(
     const right = toLocalMeters(coordinateOf(point), center);
     const leftForward = dot(left, forward);
     const rightForward = dot(right, forward);
-    if (!(leftForward <= 0 && rightForward > 0)) {
+    const direction: GateCrossingDirection | undefined = leftForward <= 0 && rightForward > 0
+      ? "forward"
+      : leftForward >= 0 && rightForward < 0
+        ? "reverse"
+        : undefined;
+    if (!direction) {
       continue;
     }
     const ratio = -leftForward / (rightForward - leftForward);
@@ -109,34 +129,55 @@ export function detectGateCrossings(
     }
     const elapsedSeconds = previousSeconds + (pointSeconds - previousSeconds) * ratio;
     const coordinate = interpolateCoordinate(coordinateOf(previous), coordinateOf(point), ratio);
-    boundaries.push({
-      id: `auto-${gate.id}-${elapsedSeconds.toFixed(3)}`,
+    events.push({
+      id: direction === "forward"
+        ? `auto-${gate.id}-${elapsedSeconds.toFixed(3)}`
+        : `auto-reverse-${gate.id}-${elapsedSeconds.toFixed(3)}`,
       source: "auto",
       pointIndex: index,
       elapsedSeconds,
       coordinate,
+      direction,
     });
     lastCrossingSeconds = elapsedSeconds;
     armed = false;
   }
-  return boundaries;
+  return events;
 }
 
 export function detectLaps(points: GpsPoint[], gate: TrackGate, options: LapDetectionOptions = {}): LapDetectionResult {
   if (!points.length) {
     return { gate, boundaries: [], laps: [], warnings: ["No GPS points are available for lap detection."] };
   }
-  const autoBoundaries = detectGateCrossings(points, gate, options);
+  const crossingEvents = detectGateCrossingEvents(points, gate, options);
+  const autoBoundaries = crossingEvents
+    .filter((event) => event.direction === "forward")
+    .map(toTimedBoundary);
+  const reverseCrossings = crossingEvents.filter((event) => event.direction === "reverse");
   const boundaries = applyBoundaryOverrides(points, autoBoundaries, options.boundaryOverrides ?? []);
   const laps = buildLaps(points, boundaries);
   const validity = new Map((options.validityOverrides ?? []).map((override) => [override.lapId, override.validity]));
-  const adjustedLaps = laps.map((lap) => ({ ...lap, validity: validity.get(lap.id) ?? lap.validity }));
+  const adjustedLaps = laps.map((lap) => {
+    const hasReverseCrossing = reverseCrossings.some(
+      (event) => event.elapsedSeconds >= lap.start.elapsedSeconds && event.elapsedSeconds <= lap.end.elapsedSeconds,
+    );
+    return {
+      ...lap,
+      validity: validity.get(lap.id) ?? lap.validity,
+      flags: hasReverseCrossing && !lap.flags.includes("reverse-crossing")
+        ? [...lap.flags, "reverse-crossing" as const]
+        : lap.flags,
+    };
+  });
   const warnings: string[] = [];
   if (!autoBoundaries.length) {
     warnings.push("The start/finish gate was not crossed in the forward direction.");
   }
   if (adjustedLaps.some((lap) => lap.flags.includes("gps-gap"))) {
     warnings.push("One or more laps contain a GPS time gap.");
+  }
+  if (reverseCrossings.length) {
+    warnings.push("One or more laps crossed the start/finish gate in the reverse direction.");
   }
   return { gate, boundaries, laps: adjustedLaps, warnings };
 }
@@ -292,4 +333,14 @@ function distinctPoint(points: GpsPoint[], selectedIndex: number, direction: -1 
 
 function dot(left: { x: number; y: number }, right: { x: number; y: number }): number {
   return left.x * right.x + left.y * right.y;
+}
+
+function toTimedBoundary(event: GateCrossingEvent): TimedBoundary {
+  return {
+    id: event.id,
+    source: event.source,
+    pointIndex: event.pointIndex,
+    elapsedSeconds: event.elapsedSeconds,
+    coordinate: event.coordinate,
+  };
 }
