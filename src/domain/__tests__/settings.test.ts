@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   CALIBRATION_PRESETS_STORAGE_KEY,
+  LAP_ANALYSIS_SETTINGS_STORAGE_KEY,
   ONBOARDING_TOUR_STORAGE_KEY,
   completedOnboardingTourState,
   exportCalibrationPresets,
   importCalibrationPresets,
   loadCalibrationPresets,
   loadJsonSetting,
+  loadLapAnalysisSettings,
   loadOnboardingTourState,
   mergeImportedCalibrationPresets,
   removeCalibrationPreset,
   saveCalibrationPresets,
   saveJsonSetting,
+  saveLapAnalysisSettings,
   saveOnboardingTourState,
   skippedOnboardingTourState,
   upsertCalibrationPreset,
@@ -207,6 +210,30 @@ describe("settings helpers", () => {
     };
 
     expect(loadOnboardingTourState(storage)).toEqual({ status: "new", version: 1 });
+  });
+
+  it("defaults partial-lap sectors to excluded and remembers the user choice", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => store.set(key, value),
+      removeItem: vi.fn(),
+    };
+
+    expect(loadLapAnalysisSettings(storage)).toEqual({ includePartialLapSectors: false });
+    saveLapAnalysisSettings({ includePartialLapSectors: true }, storage);
+    expect(store.has(LAP_ANALYSIS_SETTINGS_STORAGE_KEY)).toBe(true);
+    expect(loadLapAnalysisSettings(storage)).toEqual({ includePartialLapSectors: true });
+  });
+
+  it("rejects malformed partial-lap sector preferences", () => {
+    const storage = {
+      getItem: () => JSON.stringify({ includePartialLapSectors: "yes" }),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+
+    expect(loadLapAnalysisSettings(storage)).toEqual({ includePartialLapSectors: false });
   });
 });
 
