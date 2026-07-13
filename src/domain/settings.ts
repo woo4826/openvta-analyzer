@@ -1,9 +1,10 @@
-import type { CalibrationPreset } from "./types";
+import type { CalibrationPreset, LapAnalysisSettings } from "./types";
 
 type JsonStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export const CALIBRATION_PRESETS_STORAGE_KEY = "openvta.calibrationPresets.v1";
 export const ONBOARDING_TOUR_STORAGE_KEY = "openvta.onboardingTour.v1";
+export const LAP_ANALYSIS_SETTINGS_STORAGE_KEY = "openvta.lapAnalysisSettings.v1";
 
 export interface OnboardingTourState {
   status: "new" | "skipped" | "completed";
@@ -54,6 +55,29 @@ export function saveOnboardingTourState(
   storage: JsonStorage = defaultStorage(),
 ): void {
   saveJsonSetting(ONBOARDING_TOUR_STORAGE_KEY, state, storage);
+}
+
+export function defaultLapAnalysisSettings(): LapAnalysisSettings {
+  return { includePartialLapSectors: false };
+}
+
+export function loadLapAnalysisSettings(storage: JsonStorage = defaultStorage()): LapAnalysisSettings {
+  const value = loadJsonSetting<unknown>(
+    LAP_ANALYSIS_SETTINGS_STORAGE_KEY,
+    defaultLapAnalysisSettings(),
+    storage,
+  );
+  if (isRecord(value) && typeof value.includePartialLapSectors === "boolean") {
+    return { includePartialLapSectors: value.includePartialLapSectors };
+  }
+  return defaultLapAnalysisSettings();
+}
+
+export function saveLapAnalysisSettings(
+  settings: LapAnalysisSettings,
+  storage: JsonStorage = defaultStorage(),
+): void {
+  saveJsonSetting(LAP_ANALYSIS_SETTINGS_STORAGE_KEY, settings, storage);
 }
 
 export function skippedOnboardingTourState(timestamp = Date.now()): OnboardingTourState {

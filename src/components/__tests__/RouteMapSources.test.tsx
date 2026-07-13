@@ -11,6 +11,7 @@ const mapMock = vi.hoisted(() => {
 
   class MapDouble {
     static instances: MapDouble[] = [];
+    static shouldThrow = false;
     sources = new Map<string, SourceDouble>();
     layers = new Set<string>();
     jumpTo = vi.fn();
@@ -20,6 +21,7 @@ const mapMock = vi.hoisted(() => {
     remove = vi.fn();
 
     constructor() {
+      if (MapDouble.shouldThrow) throw new Error("map unavailable");
       MapDouble.instances.push(this);
     }
 
@@ -39,8 +41,10 @@ const mapMock = vi.hoisted(() => {
       return this.sources.get(id);
     }
 
-    addSource(id: string) {
-      this.sources.set(id, new SourceDouble());
+    addSource(id: string, source: { data?: unknown }) {
+      const next = new SourceDouble();
+      this.sources.set(id, next);
+      if (source.data) next.setData(source.data);
     }
 
     getLayer(id: string) {
@@ -86,6 +90,7 @@ const settings: MapSettings = {
 describe("RouteMap source updates", () => {
   beforeEach(() => {
     mapMock.MapDouble.instances.length = 0;
+    mapMock.MapDouble.shouldThrow = false;
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -109,13 +114,34 @@ describe("RouteMap source updates", () => {
     }
     expect(map.jumpTo).toHaveBeenCalledWith({ center: [128.001, 38.001] });
   });
+
+  it("publishes section overlays to the MapLibre source", async () => {
+    render(wrappedRoute(0, true));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+
+    await waitFor(() => expect(map.sources.get("track-section-source")?.setData).toHaveBeenCalled());
+    const data = map.sources.get("track-section-source")!.setData.mock.calls.at(-1)?.[0] as {
+      features: Array<{ properties: { id: string }; geometry: { coordinates: number[][] } }>;
+    };
+    expect(data.features[0].properties.id).toBe("section-1");
+    expect(data.features[0].geometry.coordinates.length).toBeGreaterThanOrEqual(2);
+    expect(map.layers.has("track-sections")).toBe(true);
+  });
+
+  it("renders section overlays in the coordinate fallback", async () => {
+    mapMock.MapDouble.shouldThrow = true;
+    const view = render(wrappedRoute(0, true));
+
+    expect(await view.findByTestId("track-section-section-1")).toHaveAttribute("points");
+  });
 });
 
 function renderRoute(selectedIndex: number) {
   return render(wrappedRoute(selectedIndex));
 }
 
-function wrappedRoute(selectedIndex: number) {
+function wrappedRoute(selectedIndex: number, includeSections = false) {
   return (
     <I18nProvider>
       <RouteMap
@@ -123,6 +149,14 @@ function wrappedRoute(selectedIndex: number) {
         selectedIndex={selectedIndex}
         sourceVisibility={{ rawGps: true, enhancedGps: true }}
         settings={settings}
+        trackCenterline={includeSections ? { type: "LineString", coordinates: [[128, 38], [128.001, 38.001]] } : undefined}
+        trackSections={includeSections ? [{
+          id: "section-1",
+          name: "Corner 1",
+          kind: "corner-right",
+          startDistanceMeters: 0,
+          endDistanceMeters: 120,
+        }] : undefined}
         onSelectedIndex={vi.fn()}
         onSegmentChange={vi.fn()}
         onRegionChange={vi.fn()}

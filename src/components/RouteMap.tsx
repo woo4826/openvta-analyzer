@@ -2,9 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, LineString, Point, Polygon } from "geojson";
 import { normalizeSegment } from "../domain/analysis";
-import type { ActiveSegment, AxisAlignedRegion, GpsPoint, MapSettings, SourceVisibility } from "../domain/types";
+import { deriveTrackSectionGeometry, type TrackSectionGeometry } from "../domain/lapAnalysis";
+import type { ActiveSegment, AxisAlignedRegion, GpsPoint, MapSettings, SourceVisibility, TrackGate, TrackSection } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { MapControls } from "./MapControls";
+
+export interface LapMapOverlay {
+  id: string;
+  color: string;
+  points: GpsPoint[];
+}
+
+const EMPTY_GATES: TrackGate[] = [];
+const EMPTY_LAP_OVERLAYS: LapMapOverlay[] = [];
+const EMPTY_TRACK_SECTIONS: TrackSection[] = [];
 
 interface RouteMapProps {
   points: GpsPoint[];
@@ -13,6 +24,11 @@ interface RouteMapProps {
   settings: MapSettings;
   segment?: ActiveSegment;
   region?: AxisAlignedRegion;
+  trackCenterline?: LineString;
+  sectionCenterline?: LineString;
+  trackSections?: TrackSection[];
+  gates?: TrackGate[];
+  lapOverlays?: LapMapOverlay[];
   onSelectedIndex: (index: number) => void;
   onSegmentChange: (segment?: ActiveSegment) => void;
   onRegionChange: (region?: AxisAlignedRegion) => void;
@@ -26,6 +42,11 @@ export function RouteMap({
   settings,
   segment,
   region,
+  trackCenterline,
+  sectionCenterline,
+  trackSections = EMPTY_TRACK_SECTIONS,
+  gates = EMPTY_GATES,
+  lapOverlays = EMPTY_LAP_OVERLAYS,
   onSelectedIndex,
   onSegmentChange,
   onRegionChange,
@@ -42,6 +63,35 @@ export function RouteMap({
   const routePolyline = useMemo(() => bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, points]);
   const segmentPolyline = useMemo(() => bounds ? segmentPoints.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, segmentPoints]);
   const regionRect = useMemo(() => bounds && region ? regionToSvgRect(region, bounds) : undefined, [bounds, region]);
+  const trackPolyline = useMemo(
+    () => bounds && trackCenterline ? trackCenterline.coordinates.map((coordinate) => toSvgCoordinate(coordinate, bounds)).join(" ") : "",
+    [bounds, trackCenterline],
+  );
+  const sectionGeometry = useMemo(
+    () => deriveTrackSectionGeometry(sectionCenterline ?? trackCenterline ?? { type: "LineString", coordinates: [] }, trackSections),
+    [sectionCenterline, trackCenterline, trackSections],
+  );
+  const sectionPolylines = useMemo(
+    () => bounds ? sectionGeometry.map((section) => ({
+      ...section,
+      polyline: section.line.coordinates.map((coordinate) => toSvgCoordinate(coordinate, bounds)).join(" "),
+    })) : [],
+    [bounds, sectionGeometry],
+  );
+  const lapPolylines = useMemo(
+    () => bounds ? lapOverlays.map((overlay) => ({
+      ...overlay,
+      polyline: overlay.points.map((point) => toSvgPoint(point, bounds)).join(" "),
+    })) : [],
+    [bounds, lapOverlays],
+  );
+  const gatePolylines = useMemo(
+    () => bounds ? gates.map((gate) => ({
+      id: gate.id,
+      polyline: gate.line.coordinates.map((coordinate) => toSvgCoordinate(coordinate, bounds)).join(" "),
+    })) : [],
+    [bounds, gates],
+  );
   const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds ? points.map((point, index) => {
     const [cx, cy] = toSvgPointArray(point, bounds);
     return (
@@ -140,8 +190,8 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, segment, region, settings);
-  }, [points, segment, region, settings, styleLoaded]);
+    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, sectionGeometry);
+  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, sectionGeometry]);
 
   useEffect(() => {
     if (!mapRef.current || !styleLoaded) {
@@ -253,6 +303,53 @@ export function RouteMap({
             strokeLinejoin="round"
             strokeLinecap="round"
           />
+          {trackPolyline ? (
+            <polyline
+              points={trackPolyline}
+              fill="none"
+              stroke="#2b6cb0"
+              strokeOpacity="0.75"
+              strokeWidth="3"
+              strokeDasharray="12 8"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ) : null}
+          {sectionPolylines.map((section) => section.polyline ? (
+            <polyline
+              key={section.id}
+              data-testid={`track-section-${section.id}`}
+              points={section.polyline}
+              fill="none"
+              stroke={trackSectionColor(section.kind)}
+              strokeOpacity="0.92"
+              strokeWidth="8"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ) : null)}
+          {lapPolylines.map((overlay) => overlay.polyline ? (
+            <polyline
+              key={overlay.id}
+              points={overlay.polyline}
+              fill="none"
+              stroke={overlay.color}
+              strokeOpacity="0.9"
+              strokeWidth="7"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ) : null)}
+          {gatePolylines.map((gate) => (
+            <polyline
+              key={gate.id}
+              points={gate.polyline}
+              fill="none"
+              stroke="#7c3aed"
+              strokeWidth="8"
+              strokeLinecap="round"
+            />
+          ))}
           <polyline
             points={routePolyline}
             fill="none"
@@ -383,6 +480,10 @@ function toSvgPointArray(point: Coordinate, bounds: Bounds): [number, number] {
   return [x, y];
 }
 
+function toSvgCoordinate(coordinate: number[], bounds: Bounds): string {
+  return toSvgPoint({ longitude: coordinate[0], latitude: coordinate[1] }, bounds);
+}
+
 function regionToSvgRect(region: AxisAlignedRegion, bounds: Bounds) {
   const normalized = normalizeRegion(region);
   const [x1, y1] = toSvgPointArray({ latitude: normalized.maxLatitude, longitude: normalized.minLongitude }, bounds);
@@ -410,6 +511,10 @@ function updateMapRoute(
   segment: ActiveSegment | undefined,
   region: AxisAlignedRegion | undefined,
   settings: MapSettings,
+  trackCenterline: LineString | undefined,
+  gates: TrackGate[],
+  lapOverlays: LapMapOverlay[],
+  sectionGeometry: TrackSectionGeometry[],
 ) {
   if (!map.isStyleLoaded() || !points.length) {
     return;
@@ -459,11 +564,43 @@ function updateMapRoute(
         ]
       : [],
   };
+  const trackData: FeatureCollection<LineString> = {
+    type: "FeatureCollection",
+    features: trackCenterline ? [{ type: "Feature", properties: {}, geometry: trackCenterline }] : [],
+  };
+  const lapData: FeatureCollection<LineString> = {
+    type: "FeatureCollection",
+    features: lapOverlays.filter((overlay) => overlay.points.length >= 2).map((overlay) => ({
+      type: "Feature",
+      properties: { id: overlay.id, color: overlay.color },
+      geometry: { type: "LineString", coordinates: lineCoordinates(overlay.points) },
+    })),
+  };
+  const sectionData: FeatureCollection<LineString> = {
+    type: "FeatureCollection",
+    features: sectionGeometry.map((section) => ({
+      type: "Feature",
+      properties: { id: section.id, name: section.name, kind: section.kind, color: trackSectionColor(section.kind) },
+      geometry: section.line,
+    })),
+  };
+  const gateData: FeatureCollection<LineString> = {
+    type: "FeatureCollection",
+    features: gates.map((gate) => ({
+      type: "Feature",
+      properties: { id: gate.id },
+      geometry: gate.line,
+    })),
+  };
 
   setGeoJsonSource(map, "region-source", regionData);
   setGeoJsonSource(map, "route-line-source", routeData);
   setGeoJsonSource(map, "segment-line-source", segmentData);
   setGeoJsonSource(map, "route-points-source", pointData);
+  setGeoJsonSource(map, "track-centerline-source", trackData);
+  setGeoJsonSource(map, "track-section-source", sectionData);
+  setGeoJsonSource(map, "lap-overlay-source", lapData);
+  setGeoJsonSource(map, "gate-source", gateData);
   if (!map.getSource("selected-point-source")) {
     setGeoJsonSource(map, "selected-point-source", selectedData);
   }
@@ -542,6 +679,42 @@ function updateMapRoute(
         "line-width": 14,
         "line-opacity": 0.95,
       },
+    });
+  }
+  if (!map.getLayer("track-centerline")) {
+    map.addLayer({
+      id: "track-centerline",
+      type: "line",
+      source: "track-centerline-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": "#2b6cb0", "line-width": 3, "line-opacity": 0.75, "line-dasharray": [2, 1.5] },
+    });
+  }
+  if (!map.getLayer("track-sections")) {
+    map.addLayer({
+      id: "track-sections",
+      type: "line",
+      source: "track-section-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 8, "line-opacity": 0.92 },
+    });
+  }
+  if (!map.getLayer("lap-overlays")) {
+    map.addLayer({
+      id: "lap-overlays",
+      type: "line",
+      source: "lap-overlay-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 6, "line-opacity": 0.86 },
+    });
+  }
+  if (!map.getLayer("timing-gates")) {
+    map.addLayer({
+      id: "timing-gates",
+      type: "line",
+      source: "gate-source",
+      layout: { "line-cap": "round" },
+      paint: { "line-color": "#7c3aed", "line-width": 7, "line-opacity": 0.95 },
     });
   }
   if (!map.getLayer("segment-line")) {
@@ -691,6 +864,12 @@ function sourceVisibilityState(sourceVisibility: SourceVisibility): string {
     return "enhanced";
   }
   return "none";
+}
+
+function trackSectionColor(kind: TrackSection["kind"]): string {
+  if (kind === "corner-left") return "#dc2626";
+  if (kind === "corner-right") return "#f59e0b";
+  return "#0891b2";
 }
 
 function setGeoJsonSource(map: maplibregl.Map, sourceId: string, data: MapGeoJsonData) {

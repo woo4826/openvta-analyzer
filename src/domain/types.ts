@@ -1,3 +1,5 @@
+import type { LineString, Position } from "geojson";
+
 export const GRAVITY_MPS2 = 9.80665;
 
 export type VtaFormat = "modern-openvta" | "legacy-phone" | "legacy-imu-box" | "unknown";
@@ -199,4 +201,154 @@ export interface SegmentSelection {
 export interface LoadedTextFile {
   name: string;
   text: string;
+}
+
+export type TrackDirection = "clockwise" | "counterclockwise" | "unknown";
+export type TrackGateKind = "start-finish" | "sector" | "pit-in" | "pit-out";
+export type TrackSectionKind = "corner-left" | "corner-right" | "straight";
+
+export interface TrackGate {
+  id: string;
+  name: string;
+  kind: TrackGateKind;
+  line: LineString;
+  forwardBearingDegrees: number;
+  widthMeters: number;
+}
+
+export interface TrackSection {
+  id: string;
+  name: string;
+  kind: TrackSectionKind;
+  startDistanceMeters: number;
+  endDistanceMeters: number;
+}
+
+export interface TrackProfileSource {
+  kind: "osm" | "recording" | "user";
+  osmElementIds?: string[];
+  fetchedAt?: string;
+  attribution?: string;
+  license?: "ODbL-1.0";
+}
+
+export interface TrackProfileV1 {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  layoutName?: string;
+  centerline: LineString;
+  direction: TrackDirection;
+  startFinish?: TrackGate;
+  sectorGates: TrackGate[];
+  sections: TrackSection[];
+  pitLane?: {
+    line?: LineString;
+    inGate?: TrackGate;
+    outGate?: TrackGate;
+  };
+  source: TrackProfileSource;
+  updatedAt: string;
+}
+
+export type LapCompletion = "complete" | "partial-start" | "partial-end" | "partial-both";
+export type LapValidity = "valid" | "invalid" | "excluded";
+export type LapFlag =
+  | "out-lap"
+  | "in-lap"
+  | "pit"
+  | "gps-gap"
+  | "missed-sector"
+  | "reverse-crossing"
+  | "manual";
+
+export interface TimedBoundary {
+  id: string;
+  source: "auto" | "manual" | "session-start" | "session-end";
+  pointIndex: number;
+  elapsedSeconds: number;
+  coordinate: Position;
+}
+
+export interface LapResult {
+  id: string;
+  ordinal: number;
+  completion: LapCompletion;
+  validity: LapValidity;
+  flags: LapFlag[];
+  start: TimedBoundary;
+  end: TimedBoundary;
+  startIndex: number;
+  endIndex: number;
+  durationSeconds?: number;
+  distanceKm: number;
+  averageSpeedKmh: number;
+  maxSpeedKmh: number;
+}
+
+export type LapBoundaryOverride =
+  | { id: string; type: "add"; pointIndex: number }
+  | { id: string; type: "remove"; boundaryId: string };
+
+export interface LapValidityOverride {
+  lapId: string;
+  validity: LapValidity;
+}
+
+export interface LapDetectionResult {
+  gate: TrackGate;
+  boundaries: TimedBoundary[];
+  laps: LapResult[];
+  warnings: string[];
+}
+
+export interface LapDistanceSample {
+  distanceMeters: number;
+  elapsedSeconds: number;
+  speedKmh: number;
+  latitude: number;
+  longitude: number;
+  sourceIndex: number;
+}
+
+export interface LapComparisonSample extends LapDistanceSample {
+  referenceElapsedSeconds: number;
+  deltaSeconds: number;
+}
+
+export interface TimingSectorResult {
+  id: string;
+  lapId: string;
+  sectorIndex: number;
+  name: string;
+  startGateId: string;
+  endGateId: string;
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+  fromPartialLap: boolean;
+  eligibleForBest: boolean;
+}
+
+export interface TimingSectorAnalysisResult {
+  sectors: TimingSectorResult[];
+  missedSectorLapIds: string[];
+  warnings: string[];
+}
+
+export interface CornerAnalysisResult {
+  lapId: string;
+  sectionId: string;
+  name: string;
+  kind: TrackSectionKind;
+  durationSeconds: number;
+  entrySpeedKmh: number;
+  minimumSpeedKmh: number;
+  exitSpeedKmh: number;
+  maxLateralG?: number;
+  maxDecelerationG?: number;
+}
+
+export interface LapAnalysisSettings {
+  includePartialLapSectors: boolean;
 }
