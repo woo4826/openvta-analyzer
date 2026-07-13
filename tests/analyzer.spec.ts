@@ -89,12 +89,12 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(metricValue(segmentPanel, "Segment points")).toHaveText("11");
   await expect(metricValue(segmentPanel, "Distance")).toHaveText(/0\.\d{3} km/);
   await expect(metricValue(segmentPanel, "Distance")).not.toHaveText("0.000 km");
-  await expect(metricValue(workspace, "Segment")).toHaveText("0-10");
+  await expect(metricValue(workspace, "Segment")).toHaveText(`1–11 of ${rawGpsCount + enhancedGpsCount}`);
 
   await page.getByRole("button", { name: "Clear segment" }).click();
   await expect(panelByHeading(analysisMain, "Segment")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Clear segment" })).toBeDisabled();
-  await expect(metricValue(workspace, "Segment")).toHaveText("All points");
+  await expect(metricValue(workspace, "Segment")).toHaveText(`All ${rawGpsCount + enhancedGpsCount} points`);
 
   await page.getByRole("button", { name: "Set segment start" }).click();
   await fallbackPoints.nth(15).click();
@@ -113,7 +113,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(metricValue(selectedPointPanel, "Index")).toHaveText("0");
   await expect(pointTimeline).toHaveAttribute("max", String(rawGpsCount - 1));
   await expect(pointTimeline).toHaveValue("0");
-  await expect(metricValue(workspace, "Segment")).toHaveText("All points");
+  await expect(metricValue(workspace, "Segment")).toHaveText(`All ${rawGpsCount} points`);
   await rawGpsButton.click();
   await expect(rawGpsButton).toHaveAttribute("aria-pressed", "true");
   await expect(enhancedButton).toHaveAttribute("aria-pressed", "false");
@@ -124,7 +124,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(page.getByRole("img", { name: "Velocity-derived acceleration chart" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Friction Circle chart" })).toBeVisible();
   await page.getByRole("button", { name: "Use visible velocity range as segment" }).click();
-  await expect(metricValue(workspace, "Segment")).toHaveText(`0-${rawGpsCount - 1}`);
+  await expect(metricValue(workspace, "Segment")).toHaveText(`1–${rawGpsCount} of ${rawGpsCount}`);
   await expect(metricValue(panelByHeading(analysisMain, "Averages"), "Selected points")).toHaveText(String(rawGpsCount));
 
   await page.getByRole("tab", { name: "Calibration" }).click();
