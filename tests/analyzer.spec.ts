@@ -19,6 +19,10 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expectTabControlsPanel(page, analysisMain.getByRole("tab", { name: "Overview" }));
   await analysisMain.getByRole("tab", { name: "Overview" }).focus();
   await page.keyboard.press("ArrowRight");
+  await expect(analysisMain.getByRole("tab", { name: "Lap Analysis" })).toHaveAttribute("aria-selected", "true");
+  await expect(analysisMain.getByRole("tab", { name: "Lap Analysis" })).toBeFocused();
+  await expectTabControlsPanel(page, analysisMain.getByRole("tab", { name: "Lap Analysis" }));
+  await page.keyboard.press("ArrowRight");
   await expect(analysisMain.getByRole("tab", { name: "Charts" })).toHaveAttribute("aria-selected", "true");
   await expect(analysisMain.getByRole("tab", { name: "Charts" })).toBeFocused();
   await expectTabControlsPanel(page, analysisMain.getByRole("tab", { name: "Charts" }));
@@ -129,6 +133,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await page.getByRole("button", { name: "Save preset" }).click();
   await expect(page.getByText("Static pad")).toBeVisible();
   await page.getByLabel("Low-pass filter").selectOption("on");
+  await page.getByLabel("Cutoff Hz").fill("1");
   await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Filtered" }).click();
   await page.getByRole("tab", { name: "Export", exact: true }).click();
   await page.getByLabel("Line endings").selectOption("crlf");
@@ -151,7 +156,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   expect(transformedVta).toContain("%% TransformMode: filtered");
   expect(transformedVta).toContain("%% Calibration: unit=mps2; samples=185;");
   expect(transformedVta).toContain("source=OpenVTA_sample.Vta");
-  expect(transformedVta).toContain("%% Filter: enabled=true; cutoffHz=5; channels=XYZ");
+  expect(transformedVta).toContain("%% Filter: enabled=true; cutoffHz=1; channels=XYZ");
 
   const validationCsv = await downloadTextByButton(page, "Export validation CSV", "validation.csv");
   expect(validationCsv).toContain("\r\n");
@@ -307,6 +312,7 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   await page.getByRole("tab", { name: "Calibration" }).click();
   await page.getByLabel("Low-pass filter").selectOption("on");
   await expect(page.getByLabel("Cutoff Hz")).toBeVisible();
+  await page.getByLabel("Cutoff Hz").fill("1");
   await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Filtered" }).click();
   await page.getByRole("tab", { name: "Export", exact: true }).click();
   const filteredVta = await downloadTextByButton(
@@ -317,7 +323,7 @@ test("applies sample calibration and exports summary", async ({ page }) => {
   expect(filteredVta).toContain("%% TransformMode: filtered");
   expect(filteredVta).toContain("%% Calibration: unit=mps2; samples=160;");
   expect(filteredVta).toContain("source=CAL_sample.Vta");
-  expect(filteredVta).toContain("%% Filter: enabled=true; cutoffHz=5; channels=XYZ");
+  expect(filteredVta).toContain("%% Filter: enabled=true; cutoffHz=1; channels=XYZ");
 
   await page.locator('[aria-label="Transform mode"]').getByRole("button", { name: "Compare" }).click();
   await expect(page.getByRole("button", { name: "Export transformed segment .Vta" })).toBeDisabled();
@@ -387,7 +393,9 @@ test("guided tour loads sample and completes without reappearing", async ({ page
   await page.goto("/");
 
   await page.getByRole("button", { name: "Next" }).click();
-  await page.getByRole("button", { name: "Load sample for tour" }).click();
+  const loadTourSample = page.getByRole("button", { name: "Load sample for tour" });
+  await expect(loadTourSample).toBeVisible();
+  await loadTourSample.click({ force: true });
   await expect(page.locator(".analysis-main h2").filter({ hasText: "OpenVTA_sample.Vta" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Check the active file" })).toBeVisible();
 
