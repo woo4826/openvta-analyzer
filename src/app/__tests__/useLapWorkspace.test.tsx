@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OsmTrackCandidate } from "../../domain/osmTracks";
 import type { GpsPoint, TrackProfileV1 } from "../../domain/types";
 import { createGateFromRoutePoint } from "../../domain/lapDetection";
-import { exportTrackProfile } from "../../domain/trackProfile";
+import { exportTrackProfile, parseTrackProfile } from "../../domain/trackProfile";
 
 const mocks = vi.hoisted(() => ({
   listTrackProfiles: vi.fn(),
@@ -109,6 +109,7 @@ describe("useLapWorkspace", () => {
     expect(result.current.profile?.sections.every((section) => section.source === "automatic")).toBe(true);
     expect(result.current.sectionResults.length).toBeGreaterThan(result.current.profile!.sections.length);
     expect(result.current.automaticTheoreticalBestSeconds).toBeGreaterThan(0);
+    expect(parseTrackProfile(exportTrackProfile(result.current.profile!)).error).toBeUndefined();
   });
 
   it("preserves edited sections unless automatic replacement is explicit", async () => {

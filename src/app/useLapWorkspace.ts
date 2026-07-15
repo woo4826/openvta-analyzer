@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineString } from "geojson";
 import { generateAutomaticSections } from "../domain/automaticSections";
-import { gateCenter, gateLine, routeDistanceMeters } from "../domain/geometry";
+import { gateCenter, gateLine, haversineMeters, routeDistanceMeters } from "../domain/geometry";
 import {
   analyzeTimingSectorsDetailed,
   lapLineString,
@@ -215,10 +215,20 @@ export function useLapWorkspace(
     () => representativeLap ? lapLineString(points, representativeLap, 5) : undefined,
     [points, representativeLap],
   );
-  const generatedSections = useMemo(
-    () => representativeLap ? generateAutomaticSections(resampleLapByDistance(points, representativeLap, 5)) : [],
-    [points, representativeLap],
-  );
+  const generatedSections = useMemo(() => {
+    if (!representativeLap) return [];
+    const samples = resampleLapByDistance(points, representativeLap, 5);
+    let lineDistanceMeters = 0;
+    return generateAutomaticSections(samples.map((sample, index) => {
+      if (index > 0) {
+        lineDistanceMeters += haversineMeters(
+          [samples[index - 1].longitude, samples[index - 1].latitude],
+          [sample.longitude, sample.latitude],
+        );
+      }
+      return { ...sample, distanceMeters: lineDistanceMeters };
+    }));
+  }, [points, representativeLap]);
   const analysisLine = current.profile?.analysisLine ?? representativeCenterline ?? current.profile?.centerline;
   const sectionResults = useMemo(
     () => current.profile && detection && analysisLine
