@@ -2,9 +2,18 @@ import type { TrackProfileV1 } from "./types";
 import { validateTrackProfile } from "./trackProfile";
 
 const DATABASE_NAME = "openvta-analyzer";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const STORE_NAME = "track-profiles";
+const ORIGIN_STORE_NAME = "track-profile-origins";
 const memoryProfiles = new Map<string, TrackProfileV1>();
+const memoryOrigins = new Map<string, TrackProfileOrigin>();
+
+export type TrackProfileOrigin = "local-override" | "imported" | "osm" | "generated";
+
+interface StoredTrackProfileOrigin {
+  id: string;
+  origin: TrackProfileOrigin;
+}
 
 export async function listTrackProfiles(): Promise<TrackProfileV1[]> {
   const persisted = await withStore("readonly", (store) => requestResult<TrackProfileV1[]>(store.getAll()), []);
@@ -20,11 +29,11 @@ export async function getTrackProfile(id: string): Promise<TrackProfileV1 | unde
   return withStore("readonly", (store) => requestResult<TrackProfileV1 | undefined>(store.get(id)), undefined);
 }
 
-export async function saveTrackProfile(profile: TrackProfileV1): Promise<void> {
-  await saveTrackProfiles([profile]);
+export async function saveTrackProfile(profile: TrackProfileV1, origin?: TrackProfileOrigin): Promise<void> {
+  await saveTrackProfiles([profile], origin);
 }
 
-export async function saveTrackProfiles(profiles: TrackProfileV1[]): Promise<void> {
+export async function saveTrackProfiles(profiles: TrackProfileV1[], origin?: TrackProfileOrigin): Promise<void> {
   const validated: TrackProfileV1[] = [];
   const ids = new Set<string>();
   for (const profile of profiles) {
@@ -34,24 +43,71 @@ export async function saveTrackProfiles(profiles: TrackProfileV1[]): Promise<voi
     ids.add(result.profile.id);
     validated.push(result.profile);
   }
-  for (const profile of validated) memoryProfiles.set(profile.id, profile);
+  for (const profile of validated) {
+    memoryProfiles.set(profile.id, profile);
+    if (origin) memoryOrigins.set(profile.id, origin);
+  }
   await withStore("readwrite", async (store) => {
     await Promise.all(validated.map((profile) => requestResult(store.put(profile))));
   }, undefined);
+  if (origin) {
+    await withNamedStore(ORIGIN_STORE_NAME, "readwrite", async (store) => {
+      await Promise.all(validated.map((profile) => requestResult(store.put({ id: profile.id, origin }))));
+    }, undefined);
+  }
+}
+
+export async function getTrackProfileOrigin(id: string): Promise<TrackProfileOrigin | undefined> {
+  const memory = memoryOrigins.get(id);
+  if (memory) return memory;
+  const stored = await withNamedStore<StoredTrackProfileOrigin | undefined>(
+    ORIGIN_STORE_NAME,
+    "readonly",
+    (store) => requestResult<StoredTrackProfileOrigin | undefined>(store.get(id)),
+    undefined,
+  );
+  return stored?.origin;
+}
+
+export async function getTrackProfileOrigins(): Promise<Record<string, TrackProfileOrigin>> {
+  const stored = await withNamedStore<StoredTrackProfileOrigin[]>(
+    ORIGIN_STORE_NAME,
+    "readonly",
+    (store) => requestResult<StoredTrackProfileOrigin[]>(store.getAll()),
+    [],
+  );
+  const result: Record<string, TrackProfileOrigin> = {};
+  for (const item of stored) result[item.id] = item.origin;
+  for (const [id, origin] of memoryOrigins) result[id] = origin;
+  return result;
 }
 
 export async function deleteTrackProfile(id: string): Promise<void> {
   memoryProfiles.delete(id);
+  memoryOrigins.delete(id);
   await withStore("readwrite", async (store) => {
+    await requestResult(store.delete(id));
+  }, undefined);
+  await withNamedStore(ORIGIN_STORE_NAME, "readwrite", async (store) => {
     await requestResult(store.delete(id));
   }, undefined);
 }
 
 export function clearTrackProfileMemoryForTests(): void {
   memoryProfiles.clear();
+  memoryOrigins.clear();
 }
 
 async function withStore<T>(
+  mode: IDBTransactionMode,
+  operation: (store: IDBObjectStore) => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  return withNamedStore(STORE_NAME, mode, operation, fallback);
+}
+
+async function withNamedStore<T>(
+  storeName: string,
   mode: IDBTransactionMode,
   operation: (store: IDBObjectStore) => Promise<T>,
   fallback: T,
@@ -60,7 +116,7 @@ async function withStore<T>(
   try {
     db = await openDatabase();
     if (!db) return fallback;
-    return await operation(db.transaction(STORE_NAME, mode).objectStore(STORE_NAME));
+    return await operation(db.transaction(storeName, mode).objectStore(storeName));
   } catch {
     return fallback;
   } finally {
@@ -81,6 +137,9 @@ function openDatabase(): Promise<IDBDatabase | undefined> {
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE_NAME)) {
         request.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+      if (!request.result.objectStoreNames.contains(ORIGIN_STORE_NAME)) {
+        request.result.createObjectStore(ORIGIN_STORE_NAME, { keyPath: "id" });
       }
     };
     request.onsuccess = () => resolve(request.result);

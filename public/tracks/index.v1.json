@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "openvta-track-index",
+  "generatedAt": "2026-07-15T10:21:48.000Z",
+  "entries": [
+    {
+      "id": "kr-inje-speedium-full",
+      "venueName": "Inje Speedium",
+      "layoutName": "Full Course",
+      "href": "profiles/inje-speedium-full.2026-07-15.json",
+      "bbox": [128.27, 37.99, 128.3, 38.01],
+      "lengthMeters": 3915,
+      "direction": "clockwise",
+      "revision": "2026-07-15",
+      "quality": "curated"
+    }
+  ]
+}

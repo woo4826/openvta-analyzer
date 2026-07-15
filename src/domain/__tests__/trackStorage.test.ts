@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearTrackProfileMemoryForTests,
   deleteTrackProfile,
+  getTrackProfileOrigin,
   listTrackProfiles,
   saveTrackProfile,
   saveTrackProfiles,
@@ -34,6 +35,17 @@ describe("track profile storage fallback", () => {
     await saveTrackProfiles([first, second]);
 
     expect((await listTrackProfiles()).map((profile) => profile.id)).toEqual(["second", "test-track"]);
+  });
+
+  it("stores provenance separately from the exported TrackProfile v1 object", async () => {
+    const profile = testProfile();
+    await saveTrackProfile(profile, "local-override");
+
+    expect(await getTrackProfileOrigin(profile.id)).toBe("local-override");
+    expect(await listTrackProfiles()).toEqual([profile]);
+
+    await deleteTrackProfile(profile.id);
+    expect(await getTrackProfileOrigin(profile.id)).toBeUndefined();
   });
 });
 

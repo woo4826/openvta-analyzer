@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Execution override (2026-07-15):** The primary agent implements and verifies every code change directly. Subagents are reserved for post-implementation usability/spec/code-quality evaluation; feedback fixes remain the primary agent's responsibility.
+
 **Goal:** Replace the Coach/opportunity-first lap screen with a map-first segment workbench that synchronizes static track presets, editable scopes, every traversing lap trajectory, Time Slip Rate, telemetry graphs, and per-lap records.
 
 **Architecture:** Add a static-preset loader ahead of the existing IndexedDB/OSM/generated fallback, then introduce a pure segment-analysis domain API and a controlled `AnalysisScope`. Compose focused map, telemetry, ribbon, and table components around that state while keeping track/gate editing in a compact Setup disclosure and preserving the zero-backend workflow.
@@ -565,9 +567,9 @@ Load `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta` only in local QA. Ve
 
 The reviewer inspects desktop and mobile Aside snapshots and scores discoverability, section selection, focus/reference clarity, graph readability, partial-lap handling, preset/edit/reset clarity, and accessibility from 1–5. Any Critical/Important issue or category below 4 is a failing review.
 
-- [ ] **Step 4: Repeat feedback implementation and independent review until passing**
+- [ ] **Step 4: Repeat primary-agent feedback fixes and independent review until passing**
 
-For each failed review, dispatch a fresh feedback implementer with the exact findings, require TDD for behavior changes, commit fixes, then dispatch another fresh usability reviewer. Continue until no Critical/Important issue remains and every category scores at least 4.
+For each failed review, the primary agent implements the exact findings with TDD for behavior changes, commits the fixes, then dispatches another fresh usability reviewer. Continue until no Critical/Important issue remains and every category scores at least 4.
 
 - [ ] **Step 5: Run the complete fresh verification gate**
 
