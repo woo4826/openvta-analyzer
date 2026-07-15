@@ -3,6 +3,7 @@ import type {
   CornerAnalysisResult,
   LapAnalysisSettings,
   LapResult,
+  LapSectionResult,
   TimingSectorResult,
   TrackProfileV1,
 } from "./types";
@@ -63,6 +64,46 @@ export function cornerResultsCsv(corners: CornerAnalysisResult[], lineEnding: Li
   );
 }
 
+export function sectionResultsCsv(results: LapSectionResult[], lineEnding: LineEnding = "lf"): string {
+  return genericCsv(
+    [
+      "lapId",
+      "sectionId",
+      "name",
+      "kind",
+      "durationSeconds",
+      "deltaBestSeconds",
+      "entrySpeedKmh",
+      "minimumSpeedKmh",
+      "averageSpeedKmh",
+      "maximumSpeedKmh",
+      "exitSpeedKmh",
+      "maxLateralG",
+      "maxDecelerationG",
+      "fromPartialLap",
+      "eligibleForBest",
+    ],
+    results.map((result) => [
+      result.lapId,
+      result.sectionId,
+      result.name,
+      result.kind,
+      result.durationSeconds,
+      result.deltaBestSeconds ?? "",
+      result.entrySpeedKmh,
+      result.minimumSpeedKmh,
+      result.averageSpeedKmh,
+      result.maximumSpeedKmh,
+      result.exitSpeedKmh,
+      result.maxLateralG ?? "",
+      result.maxDecelerationG ?? "",
+      result.fromPartialLap ? "true" : "false",
+      result.eligibleForBest ? "true" : "false",
+    ]),
+    lineEnding,
+  );
+}
+
 export function lapAnalysisJson(input: {
   sourceName: string;
   profile?: TrackProfileV1;
@@ -71,6 +112,8 @@ export function lapAnalysisJson(input: {
   sectors: TimingSectorResult[];
   corners: CornerAnalysisResult[];
   theoreticalBestSeconds?: number;
+  sectionResults?: LapSectionResult[];
+  automaticTheoreticalBestSeconds?: number;
 }): string {
   return `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), ...input }, null, 2)}\n`;
 }

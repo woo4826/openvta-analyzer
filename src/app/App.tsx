@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileUp, Gauge, HelpCircle, Settings, TestTube2 } from "lucide-react";
+import { Download, FileUp, Gauge, HelpCircle, Map as MapIcon, Settings, TestTube2 } from "lucide-react";
 import { sampleCalibrationName, sampleCalibrationText, sampleVtaName, sampleVtaText } from "./sampleData";
 import { buildTourSteps, nextAvailableTourStepIndex } from "./tourSteps";
 import { lapWorkspaceKey, selectLapGpsSource, type LapGpsSourceKey } from "./lapGpsSource";
@@ -40,6 +40,7 @@ import { CalibrationPanel } from "../components/CalibrationPanel";
 import { ExportPanel } from "../components/ExportPanel";
 import { GuidedTour } from "../components/GuidedTour";
 import { WorkspaceStatus } from "../components/WorkspaceStatus";
+import { TrackLibrary } from "../components/TrackLibrary";
 import { FilePickerButton, Tabs } from "../components/ui";
 import { formatLocalizedMessage, type LocalizedMessage } from "../i18n/messages";
 import { useI18n } from "../i18n/useI18n";
@@ -84,6 +85,7 @@ export function App() {
   const [tourActive, setTourActive] = useState(() => initialTourState.status === "new");
   const [tourIndex, setTourIndex] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [trackLibraryOpen, setTrackLibraryOpen] = useState(false);
   const previousEffectiveSourceVisibility = useRef<SourceVisibility | undefined>();
 
   const activeFile = files[activeIndex];
@@ -369,6 +371,10 @@ export function App() {
             <Settings size={16} aria-hidden />
             {t("app.sampleCalibration")}
           </button>
+          <button type="button" className="button ghost" onClick={() => setTrackLibraryOpen(true)}>
+            <MapIcon size={16} aria-hidden />
+            {t("trackLibrary.menu")}
+          </button>
           <div className="settings-menu-wrap">
             <button
               type="button"
@@ -554,6 +560,12 @@ export function App() {
           <Gauge size={15} aria-hidden /> {t("app.footerNote")} <Download size={15} aria-hidden />
         </footer>
       </main>
+      <TrackLibrary
+        open={trackLibraryOpen}
+        activeFileName={activeFile?.sourceName}
+        onClose={() => setTrackLibraryOpen(false)}
+        onApply={lapWorkspace.applyProfile}
+      />
       {tourActive ? (
         <GuidedTour
           steps={tourSteps}

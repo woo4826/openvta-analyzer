@@ -31,6 +31,10 @@ export function validateTrackProfile(value: unknown): TrackProfileParseResult {
   if (!centerline || centerline.coordinates.length < 2) {
     return { error: "Track profile centerline must contain at least two valid coordinates." };
   }
+  const analysisLine = value.analysisLine === undefined ? undefined : parseLineString(value.analysisLine);
+  if (value.analysisLine !== undefined && (!analysisLine || analysisLine.coordinates.length < 2)) {
+    return { error: "Track profile analysisLine must contain at least two valid coordinates." };
+  }
   if (value.direction !== "clockwise" && value.direction !== "counterclockwise" && value.direction !== "unknown") {
     return { error: "Track profile direction is invalid." };
   }
@@ -48,8 +52,8 @@ export function validateTrackProfile(value: unknown): TrackProfileParseResult {
   if (!Array.isArray(value.sections)) {
     return { error: "Track profile sections must be an array." };
   }
-  const centerlineLength = routeDistanceMeters(centerline.coordinates);
-  const sections = value.sections.map((section) => parseSection(section, centerlineLength));
+  const sectionLineLength = routeDistanceMeters((analysisLine ?? centerline).coordinates);
+  const sections = value.sections.map((section) => parseSection(section, sectionLineLength));
   if (sections.some((section) => !section)) {
     return { error: "Track profile contains an invalid track section." };
   }
@@ -78,6 +82,7 @@ export function validateTrackProfile(value: unknown): TrackProfileParseResult {
       name: value.name,
       layoutName: typeof value.layoutName === "string" && value.layoutName.trim() ? value.layoutName : undefined,
       centerline,
+      analysisLine,
       direction: value.direction,
       startFinish,
       sectorGates: sectorGates as TrackGate[],
@@ -132,12 +137,29 @@ function parseSection(value: unknown, centerlineLength: number): TrackSection | 
   ) {
     return undefined;
   }
+  const source = value.source === undefined
+    ? undefined
+    : value.source === "automatic" || value.source === "user"
+      ? value.source
+      : null;
+  if (source === null) {
+    return undefined;
+  }
+  const confidence = value.confidence === undefined ? undefined : value.confidence;
+  if (
+    confidence !== undefined &&
+    (!finiteNumber(confidence) || confidence < 0 || confidence > 1 || source !== "automatic")
+  ) {
+    return undefined;
+  }
   return {
     id: value.id,
     name: value.name,
     kind: value.kind,
     startDistanceMeters: value.startDistanceMeters,
     endDistanceMeters: value.endDistanceMeters,
+    source,
+    confidence,
   };
 }
 

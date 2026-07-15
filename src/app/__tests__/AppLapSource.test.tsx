@@ -46,7 +46,17 @@ describe("App lap GPS source", () => {
       sectors: [],
       selectedLapIds: [],
       includePartialLapSectors: false,
+      applyProfile: vi.fn(),
     });
+  });
+
+  it("opens the Track Library before a VTA is loaded", async () => {
+    const user = userEvent.setup();
+    render(<I18nProvider><App /></I18nProvider>);
+
+    await user.click(screen.getByRole("button", { name: "Track Library" }));
+
+    expect(screen.getByRole("dialog", { name: "Track Library" })).toBeVisible();
   });
 
   it("analyzes one source, switches it exclusively on the Lap tab, and restores multi-source toggling elsewhere", async () => {

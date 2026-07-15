@@ -90,6 +90,16 @@ describe("i18n language helpers", () => {
     expect(translations.ko["tour.step.welcome.title"]).toBe("VTA 파일을 브라우저에서 분석");
     expect(translations.ko["settings.restartGuide"]).toBe("가이드 다시 보기");
   });
+
+  it.each(["en", "ko", "ja", "zh-CN", "es", "fr", "de"] as LanguageCode[])(
+    "has track library and explorer labels in %s",
+    (language) => {
+      const dictionary = translations[language];
+      expect(dictionary["trackLibrary.title"].trim().length).toBeGreaterThan(0);
+      expect(dictionary["lap.explorer.scope"].trim().length).toBeGreaterThan(0);
+      expect(dictionary["lap.automaticTheoreticalBest"].trim().length).toBeGreaterThan(0);
+    },
+  );
 });
 
 describe("I18nProvider", () => {

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OsmTrackCandidate } from "../../domain/osmTracks";
 import type { GpsPoint, TrackProfileV1 } from "../../domain/types";
 import { createGateFromRoutePoint } from "../../domain/lapDetection";
-import { exportTrackProfile } from "../../domain/trackProfile";
+import { exportTrackProfile, parseTrackProfile } from "../../domain/trackProfile";
 
 const mocks = vi.hoisted(() => ({
   listTrackProfiles: vi.fn(),
@@ -97,6 +97,41 @@ describe("useLapWorkspace", () => {
     expect(result.current.sectionCenterline?.coordinates.length).toBeGreaterThan(20);
   });
 
+  it("automatically seeds analysis sectors from the first valid complete lap", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-1", "session.Vta", points));
+
+    act(() => result.current.useSelectedPointAsStartFinish(0));
+
+    await waitFor(() => expect(result.current.profile?.analysisLine?.coordinates.length).toBeGreaterThan(20));
+    expect(result.current.profile?.sections.length).toBeGreaterThan(0);
+    expect(result.current.profile?.sections.every((section) => section.source === "automatic")).toBe(true);
+    expect(result.current.sectionResults.length).toBeGreaterThan(result.current.profile!.sections.length);
+    expect(result.current.automaticTheoreticalBestSeconds).toBeGreaterThan(0);
+    expect(parseTrackProfile(exportTrackProfile(result.current.profile!)).error).toBeUndefined();
+  });
+
+  it("preserves edited sections unless automatic replacement is explicit", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-1", "session.Vta", points));
+    act(() => result.current.useSelectedPointAsStartFinish(0));
+    await waitFor(() => expect(result.current.profile?.sections.length).toBeGreaterThan(0));
+    const sectionId = result.current.profile!.sections[0].id;
+
+    act(() => result.current.updateSection(sectionId, { name: "Driver edit", startDistanceMeters: 999_999 }));
+    await waitFor(() => expect(result.current.profile?.sections[0].name).toBe("Driver edit"));
+    expect(result.current.profile?.sections[0]).toMatchObject({ source: "user", confidence: undefined });
+    expect(result.current.profile!.sections[0].startDistanceMeters)
+      .toBeLessThan(result.current.profile!.sections[0].endDistanceMeters);
+
+    act(() => result.current.recalculateAutomaticSections(false));
+    expect(result.current.profile?.sections[0].name).toBe("Driver edit");
+    act(() => result.current.recalculateAutomaticSections(true));
+    await waitFor(() => expect(result.current.profile?.sections[0].source).toBe("automatic"));
+  });
+
   it("saves a recording profile using the fastest valid complete lap instead of the repeated session", async () => {
     mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
     const points = multiLapPoints();
@@ -123,9 +158,6 @@ describe("useLapWorkspace", () => {
 
     act(() => result.current.useSelectedPointAsStartFinish(0));
     await waitFor(() => expect(result.current.canProposeSections).toBe(true));
-    expect(result.current.profile).toBeUndefined();
-
-    act(() => result.current.proposeSections());
 
     await waitFor(() => {
       expect(result.current.profile?.source.kind).toBe("recording");
@@ -273,6 +305,28 @@ describe("useLapWorkspace", () => {
       expect(result.current.detection?.laps.filter((lap) => lap.completion === "complete")).toHaveLength(2);
     });
     expect(mocks.saveTrackProfile).toHaveBeenCalledWith(expect.objectContaining({ id: "imported-layout" }));
+  });
+
+  it("applies a library profile and clears gate-dependent overrides", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = routePoints();
+    const { result } = renderHook(() => useLapWorkspace("file-1", "session.Vta", points));
+    act(() => result.current.useSelectedPointAsStartFinish(1));
+    await waitFor(() => expect(result.current.detection).toBeDefined());
+    act(() => result.current.addBoundary(3));
+    await waitFor(() => expect(result.current.detection?.boundaries.some((boundary) => boundary.source === "manual")).toBe(true));
+    const applied: TrackProfileV1 = {
+      ...osmCandidate().profile,
+      id: "library-inje",
+      source: { kind: "user" },
+      startFinish: createGateFromRoutePoint(points, 2),
+    };
+
+    act(() => result.current.applyProfile(applied));
+
+    await waitFor(() => expect(result.current.profile?.id).toBe("library-inje"));
+    expect(result.current.lookupState).toBe("imported");
+    expect(result.current.detection?.boundaries.some((boundary) => boundary.source === "manual")).toBe(false);
   });
 });
 

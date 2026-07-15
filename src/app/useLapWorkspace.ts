@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineString } from "geojson";
-import { gateCenter, gateLine } from "../domain/geometry";
-import { analyzeTimingSectorsDetailed, lapLineString, proposeTrackSections, theoreticalBestSeconds } from "../domain/lapAnalysis";
+import { generateAutomaticSections } from "../domain/automaticSections";
+import { gateCenter, gateLine, haversineMeters, routeDistanceMeters } from "../domain/geometry";
+import {
+  analyzeTimingSectorsDetailed,
+  lapLineString,
+  proposeTrackSections,
+  resampleLapByDistance,
+  theoreticalBestSeconds,
+} from "../domain/lapAnalysis";
 import { createGateFromRoutePoint, detectLaps } from "../domain/lapDetection";
 import { lookupOsmTracks, scoreTrackProfile, type OsmLookupStatus, type OsmTrackCandidate } from "../domain/osmTracks";
 import {
@@ -10,11 +17,13 @@ import {
 } from "../domain/settings";
 import { listTrackProfiles, saveTrackProfile } from "../domain/trackStorage";
 import { parseTrackProfile } from "../domain/trackProfile";
+import { analyzeLapSections, automaticTheoreticalBestSeconds } from "../domain/sectionAnalysis";
 import type {
   GpsPoint,
   LapBoundaryOverride,
   LapDetectionResult,
   LapResult,
+  LapSectionResult,
   LapValidity,
   LapValidityOverride,
   TimingSectorResult,
@@ -48,11 +57,15 @@ export interface LapWorkspace {
   detection?: LapDetectionResult;
   sectors: TimingSectorResult[];
   theoreticalBestSeconds?: number;
+  analysisLine?: LineString;
+  sectionResults: LapSectionResult[];
+  automaticTheoreticalBestSeconds?: number;
   selectedLapIds: string[];
   primaryLapId?: string;
   referenceLapId?: string;
   includePartialLapSectors: boolean;
   importProfile: (text: string) => Promise<string | undefined>;
+  applyProfile: (profile: TrackProfileV1) => void;
   chooseCandidate: (profileId: string) => void;
   useSelectedPointAsStartFinish: (pointIndex: number) => void;
   updateStartFinish: (widthMeters: number, forwardBearingDegrees: number) => void;
@@ -62,7 +75,9 @@ export interface LapWorkspace {
   reorderSectorGate: (gateId: string, targetIndex: number) => void;
   removeSectorGate: (gateId: string) => void;
   canProposeSections: boolean;
+  canGenerateAutomaticSections: boolean;
   proposeSections: () => void;
+  recalculateAutomaticSections: (replaceAll: boolean) => void;
   updateSection: (sectionId: string, patch: Partial<TrackSection>) => void;
   removeSection: (sectionId: string) => void;
   addBoundary: (pointIndex: number) => void;
@@ -200,6 +215,65 @@ export function useLapWorkspace(
     () => representativeLap ? lapLineString(points, representativeLap, 5) : undefined,
     [points, representativeLap],
   );
+  const generatedSections = useMemo(() => {
+    if (!representativeLap) return [];
+    const samples = resampleLapByDistance(points, representativeLap, 5);
+    let lineDistanceMeters = 0;
+    return generateAutomaticSections(samples.map((sample, index) => {
+      if (index > 0) {
+        lineDistanceMeters += haversineMeters(
+          [samples[index - 1].longitude, samples[index - 1].latitude],
+          [sample.longitude, sample.latitude],
+        );
+      }
+      return { ...sample, distanceMeters: lineDistanceMeters };
+    }));
+  }, [points, representativeLap]);
+  const analysisLine = current.profile?.analysisLine ?? representativeCenterline ?? current.profile?.centerline;
+  const sectionResults = useMemo(
+    () => current.profile && detection && analysisLine
+      ? analyzeLapSections(
+          points,
+          detection.laps,
+          analysisLine,
+          current.profile.sections,
+          settings.includePartialLapSectors,
+        )
+      : [],
+    [analysisLine, current.profile, detection, points, settings.includePartialLapSectors],
+  );
+  const automaticTheoretical = useMemo(
+    () => automaticTheoreticalBestSeconds(sectionResults, current.profile?.sections.length ?? 0),
+    [current.profile?.sections.length, sectionResults],
+  );
+
+  useEffect(() => {
+    if (!fileId || !representativeCenterline || !generatedSections.length) return;
+    setFiles((previous) => {
+      const workspace = previous[fileId] ?? emptyWorkspace();
+      if (workspace.profile?.sections.length) return previous;
+      const profile = workspace.profile ?? recordingProfile(
+        fileId,
+        fileName,
+        points,
+        workspace.manualGate,
+        representativeCenterline,
+      );
+      if (!profile?.startFinish) return previous;
+      return {
+        ...previous,
+        [fileId]: {
+          ...workspace,
+          profile: touchProfile({
+            ...profile,
+            analysisLine: representativeCenterline,
+            sections: generatedSections,
+          }),
+          manualGate: undefined,
+        },
+      };
+    });
+  }, [fileId, fileName, generatedSections, points, representativeCenterline]);
 
   useEffect(() => {
     if (!fileId) return;
@@ -243,6 +317,19 @@ export function useLapWorkspace(
       validityOverrides: [],
     }));
     return undefined;
+  }, [update]);
+
+  const applyProfile = useCallback((profile: TrackProfileV1) => {
+    update((workspace) => ({
+      ...workspace,
+      profile,
+      manualGate: undefined,
+      lookupState: "imported",
+      lookupMessage: undefined,
+      candidates: [],
+      boundaryOverrides: [],
+      validityOverrides: [],
+    }));
   }, [update]);
 
   const chooseCandidate = useCallback((profileId: string) => {
@@ -397,21 +484,65 @@ export function useLapWorkspace(
       if (!profile?.startFinish) return workspace;
       return {
         ...workspace,
-        profile: touchProfile({ ...profile, sections: proposeTrackSections(representativeCenterline) }),
+        profile: touchProfile({
+          ...profile,
+          analysisLine: representativeCenterline,
+          sections: proposeTrackSections(representativeCenterline),
+        }),
         manualGate: undefined,
       };
     });
   }, [fileId, fileName, points, representativeCenterline, update]);
+
+  const recalculateAutomaticSections = useCallback((replaceAll: boolean) => {
+    if (!representativeCenterline || !generatedSections.length) return;
+    update((workspace) => {
+      const profile = workspace.profile ?? recordingProfile(
+        fileId,
+        fileName,
+        points,
+        workspace.manualGate,
+        representativeCenterline,
+      );
+      if (!profile?.startFinish || (profile.sections.length && !replaceAll)) return workspace;
+      return {
+        ...workspace,
+        profile: touchProfile({
+          ...profile,
+          analysisLine: representativeCenterline,
+          sections: generatedSections,
+        }),
+        manualGate: undefined,
+      };
+    });
+  }, [fileId, fileName, generatedSections, points, representativeCenterline, update]);
 
   const updateSection = useCallback((sectionId: string, patch: Partial<TrackSection>) => {
     update((workspace) => workspace.profile ? {
       ...workspace,
       profile: touchProfile({
         ...workspace.profile,
-        sections: workspace.profile.sections.map((section) => section.id === sectionId ? { ...section, ...patch } : section),
+        sections: workspace.profile.sections.map((section) => {
+          if (section.id !== sectionId) return section;
+          const length = analysisLine ? routeDistanceMeters(analysisLine.coordinates) : section.endDistanceMeters;
+          let startDistanceMeters = Math.min(length, Math.max(0, patch.startDistanceMeters ?? section.startDistanceMeters));
+          let endDistanceMeters = Math.min(length, Math.max(0, patch.endDistanceMeters ?? section.endDistanceMeters));
+          if (startDistanceMeters >= endDistanceMeters) {
+            if (patch.startDistanceMeters !== undefined) startDistanceMeters = Math.max(0, endDistanceMeters - 1);
+            else endDistanceMeters = Math.min(length, startDistanceMeters + 1);
+          }
+          return {
+            ...section,
+            ...patch,
+            startDistanceMeters,
+            endDistanceMeters,
+            source: "user",
+            confidence: undefined,
+          };
+        }),
       }),
     } : workspace);
-  }, [update]);
+  }, [analysisLine, update]);
 
   const removeSection = useCallback((sectionId: string) => {
     update((workspace) => workspace.profile ? {
@@ -491,11 +622,15 @@ export function useLapWorkspace(
     detection,
     sectors,
     theoreticalBestSeconds: theoretical,
+    analysisLine,
+    sectionResults,
+    automaticTheoreticalBestSeconds: automaticTheoretical,
     selectedLapIds: current.selectedLapIds,
     primaryLapId: current.primaryLapId,
     referenceLapId: current.referenceLapId,
     includePartialLapSectors: settings.includePartialLapSectors,
     importProfile,
+    applyProfile,
     chooseCandidate,
     useSelectedPointAsStartFinish,
     updateStartFinish,
@@ -505,7 +640,9 @@ export function useLapWorkspace(
     reorderSectorGate,
     removeSectorGate,
     canProposeSections: Boolean(representativeCenterline && (current.profile?.startFinish || current.manualGate)),
+    canGenerateAutomaticSections: Boolean(representativeCenterline && generatedSections.length && (current.profile?.startFinish || current.manualGate)),
     proposeSections,
+    recalculateAutomaticSections,
     updateSection,
     removeSection,
     addBoundary,

@@ -222,6 +222,8 @@ export interface TrackSection {
   kind: TrackSectionKind;
   startDistanceMeters: number;
   endDistanceMeters: number;
+  source?: "automatic" | "user";
+  confidence?: number;
 }
 
 export interface TrackProfileSource {
@@ -238,6 +240,7 @@ export interface TrackProfileV1 {
   name: string;
   layoutName?: string;
   centerline: LineString;
+  analysisLine?: LineString;
   direction: TrackDirection;
   startFinish?: TrackGate;
   sectorGates: TrackGate[];
@@ -314,6 +317,25 @@ export interface LapDistanceSample {
 export interface LapComparisonSample extends LapDistanceSample {
   referenceElapsedSeconds: number;
   deltaSeconds: number;
+}
+
+export interface LapSectionResult {
+  id: string;
+  lapId: string;
+  sectionId: string;
+  name: string;
+  kind: TrackSectionKind;
+  durationSeconds: number;
+  deltaBestSeconds?: number;
+  entrySpeedKmh: number;
+  minimumSpeedKmh: number;
+  averageSpeedKmh: number;
+  maximumSpeedKmh: number;
+  exitSpeedKmh: number;
+  maxLateralG?: number;
+  maxDecelerationG?: number;
+  fromPartialLap: boolean;
+  eligibleForBest: boolean;
 }
 
 export interface TimingSectorResult {

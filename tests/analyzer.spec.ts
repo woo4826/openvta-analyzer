@@ -4,6 +4,48 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 const onboardingTourStorageKey = "openvta.onboardingTour.v1";
 const languageStorageKey = "openvta.language.v1";
 
+test("imports a track before loading a VTA and explores automatic sectors", async ({ page }) => {
+  await markTourCompleted(page);
+  await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+  await page.route("https://overpass-api.de/**", (route) => route.abort());
+  await page.route("https://overpass.kumi.systems/**", (route) => route.abort());
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Track Library" }).click();
+  let dialog = page.getByRole("dialog", { name: "Track Library" });
+  await expect(dialog).toBeVisible();
+  await dialog.locator('input[type="file"]').setInputFiles({
+    name: "test-track-catalog.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(testTrackCatalog()),
+  });
+  await expect(dialog.getByRole("heading", { name: "Automatic Sector Test Track" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Apply to current recording" })).toBeDisabled();
+  await expectNoHorizontalOverflow(page);
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  await page.locator(".dropzone input[type=file]").setInputFiles({
+    name: "loop-session.Vta",
+    mimeType: "text/plain",
+    buffer: Buffer.from(loopVta()),
+  });
+  await page.getByRole("button", { name: "Track Library" }).click();
+  dialog = page.getByRole("dialog", { name: "Track Library" });
+  await dialog.getByRole("button", { name: "Apply to current recording" }).click();
+
+  const analysisMain = page.locator(".analysis-main");
+  await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
+  await expect(analysisMain.getByRole("heading", { name: "Lap Explorer" })).toBeVisible();
+  await expect(analysisMain.getByText("Analysis sectors")).toBeVisible();
+  const scope = analysisMain.getByLabel("Analysis scope");
+  await expect(scope.locator("option").filter({ hasText: "Corner 1" })).toHaveCount(1);
+  await scope.selectOption({ label: "Corner 1" });
+  await expect(analysisMain.getByRole("heading", { name: "Corner 1 lap comparison" })).toBeVisible();
+  await expect(analysisMain.getByRole("table", { name: "Selected scope lap metrics" })).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "Export analysis sectors CSV" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("loads the sample and renders core analysis views", async ({ page }) => {
   await markTourCompleted(page);
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
@@ -502,4 +544,48 @@ async function markTourCompleted(page: Page): Promise<void> {
       JSON.stringify({ status: "completed", completedAt: 1700000000000, version: 1 }),
     );
   }, onboardingTourStorageKey);
+}
+
+function testTrackCatalog(): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    kind: "openvta-track-catalog",
+    tracks: [{
+      schemaVersion: 1,
+      id: "automatic-sector-test-track",
+      name: "Automatic Sector Test Track",
+      centerline: {
+        type: "LineString",
+        coordinates: [[0, 0], [0.0005, 0], [0.0008, 0.0004], [0, 0.0008], [-0.0008, 0.0004], [-0.0005, 0], [0, 0]],
+      },
+      direction: "counterclockwise",
+      startFinish: {
+        id: "start-finish",
+        name: "Start / Finish",
+        kind: "start-finish",
+        line: { type: "LineString", coordinates: [[0, -0.0003], [0, 0.0003]] },
+        forwardBearingDegrees: 90,
+        widthMeters: 66,
+      },
+      sectorGates: [],
+      sections: [],
+      source: { kind: "user" },
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    }],
+  });
+}
+
+function loopVta(): string {
+  const coordinates: Array<[number, number]> = [
+    [-0.0005, 0], [0.0005, 0], [0.0008, 0.0004], [0, 0.0008], [-0.0008, 0.0004], [-0.0005, 0],
+    [0.0005, 0], [0.0009, 0.0003], [0, 0.00085], [-0.0009, 0.0003], [-0.0005, 0],
+    [0.0005, 0], [0.0008, 0.0004], [0, 0.0008], [-0.0008, 0.0004], [-0.0005, 0], [0.0005, 0],
+  ];
+  return [
+    "%% VTALogger Kotlin Version: 0.0.3",
+    "%% FormatVersion: 3",
+    ...coordinates.map(([longitude, latitude], index) =>
+      `$15072026,1011${String(index).padStart(2, "0")},${latitude.toFixed(9)},${longitude.toFixed(9)},0,${70 + index % 4 * 8},90,10,2.5,gps,${500_000_000_000 + index * 1_000_000_000}`),
+    "%% End",
+  ].join("\n");
 }
