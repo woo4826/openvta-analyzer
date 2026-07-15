@@ -53,7 +53,14 @@ describe("useLapWorkspace", () => {
   });
 
   it("uses a matching hosted preset before live OSM lookup", async () => {
-    const builtIn = { ...osmCandidate().profile, id: "kr-inje-speedium-full", startFinish: createGateFromRoutePoint(multiLapPoints(), 0) };
+    const points = multiLapPoints();
+    const builtIn = {
+      ...osmCandidate().profile,
+      id: "kr-inje-speedium-full",
+      startFinish: createGateFromRoutePoint(points, 0),
+      analysisLine: { type: "LineString" as const, coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [{ id: "corner-1", name: "Corner 1", kind: "corner-right" as const, startDistanceMeters: 0, endDistanceMeters: 20 }],
+    };
     mocks.loadHostedTrackPresets.mockResolvedValue([builtIn]);
     mocks.scoreTrackProfile.mockImplementation((profile: TrackProfileV1) => ({
       profile,
@@ -61,7 +68,6 @@ describe("useLapWorkspace", () => {
       lengthRatio: 1,
       score: 4,
     }));
-    const points = multiLapPoints();
     const { result } = renderHook(() => useLapWorkspace("file-built-in", "session.Vta", points));
 
     await waitFor(() => expect(result.current.profile?.id).toBe(builtIn.id));
