@@ -413,6 +413,47 @@ footer.privacy-note {
   grid-column: 1 / -1;
 }
 
+.lap-explorer {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.lap-explorer-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.lap-explorer-scope {
+  min-width: min(300px, 100%);
+}
+
+.lap-explorer-reference {
+  align-self: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lap-explorer-chart .chart {
+  height: 380px;
+}
+
+.lap-sector-matrix th:first-child {
+  min-width: 140px;
+}
+
+.lap-matrix-metric {
+  display: grid;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lap-matrix-metric small {
+  color: var(--color-text-muted);
+}
+
 .lap-map-panel .map-shell {
   min-height: 520px;
 }

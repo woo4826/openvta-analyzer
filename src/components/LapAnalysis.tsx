@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { EChartsOption } from "echarts";
 import { Download, Flag, MapPinned, Scissors, Upload } from "lucide-react";
 import type { LapWorkspace } from "../app/useLapWorkspace";
-import { analyzeCorners, compareLapToReference, resampleLapByDistance } from "../domain/lapAnalysis";
+import { analyzeCorners } from "../domain/lapAnalysis";
 import { downloadText } from "../domain/export";
 import {
   cornerResultsCsv,
@@ -25,7 +24,7 @@ import type {
 import { useI18n } from "../i18n/useI18n";
 import type { Translate } from "../i18n/messages";
 import type { TranslationKey } from "../i18n/locales";
-import { ChartPanel } from "./ChartPanel";
+import { LapExplorer } from "./LapExplorer";
 import { PointTimeline } from "./PointTimeline";
 import { RouteMap, type LapMapOverlay } from "./RouteMap";
 import { FilePickerButton, Metric, Panel, StatusBadge } from "./ui";
@@ -70,7 +69,6 @@ export function LapAnalysis({
     [laps, workspace.selectedLapIds],
   );
   const primaryLap = laps.find((lap) => lap.id === workspace.primaryLapId);
-  const referenceLap = laps.find((lap) => lap.id === workspace.referenceLapId);
   const corners = useMemo(
     () => primaryLap && workspace.profile ? analyzeCorners(points, primaryLap, workspace.profile.sections) : [],
     [points, primaryLap, workspace.profile],
@@ -95,10 +93,6 @@ export function LapAnalysis({
   const gates = useMemo(
     () => [workspace.gate, ...(workspace.profile?.sectorGates ?? [])].filter((gate): gate is NonNullable<typeof gate> => Boolean(gate)),
     [workspace.gate, workspace.profile?.sectorGates],
-  );
-  const chartOption = useMemo(
-    () => lapComparisonOption(points, selectedLaps, referenceLap, t("lap.chart.speed"), t("lap.chart.delta")),
-    [points, referenceLap, selectedLaps, t],
   );
 
   useEffect(() => {
@@ -214,6 +208,8 @@ export function LapAnalysis({
           <Metric label={t("lap.fastestLap")} value={fastest?.durationSeconds === undefined ? "—" : formatLapTime(fastest.durationSeconds)} />
           <Metric label={t("lap.theoreticalBest")} value={workspace.theoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.theoreticalBestSeconds)} />
           <Metric label={t("lap.sectorCount")} value={String(workspace.profile?.sectorGates.length ? workspace.profile.sectorGates.length + 1 : 0)} />
+          <Metric label="Automatic theoretical best" value={workspace.automaticTheoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.automaticTheoreticalBestSeconds)} />
+          <Metric label="Analysis sectors" value={String(workspace.profile?.sections.length ?? 0)} />
         </div>
         {workspace.gate ? (
           <div className="form-grid lap-gate-form">
@@ -337,6 +333,18 @@ export function LapAnalysis({
         {workspace.selectedLapIds.length >= 5 ? <p className="inline-warning">{t("lap.maxFive")}</p> : null}
       </Panel>
 
+      <LapExplorer
+        profileId={workspace.profile?.id}
+        points={points}
+        laps={laps}
+        selectedLapIds={workspace.selectedLapIds}
+        primaryLapId={workspace.primaryLapId}
+        referenceLapId={workspace.referenceLapId}
+        analysisLine={workspace.analysisLine}
+        sections={workspace.profile?.sections ?? []}
+        sectionResults={workspace.sectionResults}
+      />
+
       <Panel title={t("lap.corrections")} className="lap-wide-panel">
         <div className="lap-track-toolbar">
           <button type="button" className="button" disabled={!workspace.gate} onClick={() => workspace.addBoundary(selectedPointIndex)}>
@@ -356,15 +364,6 @@ export function LapAnalysis({
           </div>
         ) : null}
       </Panel>
-
-      {selectedLaps.length ? (
-        <ChartPanel
-          title={t("lap.comparisonChart")}
-          ariaLabel={t("lap.comparisonChart")}
-          option={chartOption}
-          className="lap-wide-panel"
-        />
-      ) : null}
 
       <Panel
         title={t("lap.sectors")}
@@ -415,7 +414,21 @@ export function LapAnalysis({
 
       <Panel
         title={t("lap.sections")}
-        actions={<button type="button" className="button" disabled={!workspace.canProposeSections} onClick={workspace.proposeSections}>{t("lap.proposeSections")}</button>}
+        actions={(
+          <button
+            type="button"
+            className="button"
+            disabled={!workspace.canGenerateAutomaticSections}
+            onClick={() => {
+              const hasSections = Boolean(workspace.profile?.sections.length);
+              if (!hasSections || window.confirm("Replace all existing analysis sectors with automatic sectors?")) {
+                workspace.recalculateAutomaticSections(hasSections);
+              }
+            }}
+          >
+            Recalculate automatic sectors
+          </button>
+        )}
         className="lap-wide-panel"
       >
         {workspace.profile?.sections.length ? (
@@ -568,43 +581,6 @@ function lookupTone(state: LapWorkspace["lookupState"]): "neutral" | "success" |
   if (state === "offline" || state === "no-match" || state === "invalid-route") return "warning";
   if (state === "searching" || state === "cache") return "info";
   return "neutral";
-}
-
-function lapComparisonOption(
-  points: GpsPoint[],
-  laps: LapResult[],
-  reference: LapResult | undefined,
-  speedLabel: string,
-  deltaLabel: string,
-): EChartsOption {
-  const speedSeries = laps.map((lap, index) => ({
-    name: `L${lap.ordinal} ${speedLabel}`,
-    type: "line" as const,
-    showSymbol: false,
-    yAxisIndex: 0,
-    lineStyle: { color: LAP_COLORS[index % LAP_COLORS.length], width: 2 },
-    data: resampleLapByDistance(points, lap, 5).map((sample) => [sample.distanceMeters, sample.speedKmh]),
-  }));
-  const deltaSeries = reference ? laps.filter((lap) => lap.id !== reference.id).map((lap, index) => ({
-    name: `L${lap.ordinal} ${deltaLabel}`,
-    type: "line" as const,
-    showSymbol: false,
-    yAxisIndex: 1,
-    lineStyle: { color: LAP_COLORS[index % LAP_COLORS.length], type: "dashed" as const, width: 1.5 },
-    data: compareLapToReference(points, lap, reference, 5).map((sample) => [sample.distanceMeters, sample.deltaSeconds]),
-  })) : [];
-  return {
-    animation: false,
-    tooltip: { trigger: "axis" },
-    legend: { type: "scroll", top: 0 },
-    grid: { left: 60, right: 60, top: 44, bottom: 45 },
-    xAxis: { type: "value", name: "m", nameLocation: "middle", nameGap: 28 },
-    yAxis: [
-      { type: "value", name: "km/h" },
-      { type: "value", name: "Δs", splitLine: { show: false } },
-    ],
-    series: [...speedSeries, ...deltaSeries],
-  };
 }
 
 function safeBaseName(name: string): string {
