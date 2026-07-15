@@ -10,6 +10,14 @@ const mocks = vi.hoisted(() => ({
   lookupOsmTracks: vi.fn(),
   scoreTrackProfile: vi.fn(),
   saveTrackProfile: vi.fn(),
+  loadHostedTrackPresets: vi.fn(),
+  getTrackProfileOrigins: vi.fn(),
+  deleteTrackProfile: vi.fn(),
+}));
+
+vi.mock("../../domain/trackPresetIndex", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../domain/trackPresetIndex")>(),
+  loadHostedTrackPresets: mocks.loadHostedTrackPresets,
 }));
 
 vi.mock("../../domain/osmTracks", async (importOriginal) => ({
@@ -21,6 +29,8 @@ vi.mock("../../domain/osmTracks", async (importOriginal) => ({
 vi.mock("../../domain/trackStorage", () => ({
   listTrackProfiles: mocks.listTrackProfiles,
   saveTrackProfile: mocks.saveTrackProfile,
+  getTrackProfileOrigins: mocks.getTrackProfileOrigins,
+  deleteTrackProfile: mocks.deleteTrackProfile,
 }));
 
 import { useLapWorkspace } from "../useLapWorkspace";
@@ -37,6 +47,26 @@ describe("useLapWorkspace", () => {
       score: Number.POSITIVE_INFINITY,
     }));
     mocks.saveTrackProfile.mockReset().mockResolvedValue(undefined);
+    mocks.loadHostedTrackPresets.mockReset().mockResolvedValue([]);
+    mocks.getTrackProfileOrigins.mockReset().mockResolvedValue({});
+    mocks.deleteTrackProfile.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("uses a matching hosted preset before live OSM lookup", async () => {
+    const builtIn = { ...osmCandidate().profile, id: "kr-inje-speedium-full", startFinish: createGateFromRoutePoint(multiLapPoints(), 0) };
+    mocks.loadHostedTrackPresets.mockResolvedValue([builtIn]);
+    mocks.scoreTrackProfile.mockImplementation((profile: TrackProfileV1) => ({
+      profile,
+      medianDistanceMeters: 4,
+      lengthRatio: 1,
+      score: 4,
+    }));
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-built-in", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.profile?.id).toBe(builtIn.id));
+    expect(result.current.profileOrigin).toBe("built-in");
+    expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
   });
 
   it("does not propose sections from an OSM centerline when no valid complete lap exists", async () => {

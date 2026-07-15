@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineString } from "geojson";
+import { useTrackPresets, type EffectiveTrackProfileOrigin } from "./useTrackPresets";
 import { generateAutomaticSections } from "../domain/automaticSections";
 import { gateCenter, gateLine, haversineMeters, routeDistanceMeters } from "../domain/geometry";
 import {
@@ -15,7 +16,7 @@ import {
   loadLapAnalysisSettings,
   saveLapAnalysisSettings,
 } from "../domain/settings";
-import { listTrackProfiles, saveTrackProfile } from "../domain/trackStorage";
+import { saveTrackProfile } from "../domain/trackStorage";
 import { parseTrackProfile } from "../domain/trackProfile";
 import { analyzeLapSections, automaticTheoreticalBestSeconds } from "../domain/sectionAnalysis";
 import type {
@@ -36,6 +37,7 @@ export type TrackLookupState = "idle" | "cache" | "searching" | OsmLookupStatus 
 
 interface FileLapWorkspace {
   profile?: TrackProfileV1;
+  profileOrigin?: EffectiveTrackProfileOrigin;
   manualGate?: TrackGate;
   lookupState: TrackLookupState;
   lookupMessage?: string;
@@ -49,6 +51,7 @@ interface FileLapWorkspace {
 
 export interface LapWorkspace {
   profile?: TrackProfileV1;
+  profileOrigin?: EffectiveTrackProfileOrigin;
   sectionCenterline?: LineString;
   gate?: TrackGate;
   lookupState: TrackLookupState;
@@ -88,6 +91,7 @@ export interface LapWorkspace {
   setReferenceLap: (lapId: string) => void;
   setIncludePartialLapSectors: (include: boolean) => void;
   saveCurrentProfile: () => Promise<TrackProfileV1 | undefined>;
+  resetProfileOverride: () => Promise<void>;
 }
 
 const MAX_SELECTED_LAPS = 5;
@@ -99,6 +103,7 @@ export function useLapWorkspace(
 ): LapWorkspace {
   const [files, setFiles] = useState<Record<string, FileLapWorkspace>>({});
   const [settings, setSettings] = useState(() => loadLapAnalysisSettings());
+  const trackPresets = useTrackPresets(points);
   const lookupStarted = useRef(new Set<string>());
   const persistedAutomaticProfiles = useRef(new Set<string>());
   const current = fileId ? files[fileId] ?? emptyWorkspace() : emptyWorkspace();
@@ -113,7 +118,7 @@ export function useLapWorkspace(
   }, [fileId]);
 
   useEffect(() => {
-    if (!fileId || points.length < 2 || lookupStarted.current.has(fileId)) return;
+    if (!fileId || points.length < 2 || trackPresets.status === "loading" || lookupStarted.current.has(fileId)) return;
     lookupStarted.current.add(fileId);
     let cancelled = false;
     let inferredGatePromise: Promise<TrackGate | undefined> | undefined;
@@ -130,8 +135,8 @@ export function useLapWorkspace(
     };
     void (async () => {
       setForFile((workspace) => ({ ...workspace, lookupState: "cache", lookupMessage: undefined }));
-      const cached = (await listTrackProfiles())
-        .map((profile) => ({ ...scoreTrackProfile(profile, points), profile }))
+      const cached = trackPresets.profiles
+        .map(({ profile, origin }) => ({ ...scoreTrackProfile(profile, points), profile, origin }))
         .filter((candidate) => candidate.medianDistanceMeters <= 60 && candidate.lengthRatio >= 0.65 && candidate.lengthRatio <= 1.35)
         .sort((left, right) => left.score - right.score);
       const cachedResolution = resolveCachedProfile(cached);
@@ -140,6 +145,7 @@ export function useLapWorkspace(
         setForFile((workspace) => ({
           ...workspace,
           profile: undefined,
+          profileOrigin: undefined,
           lookupState: "ambiguous",
           lookupMessage: undefined,
           candidates: cached,
@@ -148,6 +154,7 @@ export function useLapWorkspace(
       }
       const isFresh = cachedProfile ? isFreshProfile(cachedProfile) : false;
       if (cachedProfile) {
+        const profileOrigin = cached.find((candidate) => candidate.profile.id === cachedProfile.id)?.origin;
         const profile = addInferredGate(
           cachedProfile,
           cachedProfile.startFinish ? undefined : await getInferredGate(),
@@ -156,6 +163,7 @@ export function useLapWorkspace(
         setForFile((workspace) => ({
           ...workspace,
           profile,
+          profileOrigin,
           lookupState: isFresh ? "matched" : "searching",
           candidates: cached,
         }));
@@ -185,6 +193,7 @@ export function useLapWorkspace(
           : {
               ...workspace,
               profile,
+              profileOrigin: "osm",
               lookupState: "matched",
               lookupMessage: undefined,
               candidates,
@@ -207,7 +216,7 @@ export function useLapWorkspace(
     return () => {
       cancelled = true;
     };
-  }, [fileId, points]);
+  }, [fileId, points, trackPresets.profiles, trackPresets.status]);
 
   const rawDetection = useMemo(
     () => gate && points.length ? detectLaps(points, gate, {
@@ -348,10 +357,11 @@ export function useLapWorkspace(
   const importProfile = useCallback(async (text: string) => {
     const parsed = parseTrackProfile(text);
     if (!parsed.profile) return parsed.error ?? "Track profile could not be imported.";
-    await saveTrackProfile(parsed.profile);
+    await saveTrackProfile(parsed.profile, "imported");
     update((workspace) => ({
       ...workspace,
       profile: parsed.profile,
+      profileOrigin: "imported",
       manualGate: undefined,
       lookupState: "imported",
       lookupMessage: undefined,
@@ -366,6 +376,7 @@ export function useLapWorkspace(
     update((workspace) => ({
       ...workspace,
       profile,
+      profileOrigin: "imported",
       manualGate: undefined,
       lookupState: "imported",
       lookupMessage: undefined,
@@ -383,10 +394,15 @@ export function useLapWorkspace(
       const profile = addInferredGate(candidate.profile, inferredGate);
       await saveTrackProfile(profile);
       update((workspace) => workspace.candidates.some((item) => item.profile.id === profileId)
-        ? { ...workspace, profile, lookupState: "matched" }
+        ? {
+            ...workspace,
+            profile,
+            profileOrigin: trackPresets.profiles.find((item) => item.profile.id === profileId)?.origin ?? "osm",
+            lookupState: "matched",
+          }
         : workspace);
     })();
-  }, [current.candidates, points, update]);
+  }, [current.candidates, points, trackPresets.profiles, update]);
 
   const useSelectedPointAsStartFinish = useCallback((pointIndex: number) => {
     const nextGate = createGateFromRoutePoint(points, pointIndex);
@@ -654,13 +670,30 @@ export function useLapWorkspace(
 
   const saveCurrentProfile = useCallback(async () => {
     const saved = current.profile ?? recordingProfile(fileId, fileName, points, current.manualGate, representativeCenterline);
-    if (saved) update((workspace) => ({ ...workspace, profile: saved, manualGate: undefined }));
-    if (saved) await saveTrackProfile(saved);
+    const origin = current.profileOrigin === "built-in" ? "local-override" : current.profileOrigin ?? "generated";
+    if (saved) update((workspace) => ({ ...workspace, profile: saved, profileOrigin: origin, manualGate: undefined }));
+    if (saved) await saveTrackProfile(saved, origin);
     return saved;
-  }, [current.manualGate, current.profile, fileId, fileName, points, representativeCenterline, update]);
+  }, [current.manualGate, current.profile, current.profileOrigin, fileId, fileName, points, representativeCenterline, update]);
+
+  const resetProfileOverride = useCallback(async () => {
+    const id = current.profile?.id;
+    if (!id || current.profileOrigin !== "local-override") return;
+    await trackPresets.resetOverride(id);
+    const hosted = trackPresets.hostedProfiles.find((profile) => profile.id === id);
+    if (!hosted) return;
+    update((workspace) => ({
+      ...workspace,
+      profile: hosted,
+      profileOrigin: "built-in",
+      boundaryOverrides: [],
+      validityOverrides: [],
+    }));
+  }, [current.profile?.id, current.profileOrigin, trackPresets, update]);
 
   return {
     profile: current.profile,
+    profileOrigin: current.profileOrigin,
     sectionCenterline: representativeCenterline ?? current.profile?.centerline,
     gate,
     lookupState: current.lookupState,
@@ -700,6 +733,7 @@ export function useLapWorkspace(
     setReferenceLap,
     setIncludePartialLapSectors,
     saveCurrentProfile,
+    resetProfileOverride,
   };
 }
 
