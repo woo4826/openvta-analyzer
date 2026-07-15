@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Flag, MapPinned, Scissors, Upload } from "lucide-react";
 import type { LapWorkspace } from "../app/useLapWorkspace";
 import { analyzeCorners } from "../domain/lapAnalysis";
-import { analyzeLapOpportunities } from "../domain/opportunityAnalysis";
 import { downloadText } from "../domain/export";
 import {
   cornerResultsCsv,
@@ -15,7 +14,6 @@ import { exportTrackProfile } from "../domain/trackProfile";
 import type {
   ActiveSegment,
   GpsPoint,
-  LapFlag,
   LapResult,
   MapSettings,
   SourceVisibility,
@@ -25,9 +23,7 @@ import type {
 import { useI18n } from "../i18n/useI18n";
 import type { Translate } from "../i18n/messages";
 import type { TranslationKey } from "../i18n/locales";
-import { LapExplorer } from "./LapExplorer";
-import { LapOpportunityOverview } from "./LapOpportunityOverview";
-import { LapTelemetryChart } from "./LapTelemetryChart";
+import { SegmentAnalysisWorkbench } from "./SegmentAnalysisWorkbench";
 import { PointTimeline } from "./PointTimeline";
 import { RouteMap, type LapMapOverlay } from "./RouteMap";
 import { FilePickerButton, Panel, StatusBadge, Tabs } from "./ui";
@@ -47,7 +43,7 @@ interface LapAnalysisProps {
 
 const LAP_COLORS = ["#0f766e", "#d97706", "#2563eb", "#be3b3b", "#7c3aed"];
 const EMPTY_LAPS: LapResult[] = [];
-type LapAnalysisView = "insights" | "compare" | "setup";
+type LapAnalysisView = "insights" | "setup";
 
 export function LapAnalysis({
   fileName,
@@ -63,7 +59,6 @@ export function LapAnalysis({
 }: LapAnalysisProps) {
   const { t } = useI18n();
   const [activeView, setActiveView] = useState<LapAnalysisView>("insights");
-  const [selectedSectionId, setSelectedSectionId] = useState<string>();
   const [importError, setImportError] = useState<string>();
   const [gateWidthDraft, setGateWidthDraft] = useState(workspace.gate?.widthMeters ?? 50);
   const [gateBearingDraft, setGateBearingDraft] = useState(workspace.gate?.forwardBearingDegrees ?? 0);
@@ -79,26 +74,8 @@ export function LapAnalysis({
     () => primaryLap && workspace.profile ? analyzeCorners(points, primaryLap, workspace.profile.sections) : [],
     [points, primaryLap, workspace.profile],
   );
-  const fastest = laps
-    .filter((lap) => lap.completion === "complete" && lap.validity === "valid" && lap.durationSeconds !== undefined)
-    .sort((left, right) => left.durationSeconds! - right.durationSeconds!)[0];
   const completeLapCount = laps.filter((lap) => lap.completion === "complete").length;
-  const opportunities = useMemo(
-    () => analyzeLapOpportunities(workspace.primaryLapId, workspace.profile?.sections ?? [], workspace.sectionResults, 3),
-    [workspace.primaryLapId, workspace.profile?.sections, workspace.sectionResults],
-  );
-  const effectiveSectionId = selectedSectionId ?? opportunities.opportunities[0]?.sectionId;
-  const selectedOpportunity = opportunities.opportunities.find((item) => item.sectionId === effectiveSectionId);
-  const selectedSection = workspace.profile?.sections.find((section) => section.id === effectiveSectionId);
-  const bestSelectedSectionResult = useMemo(
-    () => workspace.sectionResults
-      .filter((result) => result.sectionId === effectiveSectionId && result.eligibleForBest)
-      .sort((left, right) => left.durationSeconds - right.durationSeconds)[0],
-    [effectiveSectionId, workspace.sectionResults],
-  );
-  const telemetryReferenceLap = laps.find((lap) => lap.id === (selectedOpportunity?.bestLapId ?? bestSelectedSectionResult?.lapId))
-    ?? laps.find((lap) => lap.id === workspace.referenceLapId);
-  const insightsReady = Boolean(primaryLap && workspace.analysisLine && workspace.profile?.sections.length && workspace.sectionResults.length);
+  const insightsReady = Boolean(workspace.analysisLine && workspace.profile?.sections.length && laps.length);
   const bestSectorSeconds = useMemo(() => {
     const best = new Map<number, number>();
     for (const sector of workspace.sectors) {
@@ -119,25 +96,10 @@ export function LapAnalysis({
   );
 
   useEffect(() => {
-    if (!primaryLap) return;
-    onActiveSegment({ startIndex: primaryLap.startIndex, endIndex: primaryLap.endIndex, source: "manual" });
-  }, [onActiveSegment, primaryLap]);
-
-  useEffect(() => {
     if (!workspace.gate) return;
     setGateWidthDraft(workspace.gate.widthMeters);
     setGateBearingDraft(workspace.gate.forwardBearingDegrees);
   }, [workspace.gate]);
-
-  useEffect(() => {
-    const firstOpportunity = opportunities.opportunities[0]?.sectionId;
-    const sections = workspace.profile?.sections ?? [];
-    if (!selectedSectionId && firstOpportunity) {
-      setSelectedSectionId(firstOpportunity);
-    } else if (selectedSectionId && !sections.some((section) => section.id === selectedSectionId)) {
-      setSelectedSectionId(firstOpportunity);
-    }
-  }, [opportunities.opportunities, selectedSectionId, workspace.profile?.sections]);
 
   async function importTrack(files: File[]) {
     const file = files[0];
@@ -189,8 +151,7 @@ export function LapAnalysis({
         <Tabs
           ariaLabel={t("lap.view.aria")}
           items={[
-            { id: "insights", label: t("lap.view.insights") },
-            { id: "compare", label: t("lap.view.compare") },
+            { id: "insights", label: t("lap.workbench.title") },
             { id: "setup", label: t("lap.view.setup") },
           ]}
           value={activeView}
@@ -212,47 +173,26 @@ export function LapAnalysis({
       ) : null}
 
       {activeView === "insights" ? (
-        insightsReady ? (
-          <>
-            <LapOpportunityOverview
-              points={points}
-              laps={laps}
-              primaryLapId={workspace.primaryLapId}
-              onPrimaryLap={workspace.setPrimaryLap}
-              fastestSeconds={fastest?.durationSeconds}
-              theoreticalBestSeconds={workspace.automaticTheoreticalBestSeconds}
-              sections={workspace.profile?.sections ?? []}
-              sectionResults={workspace.sectionResults}
-              selectedSectionId={selectedSection?.id}
-              onSelectSection={setSelectedSectionId}
-              selectedPointIndex={selectedPointIndex}
-              onSelectedPointIndex={onSelectedPointIndex}
-              sourceVisibility={sourceVisibility}
-              mapSettings={mapSettings}
-              onMapSettingsChange={onMapSettingsChange}
-              activeSegment={activeSegment}
-              onActiveSegment={onActiveSegment}
-              trackCenterline={workspace.profile?.centerline}
-              sectionCenterline={workspace.sectionCenterline}
-              gates={gates}
-              trackName={workspace.profile?.name}
-            />
-            <LapTelemetryChart
-              points={points}
-              primaryLap={primaryLap}
-              referenceLap={telemetryReferenceLap}
-              analysisLine={workspace.analysisLine}
-              section={selectedSection}
-              selectedPointIndex={selectedPointIndex}
-              onSelectedPointIndex={onSelectedPointIndex}
-              onActiveSegment={onActiveSegment}
-            />
-          </>
+        insightsReady && workspace.profile && workspace.analysisLine ? (
+          <SegmentAnalysisWorkbench
+            points={points}
+            laps={laps}
+            profile={workspace.profile}
+            analysisLine={workspace.analysisLine}
+            includePartialLapSections={workspace.includePartialLapSectors}
+            onIncludePartialLapSections={workspace.setIncludePartialLapSectors}
+            mapSettings={mapSettings}
+            selectedPointIndex={selectedPointIndex}
+            onSelectedPointIndex={onSelectedPointIndex}
+            onMapSettingsChange={onMapSettingsChange}
+            onActiveSegment={onActiveSegment}
+            onOpenSetup={() => setActiveView("setup")}
+          />
         ) : (
           <>
             <Panel
-              title={t("lap.insights.title")}
-              eyebrow={t("lap.insights.eyebrow")}
+              title={t("lap.workbench.title")}
+              eyebrow={t("lap.workbench.question")}
               className="lap-analysis-onboarding lap-wide-panel"
               actions={(
                 <StatusBadge tone={!workspace.gate || completeLapCount ? "info" : "warning"}>
@@ -300,56 +240,6 @@ export function LapAnalysis({
         )
       ) : null}
 
-      {activeView === "compare" ? (
-        <>
-          <Panel
-            title={t("lap.lapList")}
-            actions={<span className="lap-selection-count">{workspace.selectedLapIds.length}/5 {t("lap.selected")}</span>}
-            className="lap-wide-panel"
-          >
-            {laps.length ? (
-              <div className="table-wrap">
-                <table className="lap-table">
-                  <thead><tr><th>{t("lap.compare")}</th><th>{t("lap.lap")}</th><th>{t("lap.completion")}</th><th>{t("lap.duration")}</th><th>{t("lap.deltaFastest")}</th><th>{t("lap.distance")}</th><th>{t("lap.avgSpeed")}</th><th>{t("lap.validity")}</th><th>{t("lap.flags")}</th><th>{t("lap.primary")}</th><th>{t("lap.reference")}</th></tr></thead>
-                  <tbody>{laps.map((lap) => {
-                    const selected = workspace.selectedLapIds.includes(lap.id);
-                    return (
-                      <tr key={lap.id} className={workspace.primaryLapId === lap.id ? "lap-primary-row" : undefined}>
-                        <td><input type="checkbox" aria-label={`${t("lap.compare")} ${lapLabel(lap, t)}`} checked={selected} disabled={!selected && workspace.selectedLapIds.length >= 5} onChange={() => workspace.toggleLapSelection(lap.id)} /></td>
-                        <th scope="row">{lapLabel(lap, t)}</th>
-                        <td><StatusBadge tone={lap.completion === "complete" ? "success" : "warning"}>{completionLabel(lap, t)}</StatusBadge></td>
-                        <td>{lap.durationSeconds === undefined ? "—" : formatLapTime(lap.durationSeconds)}</td>
-                        <td>{lap.durationSeconds === undefined || fastest?.durationSeconds === undefined ? "—" : formatDelta(lap.durationSeconds - fastest.durationSeconds)}</td>
-                        <td>{lap.distanceKm.toFixed(3)} km</td>
-                        <td>{lap.averageSpeedKmh.toFixed(1)} km/h</td>
-                        <td><select aria-label={`${t("lap.validity")} ${lapLabel(lap, t)}`} value={lap.validity} onChange={(event) => workspace.setLapValidity(lap.id, event.target.value as LapResult["validity"])}><option value="valid">{t("lap.valid")}</option><option value="invalid">{t("lap.invalid")}</option><option value="excluded">{t("lap.excluded")}</option></select></td>
-                        <td>{lap.flags.length ? <div className="lap-flag-list">{lap.flags.map((flag) => <StatusBadge key={flag} tone={lapFlagTone(flag)}>{lapFlagLabel(flag, t)}</StatusBadge>)}</div> : "—"}</td>
-                        <td><input type="radio" name="primary-lap" aria-label={`${t("lap.primary")} ${lapLabel(lap, t)}`} checked={workspace.primaryLapId === lap.id} onChange={() => workspace.setPrimaryLap(lap.id)} /></td>
-                        <td><input type="radio" name="reference-lap" aria-label={`${t("lap.reference")} ${lapLabel(lap, t)}`} checked={workspace.referenceLapId === lap.id} disabled={lap.completion !== "complete" || lap.validity !== "valid"} onChange={() => workspace.setReferenceLap(lap.id)} /></td>
-                      </tr>
-                    );
-                  })}</tbody>
-                </table>
-              </div>
-            ) : <div className="empty-state">{workspace.gate ? t("lap.noLaps") : t("lap.noGateHelp")}</div>}
-            {workspace.selectedLapIds.length >= 5 ? <p className="inline-warning">{t("lap.maxFive")}</p> : null}
-          </Panel>
-          <LapExplorer
-            profileId={workspace.profile?.id}
-            points={points}
-            laps={laps}
-            selectedLapIds={workspace.selectedLapIds}
-            primaryLapId={workspace.primaryLapId}
-            referenceLapId={workspace.referenceLapId}
-            analysisLine={workspace.analysisLine}
-            sections={workspace.profile?.sections ?? []}
-            sectionResults={workspace.sectionResults}
-            scopeId={selectedSectionId}
-            onScopeIdChange={(scopeId) => setSelectedSectionId(scopeId === "whole-lap" ? undefined : scopeId)}
-          />
-        </>
-      ) : null}
-
       {activeView === "setup" ? (
         <>
           <Panel title={t("lap.title")} eyebrow={t("lap.subtitle")} className="lap-wide-panel">
@@ -362,6 +252,9 @@ export function LapAnalysis({
             <div className="lap-track-toolbar">
               <FilePickerButton accept=".json,.openvta-track.json,application/json" onFiles={(files) => void importTrack(files)} icon={<Upload size={16} aria-hidden />}>{t("lap.importTrack")}</FilePickerButton>
               <button type="button" className="button" onClick={() => void saveAndExportProfile()}><Download size={16} aria-hidden />{t("lap.saveExportTrack")}</button>
+              {workspace.profileOrigin === "local-override" ? (
+                <button type="button" className="button" onClick={() => void workspace.resetProfileOverride()}>{t("lap.workbench.resetBuiltIn")}</button>
+              ) : null}
               <button type="button" className="button primary" onClick={useSelectedPointAsStartFinish}><Flag size={16} aria-hidden />{t("lap.useSelectedPoint")}</button>
               <button type="button" className="button" onClick={() => workspace.addSectorGate(selectedPointIndex)} disabled={!workspace.gate}><MapPinned size={16} aria-hidden />{t("lap.addSectorGate")}</button>
             </div>
@@ -567,28 +460,6 @@ function lapLabel(lap: LapResult | undefined, t: Translate): string {
   if (lap.completion === "partial-end") return t("lap.partialEnd");
   if (lap.completion === "partial-both") return t("lap.partialBoth");
   return `${t("lap.lap")} ${lap.ordinal}`;
-}
-
-function completionLabel(lap: LapResult, t: Translate): string {
-  return lap.completion === "complete" ? t("lap.complete") : t("lap.partial");
-}
-
-function lapFlagLabel(flag: LapFlag, t: Translate): string {
-  const keys: Record<LapFlag, TranslationKey> = {
-    "out-lap": "lap.flag.outLap",
-    "in-lap": "lap.flag.inLap",
-    pit: "lap.flag.pit",
-    "gps-gap": "lap.flag.gpsGap",
-    "missed-sector": "lap.flag.missedSector",
-    "reverse-crossing": "lap.flag.reverseCrossing",
-    manual: "lap.flag.manual",
-  };
-  return t(keys[flag]);
-}
-
-function lapFlagTone(flag: LapFlag): "neutral" | "warning" | "danger" {
-  if (flag === "reverse-crossing" || flag === "missed-sector" || flag === "gps-gap") return "warning";
-  return "neutral";
 }
 
 function localizeLapDetectionWarning(warning: string, t: Translate): string {

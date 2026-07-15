@@ -9,12 +9,10 @@ import { LapAnalysis } from "../LapAnalysis";
 vi.mock("../RouteMap", () => ({
   RouteMap: ({
     onSectionSelect,
-    sectionVisuals,
   }: {
     onSectionSelect?: (sectionId: string) => void;
-    sectionVisuals?: Record<string, { color: string }>;
   }) => (
-    <div data-testid="lap-route-map" data-neutral-color={sectionVisuals?.["straight-neutral"]?.color}>
+    <div data-testid="lap-route-map">
       {onSectionSelect ? <button type="button" onClick={() => onSectionSelect("straight-neutral")}>Select neutral section</button> : null}
     </div>
   ),
@@ -106,8 +104,7 @@ describe("LapAnalysis", () => {
     confirm.mockRestore();
   });
 
-  it("renders reverse crossing and missed-sector diagnostics as localized warnings and lap flags", async () => {
-    const user = userEvent.setup();
+  it("renders reverse crossing and missed-sector diagnostics as localized warnings", () => {
     const workspace = emptyWorkspace();
     const flaggedLap = lapWithFlags();
     workspace.gate = gate();
@@ -123,15 +120,11 @@ describe("LapAnalysis", () => {
 
     renderLapAnalysis(workspace);
 
-    await user.click(screen.getByRole("tab", { name: "Compare" }));
-    expect(screen.getByRole("columnheader", { name: "Flags" })).toBeInTheDocument();
-    expect(screen.getAllByText("Reverse crossing").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Missing / wrong sector order").length).toBeGreaterThan(0);
     expect(screen.getByText("A lap crossed the start/finish gate in the reverse direction.")).toBeInTheDocument();
     expect(screen.getByText("A lap crossed timing sector gates in the wrong order or missed a gate.")).toBeInTheDocument();
   });
 
-  it("edits sector gates and shows lap and sector deltas", async () => {
+  it("edits sector gates and shows sector deltas in setup", async () => {
     const user = userEvent.setup();
     const workspace = emptyWorkspace();
     const fastest = { ...lapWithFlags(), id: "fastest", flags: [], durationSeconds: 10 };
@@ -146,10 +139,6 @@ describe("LapAnalysis", () => {
     ];
     renderLapAnalysis(workspace);
 
-    await user.click(screen.getByRole("tab", { name: "Compare" }));
-    expect(screen.getByRole("columnheader", { name: "Delta to fastest" })).toBeInTheDocument();
-    expect(screen.getByText("+2.000 s")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Reference Closing fragment" })).toBeDisabled();
     await user.click(screen.getByRole("tab", { name: "Setup" }));
     expect(screen.getByText("+1.000 s")).toBeInTheDocument();
 
@@ -162,7 +151,7 @@ describe("LapAnalysis", () => {
     expect(workspace.moveSectorGateToPoint).toHaveBeenCalledWith("sector-1", 0);
   });
 
-  it("defaults to opportunity insights and keeps advanced setup out of the primary flow", () => {
+  it("defaults to the segment analysis workbench and keeps setup out of the primary flow", () => {
     const workspace = emptyWorkspace();
     const selectedLap = { ...lapWithFlags(), id: "lap-a", flags: [], durationSeconds: 11 };
     const referenceLap = { ...lapWithFlags(), id: "lap-b", ordinal: 2, flags: [], durationSeconds: 10 };
@@ -186,12 +175,13 @@ describe("LapAnalysis", () => {
 
     renderLapAnalysis(workspace);
 
-    expect(screen.getByRole("tab", { name: "Insights" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "Biggest time-loss opportunities" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Segment Analysis Workbench" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Where am I losing time?" })).toBeVisible();
     expect(screen.queryByText("Corner and straight definitions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Biggest time-loss opportunities")).not.toBeInTheDocument();
   });
 
-  it("keeps a neutral map section selected even when it is outside the top opportunities", async () => {
+  it("selects a map section through the shared analysis scope", async () => {
     const user = userEvent.setup();
     const workspace = emptyWorkspace();
     const selectedLap = { ...lapWithFlags(), id: "lap-selected", flags: [], durationSeconds: 20 };
@@ -224,8 +214,8 @@ describe("LapAnalysis", () => {
     renderLapAnalysis(workspace);
     await user.click(screen.getByRole("button", { name: "Select neutral section" }));
 
-    await waitFor(() => expect(screen.getByTestId("lap-route-map")).toHaveAttribute("data-neutral-color", "#7c3aed"));
-    expect(screen.queryAllByRole("button", { pressed: true })).toHaveLength(0);
+    await waitFor(() => expect(screen.getByRole("button", { name: /straight-neutral 100 m/i })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByText(/straight-neutral ·/i)).toBeInTheDocument();
   });
 });
 

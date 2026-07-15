@@ -1,0 +1,106 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import type { GpsPoint, LapResult, TrackProfileV1 } from "../../domain/types";
+import { I18nProvider } from "../../i18n/I18nProvider";
+
+vi.mock("../SegmentTrajectoryMap", () => ({
+  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId }: { focusedLapId?: string; referenceLapId?: string }) => (
+    <div data-testid="map-state">{focusedLapId}:{referenceLapId}</div>
+  ),
+}));
+vi.mock("../SegmentTelemetryChart", () => ({
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId }: { focusedLapId?: string; referenceLapId?: string }) => (
+    <div data-testid="chart-state">{focusedLapId}:{referenceLapId}</div>
+  ),
+}));
+
+import { SegmentAnalysisWorkbench } from "../SegmentAnalysisWorkbench";
+
+describe("SegmentAnalysisWorkbench", () => {
+  it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    render(<I18nProvider><SegmentAnalysisWorkbench
+      points={fixture.points}
+      laps={fixture.laps}
+      profile={fixture.profile}
+      analysisLine={fixture.profile.centerline}
+      includePartialLapSections={false}
+      onIncludePartialLapSections={vi.fn()}
+      mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+      selectedPointIndex={0}
+      onSelectedPointIndex={vi.fn()}
+      onMapSettingsChange={vi.fn()}
+      onActiveSegment={vi.fn()}
+      onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+
+    await user.click(screen.getByRole("button", { name: /Corner 1/ }));
+    expect(screen.getByText(/Corner 1 · 10–90 m/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Focus Lap 2/ }));
+    expect(screen.getByTestId("map-state")).toHaveTextContent("lap-2");
+    expect(screen.getByTestId("chart-state")).toHaveTextContent("lap-2");
+    expect(screen.getByText("Where am I losing time?")).toBeVisible();
+  });
+});
+
+function data(): { points: GpsPoint[]; laps: LapResult[]; profile: TrackProfileV1 } {
+  const points: GpsPoint[] = [];
+  const laps: LapResult[] = [];
+  for (let lapIndex = 0; lapIndex < 2; lapIndex += 1) {
+    const startIndex = points.length;
+    [0, 0.0005, 0.001].forEach((longitude, offset) => points.push(gps(points.length, longitude, lapIndex * 20 + offset * (5 + lapIndex))));
+    const endIndex = points.length - 1;
+    laps.push({
+      id: `lap-${lapIndex + 1}`,
+      ordinal: lapIndex + 1,
+      completion: "complete",
+      validity: "valid",
+      flags: [],
+      start: { id: `s${lapIndex}`, source: "auto", pointIndex: startIndex, elapsedSeconds: lapIndex * 20, coordinate: [0, 0] },
+      end: { id: `e${lapIndex}`, source: "auto", pointIndex: endIndex, elapsedSeconds: lapIndex * 20 + (10 + lapIndex * 2), coordinate: [0.001, 0] },
+      startIndex,
+      endIndex,
+      durationSeconds: 10 + lapIndex * 2,
+      distanceKm: 0.111,
+      averageSpeedKmh: 80,
+      maxSpeedKmh: 90,
+    });
+  }
+  return {
+    points,
+    laps,
+    profile: {
+      schemaVersion: 1,
+      id: "test",
+      name: "Test Circuit",
+      centerline: { type: "LineString", coordinates: [[0, 0], [0.001, 0]] },
+      direction: "clockwise",
+      sectorGates: [],
+      sections: [{ id: "c1", name: "Corner 1", kind: "corner-right", startDistanceMeters: 10, endDistanceMeters: 90 }],
+      source: { kind: "user" },
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    },
+  };
+}
+
+function gps(index: number, longitude: number, seconds: number): GpsPoint {
+  return {
+    index,
+    lineNumber: index + 1,
+    rawLine: "",
+    date: "20260715",
+    time: "000000",
+    latitude: 0,
+    longitude,
+    altitudeMeters: 0,
+    speedKmh: 80,
+    bearingDegrees: 90,
+    satelliteCount: 10,
+    accuracyMeters: 2,
+    elapsedRealtimeNanos: seconds * 1_000_000_000,
+    source: "RawGps",
+    confidence: 1,
+  };
+}
