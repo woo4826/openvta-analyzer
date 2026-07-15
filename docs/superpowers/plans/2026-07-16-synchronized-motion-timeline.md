@@ -1,5 +1,9 @@
 # Synchronized Motion Timeline MVP Implementation Plan
 
+> **Historical plan:** This records the first row-order implementation. Its
+> legacy synchronization and lap-workbench behavior are superseded by
+> [GPS–Sensor Alignment and Lap Workbench Reliability](./2026-07-16-gps-sensor-fusion-and-lap-controls.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add measured IMU X/Y/Z acceleration and one map/chart cursor to the Segment Analysis Workbench, while making the open floating controls reserve desktop layout space.

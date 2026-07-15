@@ -1,5 +1,10 @@
 # Synchronized Motion Timeline MVP Design
 
+> **Superseded legacy fallback:** The original MVP used VTA row order for
+> legacy synchronization. The current sensor-clock inference, strict two-lap
+> map, and control behavior are defined in
+> [GPS–Sensor Alignment and Lap Workbench Reliability Design](./2026-07-16-gps-sensor-fusion-and-lap-controls-design.md).
+
 ## Goal
 
 Add a deliberately small vehicle-motion MVP to the existing Segment Analysis
