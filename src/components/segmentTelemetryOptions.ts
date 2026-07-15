@@ -53,7 +53,11 @@ export function buildSegmentTelemetryOption(
     { key: "loss", label: labels.loss, unit: "s/100m" },
   ];
   const metrics = allMetrics.filter((metric) => visibleMetrics.includes(metric.key));
-  const visibleIds = unique([focusedLapId, referenceLapId, ...overlayLapIds]).slice(0, 5);
+  const visibleIds = unique([
+    overlayLapIds.includes(focusedLapId ?? "") ? focusedLapId : undefined,
+    overlayLapIds.includes(referenceLapId ?? "") ? referenceLapId : undefined,
+    ...overlayLapIds,
+  ]).slice(0, 5);
   const records = visibleIds.flatMap((id) => {
     const record = analysis.records.find((candidate) => candidate.lapId === id);
     return record ? [record] : [];

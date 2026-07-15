@@ -8,9 +8,10 @@ interface SegmentVariationChartProps {
   analysis: SegmentAnalysisResult;
   focusedLapId?: string;
   referenceLapId?: string;
+  visibleLapIds: string[];
 }
 
-export function SegmentVariationChart({ analysis, focusedLapId, referenceLapId }: SegmentVariationChartProps) {
+export function SegmentVariationChart({ analysis, focusedLapId, referenceLapId, visibleLapIds }: SegmentVariationChartProps) {
   const { t } = useI18n();
   const option = useMemo(() => buildSegmentVariationOption(analysis, focusedLapId, referenceLapId, {
     lap: t("lap.lap"),
@@ -19,7 +20,7 @@ export function SegmentVariationChart({ analysis, focusedLapId, referenceLapId }
     focused: t("lap.workbench.focusedLap"),
     reference: t("lap.workbench.referenceLap"),
     average: t("lap.workbench.average"),
-  }), [analysis, focusedLapId, referenceLapId, t]);
+  }, visibleLapIds), [analysis, focusedLapId, referenceLapId, t, visibleLapIds]);
 
   return (
     <ChartPanel

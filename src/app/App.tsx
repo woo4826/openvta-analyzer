@@ -31,7 +31,7 @@ import type {
   VtaWorkspaceFile,
 } from "../domain/types";
 import { FileDrop } from "../components/FileDrop";
-import { FileTray } from "../components/FileTray";
+import { TopbarFileWorkspace } from "../components/TopbarFileWorkspace";
 import { Overview } from "../components/Overview";
 import { LapAnalysis } from "../components/LapAnalysis";
 import { Charts, type AccelerationSensorSet } from "../components/Charts";
@@ -336,24 +336,13 @@ export function App() {
               ))}
             </select>
           </label>
-          {files.length > 1 ? (
-            <select
-              aria-label={t("app.activeFile.label")}
-              value={activeIndex}
-              onChange={(event) => {
-                setActiveIndex(Number(event.target.value));
-                setSelectedPointIndex(0);
-                setActiveSegment(undefined);
-                setRegion(undefined);
-              }}
-            >
-              {files.map((file, index) => (
-                <option value={index} key={file.id}>
-                  {file.sourceName}
-                </option>
-              ))}
-            </select>
-          ) : null}
+          <TopbarFileWorkspace
+            files={files}
+            activeFileId={activeFile?.id}
+            onFiles={(incoming) => void loadFiles(incoming)}
+            onSelectFile={selectFile}
+            onRemoveFile={removeFile}
+          />
           <FilePickerButton
             accept=".vta,.Vta,.zip"
             multiple
@@ -411,15 +400,6 @@ export function App() {
           />
         ) : (
           <div className={`workspace-grid${activeTab === "laps" ? " workspace-grid-laps" : ""}`}>
-            <aside className="file-rail" data-tour="file-rail">
-              <FileTray
-                files={files}
-                activeFileId={activeFile.id}
-                onSelectFile={selectFile}
-                onRemoveFile={removeFile}
-              />
-            </aside>
-
             <section className="analysis-main">
               <div data-tour="analysis-tabs">
                 <Tabs

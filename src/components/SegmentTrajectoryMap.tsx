@@ -60,6 +60,7 @@ export function SegmentTrajectoryMap({
   onSettingsChange = () => undefined,
 }: SegmentTrajectoryMapProps) {
   const { t } = useI18n();
+  const visibleLapIds = useMemo(() => new Set(overlayLapIds), [overlayLapIds]);
   const colorByLap = useMemo(() => new Map(
     analysis.records.map((record, index) => [
       record.lapId,
@@ -71,23 +72,22 @@ export function SegmentTrajectoryMap({
     ]),
   ), [analysis.records, focusedLapId, referenceLapId]);
   const lapOverlays = useMemo((): LapMapOverlay[] => analysis.records
-    .filter((record) => record.trajectory.length >= 2)
+    .filter((record) => visibleLapIds.has(record.lapId) && record.trajectory.length >= 2)
     .sort((left, right) => pathLayerRank(left.lapId, focusedLapId, referenceLapId) - pathLayerRank(right.lapId, focusedLapId, referenceLapId))
     .map((record) => {
-      const selected = overlayLapIds.includes(record.lapId);
       const focused = record.lapId === focusedLapId;
       const reference = record.lapId === referenceLapId;
       return {
         id: record.lapId,
         color: colorByLap.get(record.lapId) ?? "#64748b",
         points: record.trajectory.map((sample) => toGpsPoint(sample, points[sample.sourceIndex])),
-        width: focused ? 8 : reference ? 6 : selected ? 4 : 2,
-        opacity: focused ? 0.96 : reference ? 0.9 : selected ? 0.58 : 0.18,
+        width: focused ? 8 : reference ? 6 : 4,
+        opacity: focused ? 0.96 : reference ? 0.9 : 0.58,
         dashArray: reference && !focused ? [3, 2] : undefined,
       };
-    }), [analysis.records, colorByLap, focusedLapId, overlayLapIds, points, referenceLapId]);
+    }), [analysis.records, colorByLap, focusedLapId, points, referenceLapId, visibleLapIds]);
 
-  const focusedRecord = analysis.records.find((record) => record.lapId === focusedLapId);
+  const focusedRecord = analysis.records.find((record) => record.lapId === focusedLapId && visibleLapIds.has(record.lapId));
   const heatSegments = useMemo((): MapHeatSegment[] => {
     if (!focusedRecord || focusedRecord.coverage !== "complete" || focusedRecord.gpsConfidence === "low") return [];
     return focusedRecord.trajectory.slice(1).flatMap((sample, index) => {
@@ -112,7 +112,7 @@ export function SegmentTrajectoryMap({
     return uniqueRecords([
       analysis.records.find((record) => record.lapId === focusedLapId),
       analysis.records.find((record) => record.lapId === referenceLapId),
-    ]).flatMap((record) => {
+    ]).filter((record) => visibleLapIds.has(record.lapId)).flatMap((record) => {
       const sample = nearestSample(record, progress);
       if (!sample) return [];
       const role = record.lapId === focusedLapId ? "focused" : "reference";
@@ -123,11 +123,11 @@ export function SegmentTrajectoryMap({
         color: colorByLap.get(record.lapId) ?? "#64748b",
       } satisfies MapGhostMarker];
     });
-  }, [analysis.range.endDistanceMeters, analysis.range.startDistanceMeters, analysis.records, colorByLap, cursorDistanceMeters, focusedLapId, referenceLapId, t]);
+  }, [analysis.range.endDistanceMeters, analysis.range.startDistanceMeters, analysis.records, colorByLap, cursorDistanceMeters, focusedLapId, referenceLapId, t, visibleLapIds]);
 
-  const fastest = analysis.records.find((record) => record.lapId === analysis.fastestLapId);
-  const shortest = analysis.records.find((record) => record.lapId === analysis.shortestLapId);
-  const referenceRecord = analysis.records.find((record) => record.lapId === referenceLapId);
+  const fastest = analysis.records.find((record) => record.lapId === analysis.fastestLapId && visibleLapIds.has(record.lapId));
+  const shortest = analysis.records.find((record) => record.lapId === analysis.shortestLapId && visibleLapIds.has(record.lapId));
+  const referenceRecord = analysis.records.find((record) => record.lapId === referenceLapId && visibleLapIds.has(record.lapId));
 
   return (
     <section className="segment-trajectory-map" aria-label={t("lap.workbench.trajectoryComparison")}>

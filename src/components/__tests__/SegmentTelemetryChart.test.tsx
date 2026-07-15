@@ -85,6 +85,18 @@ describe("segment telemetry chart", () => {
     expect(chartPanelSpy.onPointReferences.at(-1)).toBe(beforeHover);
   });
 
+  it("keeps the reference calculation but removes its plotted series in focused-only mode", () => {
+    const option = buildSegmentTelemetryOption(analysis(), ["lap-2"], "distance", "lap-2", "lap-1") as {
+      series: Array<{ id: string }>;
+      legend: { data: string[] };
+    };
+
+    expect(option.series.map((series) => series.id)).toEqual([
+      "lap-2-speed", "lap-2-acceleration", "lap-2-elapsed", "lap-2-delta", "lap-2-loss",
+    ]);
+    expect(option.legend.data).toEqual(["Focused · Lap 2"]);
+  });
+
   it("keeps the keyboard range default inside a fractional scope maximum", () => {
     const onRange = vi.fn();
     const fractional = analysis();

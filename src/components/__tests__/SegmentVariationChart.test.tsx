@@ -39,6 +39,21 @@ describe("segment variation chart", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.filter((id) => id.includes("lap-1") && id.includes("highlight"))).toHaveLength(2);
   });
+
+  it("filters trend and highlights to the requested visible laps", () => {
+    const option = buildSegmentVariationOption(analysis(), "lap-3", "lap-1", {
+      lap: "Lap",
+      segmentTime: "Segment time",
+      drivenPath: "Driven path",
+      focused: "Focused",
+      reference: "Reference",
+      average: "Average",
+    }, ["lap-3"]) as { series: Array<{ id: string; data: number[][] }> };
+
+    expect(option.series.find((series) => series.id === "lap-time-trend")?.data).toHaveLength(1);
+    expect(option.series.some((series) => series.id === "lap-1-trend-highlight")).toBe(false);
+    expect(option.series.some((series) => series.id === "lap-3-trend-highlight")).toBe(true);
+  });
 });
 
 function analysis(): SegmentAnalysisResult {

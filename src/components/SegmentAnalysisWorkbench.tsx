@@ -5,14 +5,32 @@ import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
 import { projectCoordinateToLineProgress } from "../domain/geometry";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
-import type { ActiveSegment, GpsPoint, LapResult, MapSettings, SegmentLapRecord, TrackProfileV1, TrackSectionKind } from "../domain/types";
+import {
+  canHideWidget,
+  defaultSegmentWorkbenchPreferences,
+  loadSegmentWorkbenchPreferences,
+  saveSegmentWorkbenchPreferences,
+} from "../domain/segmentWorkbenchPreferences";
+import type {
+  ActiveSegment,
+  GpsPoint,
+  LapResult,
+  MapSettings,
+  SegmentLapRecord,
+  SegmentWidgetLayout,
+  SegmentWorkbenchPreferences,
+  TrackProfileV1,
+  TrackSectionKind,
+} from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentLapTable } from "./SegmentLapTable";
 import { SegmentOpportunityRanking } from "./SegmentOpportunityRanking";
-import { SegmentScopeRibbon } from "./SegmentScopeRibbon";
 import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
 import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
 import { SegmentVariationChart } from "./SegmentVariationChart";
+import { SegmentWorkbenchControls } from "./SegmentWorkbenchControls";
+import { SegmentDashboard } from "./SegmentDashboard";
+import { DashboardWidget } from "./DashboardWidget";
 
 interface SegmentAnalysisWorkbenchProps {
   active?: boolean;
@@ -56,15 +74,16 @@ export function SegmentAnalysisWorkbench({
   onOpenSetup,
 }: SegmentAnalysisWorkbenchProps) {
   const { t } = useI18n();
+  const [preferences, setPreferences] = useState<SegmentWorkbenchPreferences>(() => loadSegmentWorkbenchPreferences());
   const workbench = useSegmentWorkbench({
     points,
     laps,
     analysisLine,
     sections: profile.sections,
     includePartialLapSections,
+    lapVisibility: preferences.lapVisibility,
   });
   const [cursorDistanceMeters, setCursorDistanceMeters] = useState<number>();
-  const [mobileView, setMobileView] = useState<"map" | "graphs" | "laps">("map");
   const [showRangeEditor, setShowRangeEditor] = useState(false);
   const [rangeName, setRangeName] = useState("");
   const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
@@ -73,10 +92,10 @@ export function SegmentAnalysisWorkbench({
   const visibleSectionIds = useMemo(() => new Set(workbench.navigationSections.map((section) => section.id)), [workbench.navigationSections]);
   const visibleOpportunities = useMemo(() => workbench.opportunities.filter((opportunity) =>
     visibleSectionIds.has(opportunity.section.id)), [visibleSectionIds, workbench.opportunities]);
-  const lossesBySection = useMemo(() => Object.fromEntries(workbench.opportunities.map((opportunity) => [
-    opportunity.section.id,
-    opportunity.timeDeltaSeconds,
-  ])), [workbench.opportunities]);
+  const totalDistanceMeters = useMemo(() => Math.max(
+    1,
+    ...profile.sections.flatMap((section) => [section.startDistanceMeters, section.endDistanceMeters]),
+  ), [profile.sections]);
   const selectMapSegment = useCallback((segment?: ActiveSegment) => {
     if (!segment) {
       workbench.resetScope();
@@ -104,24 +123,41 @@ export function SegmentAnalysisWorkbench({
     return t("lap.workbench.customRange");
   }, [profile.sections, t, workbench.scope]);
   const coachCue = useMemo(() => buildCoachCue(scopeName, focused, reference, t), [focused, reference, scopeName, t]);
+  const partialImpact = partialCompletedSectorCount === 0
+    ? t("lap.workbench.partialNoCandidates", { theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds) })
+    : t(includePartialLapSections ? "lap.workbench.partialIncludedImpact" : "lap.workbench.partialExcludedImpact", {
+        eligible: partialEligibleSectorCount,
+        completed: partialCompletedSectorCount,
+        theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds),
+      });
+
+  const updatePreferences = useCallback((update: (current: SegmentWorkbenchPreferences) => SegmentWorkbenchPreferences) => {
+    setPreferences((current) => update(current));
+  }, []);
+
+  const updateLayouts = useCallback((layouts: Record<string, SegmentWidgetLayout[]>) => {
+    updatePreferences((current) => JSON.stringify(current.layouts) === JSON.stringify(layouts)
+      ? current
+      : { ...current, layouts });
+  }, [updatePreferences]);
 
   useEffect(() => {
     onActiveSegment(workbench.activeSegment);
   }, [onActiveSegment, workbench.activeSegment]);
 
+  useEffect(() => {
+    saveSegmentWorkbenchPreferences(preferences);
+  }, [preferences]);
+
   return (
-    <section className="segment-workbench lap-wide-panel" aria-label={t("lap.workbench.title")} data-mobile-view={mobileView}>
+    <section className="segment-workbench lap-wide-panel" aria-label={t("lap.workbench.title")}>
       <header className="segment-workbench-header">
         <div>
-          <span className="panel-eyebrow">{profile.name}</span>
-          <h2>{t("lap.workbench.question")}</h2>
+          <span className="panel-eyebrow">{t("lap.workbench.title")}</span>
+          <h2>{profile.name}</h2>
           <p>{scopeName} · {Math.round(workbench.analysis.range.startDistanceMeters)}–{Math.round(workbench.analysis.range.endDistanceMeters)} m</p>
         </div>
         <div className="segment-workbench-actions">
-          <div className="segmented-control" role="group" aria-label={t("lap.workbench.graphAxis")}>
-            <button type="button" aria-pressed={workbench.axis === "distance"} onClick={() => workbench.setAxis("distance")}>{t("lap.workbench.distanceAxis")}</button>
-            <button type="button" aria-pressed={workbench.axis === "time"} onClick={() => workbench.setAxis("time")}>{t("lap.workbench.timeAxis")}</button>
-          </div>
           {workbench.scope.kind === "range" ? (
             <button type="button" className="button" onClick={() => setShowRangeEditor((visible) => !visible)}><Save size={16} aria-hidden />{t("lap.workbench.saveRange")}</button>
           ) : null}
@@ -187,137 +223,162 @@ export function SegmentAnalysisWorkbench({
       ) : null}
 
       <div className="segment-comparison-bar" aria-label={t("lap.workbench.comparisonControls")}>
-        <label className="comparison-role is-focus">
+        <span className="comparison-role is-focus">
           <span><i aria-hidden />{t("lap.workbench.focusedLap")}</span>
-          <select aria-label={t("lap.workbench.focusedLap")} value={workbench.focusedLapId ?? ""} onChange={(event) => workbench.setFocusedLap(event.target.value)}>
-            {workbench.analysis.records.map((record) => <option key={record.lapId} value={record.lapId}>{workbenchLapLabel(record, t)}</option>)}
-          </select>
-        </label>
+          <strong>{focused ? workbenchLapLabel(focused, t) : "—"}</strong>
+        </span>
         <span className="comparison-separator" aria-hidden>↔</span>
-        <label className="comparison-role is-reference">
+        <span className="comparison-role is-reference">
           <span><i aria-hidden />{t("lap.workbench.referenceLap")}</span>
-          <select aria-label={t("lap.workbench.referenceLap")} value={workbench.referenceLapId ?? ""} onChange={(event) => workbench.setReferenceLap(event.target.value)}>
-            {workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest).map((record) => <option key={record.lapId} value={record.lapId}>{workbenchLapLabel(record, t)}</option>)}
-          </select>
-        </label>
+          <strong>{reference ? workbenchLapLabel(reference, t) : "—"}</strong>
+        </span>
         <span className="comparison-scope"><small>{t("lap.workbench.selectedScope")}</small><strong>{scopeName}</strong></span>
         <span className="sr-only" role="status" aria-live="polite">{focused ? workbenchLapLabel(focused, t) : "—"} {t("lap.workbench.focusVs")} {reference ? workbenchLapLabel(reference, t) : "—"} · {scopeName}</span>
       </div>
 
-      <SegmentScopeRibbon
+      <SegmentWorkbenchControls
+        open={preferences.drawerOpen}
         scope={workbench.scope}
         filter={workbench.filter}
-        sections={workbench.navigationSections}
-        losses={lossesBySection}
+        sections={profile.sections}
+        totalDistanceMeters={totalDistanceMeters}
+        focusedLapId={workbench.focusedLapId}
+        referenceLapId={workbench.referenceLapId}
+        focusOptions={workbench.analysis.records.map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
+        referenceOptions={workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest).map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
+        lapVisibility={preferences.lapVisibility}
+        axis={workbench.axis}
+        includePartialLapSections={includePartialLapSections}
+        partialImpact={partialImpact}
+        snapToSections={preferences.snapToSections}
+        visibleWidgets={preferences.visibleWidgets}
+        onOpenChange={(drawerOpen) => updatePreferences((current) => ({ ...current, drawerOpen }))}
+        onFocusedLap={workbench.setFocusedLap}
+        onReferenceLap={workbench.setReferenceLap}
+        onLapVisibility={(lapVisibility) => updatePreferences((current) => ({ ...current, lapVisibility }))}
+        onAxis={workbench.setAxis}
+        onIncludePartialLapSections={onIncludePartialLapSections}
+        onSnapToSections={(snapToSections) => updatePreferences((current) => ({ ...current, snapToSections }))}
         onWholeLap={workbench.resetScope}
         onFilter={workbench.setFilter}
         onSection={workbench.selectSection}
+        onRange={(start, end) => workbench.selectRange(start, end, "manual")}
+        onWidgetVisibility={(widgetId, visible) => updatePreferences((current) => {
+          if (!visible && !canHideWidget(current.visibleWidgets, widgetId)) return current;
+          return { ...current, visibleWidgets: { ...current.visibleWidgets, [widgetId]: visible } };
+        })}
+        onResetLayout={() => updatePreferences((current) => ({
+          ...current,
+          layouts: defaultSegmentWorkbenchPreferences().layouts,
+        }))}
       />
 
       {active ? <>
-      <div className="segment-mobile-switch segmented-control" role="group" aria-label={t("lap.workbench.analysisView")}>
-        {(["map", "graphs", "laps"] as const).map((view) => (
-          <button key={view} type="button" aria-pressed={mobileView === view} onClick={() => setMobileView(view)}>{t(`lap.workbench.${view}`)}</button>
-        ))}
-      </div>
-
-      <div data-workbench-pane="map">
-        <SegmentOpportunityRanking
-          opportunities={visibleOpportunities}
-          scope={workbench.scope}
-          focusedLapOrdinal={focused?.ordinal}
-          referenceLapOrdinal={reference?.ordinal}
-          onSection={workbench.selectSection}
-        />
-      </div>
-
-      <div className="segment-map-stage" data-workbench-pane="map">
-        <SegmentTrajectoryMap
-          analysis={workbench.analysis}
-          points={points}
-          centerline={profile.centerline}
-          sections={profile.sections}
-          settings={mapSettings}
-          selectedIndex={selectedPointIndex}
-          focusedLapId={workbench.focusedLapId}
-          referenceLapId={workbench.referenceLapId}
-          overlayLapIds={workbench.overlayLapIds}
-          cursorDistanceMeters={cursorDistanceMeters}
-          segment={workbench.activeSegment}
-          onSelectedIndex={onSelectedPointIndex}
-          onSectionSelect={workbench.selectSection}
-          onSegmentChange={selectMapSegment}
-          onSettingsChange={onMapSettingsChange}
-        />
-        <aside className="segment-evidence-panel" aria-label={t("lap.workbench.focusedEvidence")}>
-          <span className="panel-eyebrow">{t("lap.workbench.focusedLap")}</span>
-          <h3>{focused ? workbenchLapLabel(focused, t) : "—"}</h3>
-          <dl>
-            <Metric label={t("lap.duration")} value={formatTime(focused?.durationSeconds)} />
-            <Metric label={t("lap.deltaBest")} value={formatDelta(focused?.deltaBestSeconds)} />
-            <Metric label={t("lap.workbench.path")} value={focused?.drivenDistanceMeters === undefined ? "—" : `${focused.drivenDistanceMeters.toFixed(1)} m`} />
-            <Metric label={t("lap.entrySpeed")} value={formatSpeed(focused?.entrySpeedKmh)} />
-            <Metric label={t("lap.minimumSpeed")} value={formatSpeed(focused?.minimumSpeedKmh)} />
-            <Metric label={t("lap.exitSpeed")} value={formatSpeed(focused?.exitSpeedKmh)} />
-            <Metric label={t("lap.workbench.lossRate")} value={focused?.peakLossRateSecondsPer100m === undefined ? "—" : `+${focused.peakLossRateSecondsPer100m.toFixed(2)} s/100m`} />
-            <Metric label={t("lap.workbench.gps")} value={focused ? gpsConfidenceLabel(focused.gpsConfidence, t) : "—"} />
-          </dl>
-          <div className={`segment-coach-card ${coachCue.actionable ? "is-actionable" : "is-caution"}`}>
-            <span className="panel-eyebrow">{t("lap.workbench.nextRun")}</span>
-            <strong>{coachCue.evidence}</strong>
-            <p>{coachCue.action}</p>
-            {coachCue.verification ? <small>{t("lap.workbench.verifyNext")}: {coachCue.verification}</small> : null}
-          </div>
-        </aside>
-      </div>
-
-      <div className="segment-graphs-stack" data-workbench-pane="graphs">
-        <SegmentVariationChart
-          analysis={workbench.analysis}
-          focusedLapId={workbench.focusedLapId}
-          referenceLapId={workbench.referenceLapId}
-        />
-        <SegmentTelemetryChart
-          analysis={workbench.analysis}
-          overlayLapIds={workbench.overlayLapIds}
-          focusedLapId={workbench.focusedLapId}
-          referenceLapId={workbench.referenceLapId}
-          axis={workbench.axis}
-          onRange={(start, end) => workbench.selectRange(start, end, "chart")}
-          onReset={workbench.resetScope}
-          onCursorDistance={setCursorDistanceMeters}
-        />
-      </div>
-
-      <section className="panel segment-records-panel" data-workbench-pane="laps">
-        <div className="panel-header">
-          <div><span className="panel-eyebrow">{t("lap.workbench.scope")}</span><h3>{t("lap.workbench.records")}</h3></div>
-          <label className="lap-option-check">
-            <input type="checkbox" checked={includePartialLapSections} onChange={(event) => onIncludePartialLapSections(event.target.checked)} />
-            <span>{t("lap.workbench.includePartial")}</span>
-          </label>
-          <p className="partial-policy-impact" aria-live="polite">
-            {partialCompletedSectorCount === 0
-              ? t("lap.workbench.partialNoCandidates", { theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds) })
-              : t(includePartialLapSections ? "lap.workbench.partialIncludedImpact" : "lap.workbench.partialExcludedImpact", {
-                  eligible: partialEligibleSectorCount,
-                  completed: partialCompletedSectorCount,
-                  theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds),
-                })}
-          </p>
-        </div>
-        <div className="panel-body">
-          <SegmentLapTable
-            records={workbench.analysis.records}
-            focusedLapId={workbench.focusedLapId}
-            referenceLapId={workbench.referenceLapId}
-            fastestLapId={workbench.analysis.fastestLapId}
-            shortestLapId={workbench.analysis.shortestLapId}
-            onFocusedLap={workbench.setFocusedLap}
-            onReferenceLap={workbench.setReferenceLap}
-          />
-        </div>
-      </section>
+      <SegmentDashboard
+        layouts={preferences.layouts}
+        visibleWidgets={preferences.visibleWidgets}
+        onLayouts={updateLayouts}
+      >
+        {{
+          opportunities: (
+            <DashboardWidget id="opportunities" title={t("lap.workbench.widget.opportunities")}>
+              <SegmentOpportunityRanking
+                opportunities={visibleOpportunities}
+                scope={workbench.scope}
+                focusedLapOrdinal={focused?.ordinal}
+                referenceLapOrdinal={reference?.ordinal}
+                onSection={workbench.selectSection}
+              />
+            </DashboardWidget>
+          ),
+          map: (
+            <DashboardWidget id="map" title={t("lap.workbench.widget.map")}>
+              <SegmentTrajectoryMap
+                analysis={workbench.analysis}
+                points={points}
+                centerline={profile.centerline}
+                sections={profile.sections}
+                settings={mapSettings}
+                selectedIndex={selectedPointIndex}
+                focusedLapId={workbench.focusedLapId}
+                referenceLapId={workbench.referenceLapId}
+                overlayLapIds={workbench.overlayLapIds}
+                cursorDistanceMeters={cursorDistanceMeters}
+                segment={workbench.activeSegment}
+                onSelectedIndex={onSelectedPointIndex}
+                onSectionSelect={workbench.selectSection}
+                onSegmentChange={selectMapSegment}
+                onSettingsChange={onMapSettingsChange}
+              />
+            </DashboardWidget>
+          ),
+          evidence: (
+            <DashboardWidget id="evidence" title={t("lap.workbench.widget.evidence")}>
+              <aside className="segment-evidence-panel" aria-label={t("lap.workbench.focusedEvidence")}>
+                <span className="panel-eyebrow">{t("lap.workbench.focusedLap")}</span>
+                <h3>{focused ? workbenchLapLabel(focused, t) : "—"}</h3>
+                <dl>
+                  <Metric label={t("lap.duration")} value={formatTime(focused?.durationSeconds)} />
+                  <Metric label={t("lap.deltaBest")} value={formatDelta(focused?.deltaBestSeconds)} />
+                  <Metric label={t("lap.workbench.path")} value={focused?.drivenDistanceMeters === undefined ? "—" : `${focused.drivenDistanceMeters.toFixed(1)} m`} />
+                  <Metric label={t("lap.entrySpeed")} value={formatSpeed(focused?.entrySpeedKmh)} />
+                  <Metric label={t("lap.minimumSpeed")} value={formatSpeed(focused?.minimumSpeedKmh)} />
+                  <Metric label={t("lap.exitSpeed")} value={formatSpeed(focused?.exitSpeedKmh)} />
+                  <Metric label={t("lap.workbench.lossRate")} value={focused?.peakLossRateSecondsPer100m === undefined ? "—" : `+${focused.peakLossRateSecondsPer100m.toFixed(2)} s/100m`} />
+                  <Metric label={t("lap.workbench.gps")} value={focused ? gpsConfidenceLabel(focused.gpsConfidence, t) : "—"} />
+                </dl>
+                <div className={`segment-coach-card ${coachCue.actionable ? "is-actionable" : "is-caution"}`}>
+                  <span className="panel-eyebrow">{t("lap.workbench.nextRun")}</span>
+                  <strong>{coachCue.evidence}</strong>
+                  <p>{coachCue.action}</p>
+                  {coachCue.verification ? <small>{t("lap.workbench.verifyNext")}: {coachCue.verification}</small> : null}
+                </div>
+              </aside>
+            </DashboardWidget>
+          ),
+          variation: (
+            <DashboardWidget id="variation" title={t("lap.workbench.widget.variation")}>
+              <SegmentVariationChart
+                analysis={workbench.analysis}
+                focusedLapId={workbench.focusedLapId}
+                referenceLapId={workbench.referenceLapId}
+                visibleLapIds={workbench.visibleLapIds}
+              />
+            </DashboardWidget>
+          ),
+          telemetry: (
+            <DashboardWidget id="telemetry" title={t("lap.workbench.widget.telemetry")}>
+              <SegmentTelemetryChart
+                analysis={workbench.analysis}
+                overlayLapIds={workbench.overlayLapIds}
+                focusedLapId={workbench.focusedLapId}
+                referenceLapId={workbench.referenceLapId}
+                axis={workbench.axis}
+                onRange={(start, end) => workbench.selectRange(start, end, "chart")}
+                onReset={workbench.resetScope}
+                onCursorDistance={setCursorDistanceMeters}
+              />
+            </DashboardWidget>
+          ),
+          laps: (
+            <DashboardWidget id="laps" title={t("lap.workbench.widget.laps")}>
+              <section className="panel segment-records-panel">
+                <div className="panel-body">
+                  <SegmentLapTable
+                    records={workbench.analysis.records.filter((record) => workbench.visibleLapIds.includes(record.lapId))}
+                    focusedLapId={workbench.focusedLapId}
+                    referenceLapId={workbench.referenceLapId}
+                    fastestLapId={workbench.analysis.fastestLapId}
+                    shortestLapId={workbench.analysis.shortestLapId}
+                    onFocusedLap={workbench.setFocusedLap}
+                    onReferenceLap={workbench.setReferenceLap}
+                  />
+                </div>
+              </section>
+            </DashboardWidget>
+          ),
+        }}
+      </SegmentDashboard>
       </> : null}
     </section>
   );

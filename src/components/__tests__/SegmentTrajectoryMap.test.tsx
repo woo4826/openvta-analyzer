@@ -21,7 +21,7 @@ vi.mock("../RouteMap", () => ({
 import { SegmentTrajectoryMap } from "../SegmentTrajectoryMap";
 
 describe("SegmentTrajectoryMap", () => {
-  it("shows every traversing lap while emphasizing focused/reference paths and two synchronized Ghosts", () => {
+  it("shows only requested laps while emphasizing focused/reference paths and two synchronized Ghosts", () => {
     render(
       <I18nProvider>
         <SegmentTrajectoryMap
@@ -43,14 +43,43 @@ describe("SegmentTrajectoryMap", () => {
 
     const map = screen.getByTestId("trajectory-route-map");
     const overlays = JSON.parse(map.getAttribute("data-overlays")!);
-    expect(overlays).toHaveLength(3);
+    expect(overlays).toHaveLength(2);
     expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-2")).toMatchObject({ width: 8, opacity: 0.96 });
-    expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-3").opacity).toBeLessThan(0.3);
+    expect(overlays.some((overlay: { id: string }) => overlay.id === "lap-3")).toBe(false);
     expect(JSON.parse(map.getAttribute("data-heat")!)).not.toHaveLength(0);
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
     expect(screen.getByText("Lap 1 reference Ghost")).toBeVisible();
     expect(screen.getByText("Focused lap · Lap 2")).toBeVisible();
     expect(screen.getByText("Reference lap · Lap 1")).toBeVisible();
+  });
+
+  it("removes the reference path, Ghost, legend, and badges in focused-only mode", () => {
+    render(
+      <I18nProvider>
+        <SegmentTrajectoryMap
+          analysis={analysis()}
+          points={points()}
+          centerline={{ type: "LineString", coordinates: [[128, 38], [128.002, 38]] }}
+          sections={[]}
+          settings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+          selectedIndex={0}
+          focusedLapId="lap-2"
+          referenceLapId="lap-1"
+          overlayLapIds={["lap-2"]}
+          cursorDistanceMeters={50}
+          onSelectedIndex={vi.fn()}
+          onSectionSelect={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const map = screen.getByTestId("trajectory-route-map");
+    expect(JSON.parse(map.getAttribute("data-overlays")!)).toHaveLength(1);
+    expect(JSON.parse(map.getAttribute("data-ghosts")!)).toHaveLength(1);
+    expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
+    expect(screen.queryByText("Lap 1 reference Ghost")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reference lap · Lap 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Shortest recorded path · Lap 1")).not.toBeInTheDocument();
   });
 
   it("keeps fastest and shortest path labels distinct", () => {

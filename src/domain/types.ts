@@ -443,3 +443,32 @@ export interface CornerAnalysisResult {
 export interface LapAnalysisSettings {
   includePartialLapSectors: boolean;
 }
+
+export type SegmentLapVisibility = "all" | "focus-reference" | "focus-only";
+
+export type SegmentWidgetId =
+  | "opportunities"
+  | "map"
+  | "evidence"
+  | "variation"
+  | "telemetry"
+  | "laps";
+
+export interface SegmentWidgetLayout {
+  i: SegmentWidgetId;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+}
+
+export interface SegmentWorkbenchPreferences {
+  version: 1;
+  drawerOpen: boolean;
+  lapVisibility: SegmentLapVisibility;
+  snapToSections: boolean;
+  visibleWidgets: Record<SegmentWidgetId, boolean>;
+  layouts: Record<string, SegmentWidgetLayout[]>;
+}

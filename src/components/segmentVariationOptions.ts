@@ -15,9 +15,11 @@ export function buildSegmentVariationOption(
   focusedLapId: string | undefined,
   referenceLapId: string | undefined,
   labels: SegmentVariationLabels,
+  visibleLapIds: string[] = analysis.records.map((record) => record.lapId),
 ): EChartsOption {
+  const visible = new Set(visibleLapIds);
   const records = analysis.records.filter((record) =>
-    record.eligibleForBest && record.durationSeconds !== undefined && record.drivenDistanceMeters !== undefined);
+    visible.has(record.lapId) && record.eligibleForBest && record.durationSeconds !== undefined && record.drivenDistanceMeters !== undefined);
   const trend = records.map((record) => [record.ordinal, record.durationSeconds!, record.ordinal]);
   const scatter = records.map((record) => [record.drivenDistanceMeters!, record.durationSeconds!, record.ordinal]);
   const focused = records.find((record) => record.lapId === focusedLapId);

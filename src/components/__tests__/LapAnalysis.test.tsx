@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LapWorkspace } from "../../app/useLapWorkspace";
 import type { GpsPoint, LapResult, TrackProfileV1 } from "../../domain/types";
+import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPreferences";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { LapAnalysis } from "../LapAnalysis";
 
@@ -25,7 +26,10 @@ vi.mock("../ChartPanel", () => ({
 }));
 
 describe("LapAnalysis", () => {
-  beforeEach(() => downloadText.mockReset());
+  beforeEach(() => {
+    downloadText.mockReset();
+    localStorage.removeItem(SEGMENT_WORKBENCH_STORAGE_KEY);
+  });
 
   it("imports a track profile and exposes the partial-lap sector policy", async () => {
     const user = userEvent.setup();
@@ -195,7 +199,8 @@ describe("LapAnalysis", () => {
     renderLapAnalysis(workspace);
 
     expect(screen.getByRole("tab", { name: "Segment Analysis Workbench" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("heading", { name: "Where am I losing time?" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: profile.name })).toBeVisible();
+    expect(screen.queryByText("Where am I losing time?")).not.toBeInTheDocument();
     expect(screen.queryByText("Corner and straight definitions")).not.toBeInTheDocument();
     expect(screen.queryByText("Biggest time-loss opportunities")).not.toBeInTheDocument();
   });
@@ -233,12 +238,13 @@ describe("LapAnalysis", () => {
     renderLapAnalysis(workspace);
     await user.click(screen.getByRole("button", { name: "Select neutral section" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: /straight-neutral 100 m/i })).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByText(/straight-neutral ·/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Analysis controls" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /straight-neutral, 300–400 m/i })).toHaveAttribute("aria-pressed", "true"));
 
     await user.click(screen.getByRole("tab", { name: "Setup" }));
     await user.click(screen.getByRole("tab", { name: "Segment Analysis Workbench" }));
-    expect(screen.getByRole("button", { name: /straight-neutral 100 m/i })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: /straight-neutral, 300–400 m/i })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("uses automatic section results for the partial-lap policy summary", async () => {

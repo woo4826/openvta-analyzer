@@ -44,7 +44,7 @@ export function buildTourSteps(hasActiveFile: boolean): TourStep[] {
       id: "file-workspace",
       titleKey: "tour.step.fileWorkspace.title",
       bodyKey: "tour.step.fileWorkspace.body",
-      target: "[data-tour='file-rail']",
+      target: "[data-tour='file-workspace']",
       requiresFile: true,
     },
     {

@@ -1,12 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GpsPoint, LapResult, TrackProfileV1 } from "../../domain/types";
+import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPreferences";
 import { I18nProvider } from "../../i18n/I18nProvider";
 
 vi.mock("../SegmentTrajectoryMap", () => ({
-  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; onSegmentChange: (segment: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
-    <div data-testid="map-state">{focusedLapId}:{referenceLapId}<button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
+  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, overlayLapIds, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; overlayLapIds: string[]; onSegmentChange: (segment: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
+    <div data-testid="map-state">{focusedLapId}:{referenceLapId}:visible={overlayLapIds.join(",")}<button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
@@ -23,6 +24,8 @@ vi.mock("../SegmentVariationChart", () => ({
 import { SegmentAnalysisWorkbench } from "../SegmentAnalysisWorkbench";
 
 describe("SegmentAnalysisWorkbench", () => {
+  beforeEach(() => localStorage.removeItem(SEGMENT_WORKBENCH_STORAGE_KEY));
+
   it("releases map and chart resources while the preserved workbench is inactive", () => {
     const fixture = data();
     render(<I18nProvider><SegmentAnalysisWorkbench
@@ -45,7 +48,7 @@ describe("SegmentAnalysisWorkbench", () => {
 
     expect(screen.queryByTestId("map-state")).not.toBeInTheDocument();
     expect(screen.queryByTestId("chart-state")).not.toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "Analysis scope" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analysis controls" })).toBeInTheDocument();
   });
 
   it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {
@@ -68,14 +71,46 @@ describe("SegmentAnalysisWorkbench", () => {
       onOpenSetup={vi.fn()}
     /></I18nProvider>);
 
-    await user.click(within(screen.getByRole("navigation", { name: "Analysis scope" })).getByRole("button", { name: /Corner 1/ }));
+    await user.click(screen.getByRole("button", { name: "Analysis controls" }));
+    const controls = screen.getByRole("dialog", { name: "Analysis controls" });
+    await user.click(within(controls).getByRole("button", { name: "Corner 1, 10–90 m" }));
     expect(screen.getByText(/Corner 1 · 10–90 m/)).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /Focus Lap 2/ }));
+    await user.selectOptions(within(controls).getByRole("combobox", { name: "Focused lap" }), "lap-1");
+    expect(screen.getByTestId("map-state")).toHaveTextContent("lap-1:lap-1");
+    await user.selectOptions(within(controls).getByRole("combobox", { name: "Focused lap" }), "lap-2");
     expect(screen.getByTestId("map-state")).toHaveTextContent("lap-2");
     expect(screen.getByTestId("chart-state")).toHaveTextContent("lap-2");
-    expect(screen.getByText("Where am I losing time?")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Test Circuit" })).toBeVisible();
+    expect(screen.queryByText("Where am I losing time?")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Select map range" }));
     expect(screen.getByText(/Custom range · 0–56 m/)).toBeVisible();
+  });
+
+  it("shows only the focused lap and persists optional widget visibility", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    render(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="session.Vta" points={fixture.points} laps={fixture.laps} profile={fixture.profile}
+      analysisLine={fixture.profile.centerline} includePartialLapSections={false}
+      onIncludePartialLapSections={vi.fn()} mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+      selectedPointIndex={0} onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()}
+      onActiveSegment={vi.fn()} onSaveRange={vi.fn()} onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+
+    await user.click(screen.getByRole("button", { name: "Analysis controls" }));
+    const controls = screen.getByRole("dialog", { name: "Analysis controls" });
+    await user.selectOptions(within(controls).getByRole("combobox", { name: "Visible laps" }), "focus-only");
+
+    expect(screen.getByTestId("map-state")).toHaveTextContent("lap-2:lap-1:visible=lap-2");
+    expect(screen.getByRole("rowheader", { name: /Lap 2/ })).toBeVisible();
+    expect(screen.queryByRole("rowheader", { name: /Lap 1/ })).not.toBeInTheDocument();
+
+    await user.click(within(controls).getByRole("checkbox", { name: "Time-loss ranking" }));
+    expect(screen.queryByRole("region", { name: "Time-loss ranking" })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(SEGMENT_WORKBENCH_STORAGE_KEY) ?? "{}")).toMatchObject({
+      lapVisibility: "focus-only",
+      visibleWidgets: { opportunities: false },
+    });
   });
 
   it("saves a graph-selected range as a named track section", async () => {

@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "maplibre-gl/dist/maplibre-gl.css";
+import "react-grid-layout/css/styles.css";
 import "./styles.css";
 import { App } from "./app/App";
 import { I18nProvider } from "./i18n/I18nProvider";

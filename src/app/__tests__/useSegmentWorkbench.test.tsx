@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { GpsPoint, LapResult, TrackSection } from "../../domain/types";
+import type { GpsPoint, LapResult, SegmentLapVisibility, TrackSection } from "../../domain/types";
 import { useSegmentWorkbench } from "../useSegmentWorkbench";
 
 describe("useSegmentWorkbench", () => {
@@ -51,6 +51,24 @@ describe("useSegmentWorkbench", () => {
       endIndex: expect.any(Number),
       source: "map",
     }));
+  });
+
+  it("isolates presentation laps without changing the comparison reference", () => {
+    const fixture = workbenchFixture(4);
+    const { result, rerender } = renderHook(
+      ({ lapVisibility }) => useSegmentWorkbench({ ...fixture, lapVisibility }),
+      { initialProps: { lapVisibility: "focus-reference" as SegmentLapVisibility } },
+    );
+    const referenceLapId = result.current.referenceLapId;
+    const focusedLapId = result.current.focusedLapId;
+
+    expect(result.current.visibleLapIds).toEqual([focusedLapId, referenceLapId]);
+    rerender({ lapVisibility: "focus-only" });
+    expect(result.current.visibleLapIds).toEqual([focusedLapId]);
+    expect(result.current.referenceLapId).toBe(referenceLapId);
+    rerender({ lapVisibility: "all" });
+    expect(result.current.visibleLapIds).toHaveLength(4);
+    expect(result.current.overlayLapIds).toEqual(result.current.visibleLapIds);
   });
 
   it("resets a selected section synchronously when that section is removed", async () => {

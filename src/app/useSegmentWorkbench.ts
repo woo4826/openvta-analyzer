@@ -8,6 +8,7 @@ import type {
   LapResult,
   SegmentAnalysisResult,
   SectionOpportunity,
+  SegmentLapVisibility,
   TrackSection,
 } from "../domain/types";
 import type { LineString } from "geojson";
@@ -21,6 +22,7 @@ export interface SegmentWorkbenchInput {
   analysisLine: LineString;
   sections: TrackSection[];
   includePartialLapSections: boolean;
+  lapVisibility?: SegmentLapVisibility;
 }
 
 export interface SegmentWorkbenchState {
@@ -29,6 +31,7 @@ export interface SegmentWorkbenchState {
   focusedLapId?: string;
   referenceLapId?: string;
   overlayLapIds: string[];
+  visibleLapIds: string[];
   axis: SegmentAxis;
   analysis: SegmentAnalysisResult;
   opportunities: SectionOpportunity[];
@@ -123,13 +126,19 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     referenceLapId,
   ]);
 
+  const visibleLapIds = useMemo(() => {
+    if (input.lapVisibility === "all") return analysis.records.map((record) => record.lapId);
+    if (input.lapVisibility === "focus-only") return unique([focusedLapId]);
+    return unique([focusedLapId, referenceLapId]);
+  }, [analysis.records, focusedLapId, input.lapVisibility, referenceLapId]);
   const overlayLapIds = useMemo(() => {
+    if (input.lapVisibility === "all") return visibleLapIds;
+    if (input.lapVisibility === "focus-only") return visibleLapIds;
     return unique([
-      focusedLapId,
-      referenceLapId,
+      ...visibleLapIds,
       ...requestedOverlayLapIds.filter((id) => recordIds.has(id)),
     ]).slice(0, MAX_OVERLAY_LAPS);
-  }, [focusedLapId, recordIds, referenceLapId, requestedOverlayLapIds]);
+  }, [input.lapVisibility, recordIds, requestedOverlayLapIds, visibleLapIds]);
 
   const activeSegment = useMemo((): ActiveSegment | undefined => {
     const focused = analysis.records.find((record) => record.lapId === focusedLapId);
@@ -179,6 +188,7 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     focusedLapId,
     referenceLapId,
     overlayLapIds,
+    visibleLapIds,
     axis,
     analysis,
     opportunities,
