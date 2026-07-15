@@ -164,6 +164,7 @@ export function RouteMap({
     return (
       <circle
         key={`${point.source}-${point.index}-${point.lineNumber}`}
+        data-testid={`route-hit-${selectionIndex}`}
         cx={cx}
         cy={cy}
         r={showRoutePoints ? settings.pointSize : 10}

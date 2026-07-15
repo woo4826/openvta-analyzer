@@ -176,6 +176,22 @@ describe("RouteMap source updates", () => {
     expect(hits.features.map((feature) => feature.properties.index)).toEqual([401, 422]);
   });
 
+  it("emits explicit source indexes from focused hit targets in the coordinate fallback", async () => {
+    mapMock.MapDouble.shouldThrow = true;
+    const user = userEvent.setup();
+    const onSelectedIndex = vi.fn();
+    const view = render(wrappedRoute(0, false, {
+      interactionPoints: [{ ...point(0), index: 401 }],
+      showRoutePoints: false,
+      interactiveRoutePoints: true,
+      onSelectedIndex,
+    }));
+
+    await user.click(await view.findByTestId("route-hit-401"));
+
+    expect(onSelectedIndex).toHaveBeenCalledWith(401);
+  });
+
   it("renders section overlays in the coordinate fallback", async () => {
     mapMock.MapDouble.shouldThrow = true;
     const view = render(wrappedRoute(0, true));
@@ -248,6 +264,7 @@ function wrappedRoute(
     interactiveRoutePoints?: boolean;
     showRouteLine?: boolean;
     interactionPoints?: GpsPoint[];
+    onSelectedIndex?: (index: number) => void;
     lapOverlays?: ComponentProps<typeof RouteMap>["lapOverlays"];
     heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
     ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
@@ -277,7 +294,7 @@ function wrappedRoute(
         showRouteLine={options.showRouteLine}
         interactionPoints={options.interactionPoints}
         onSectionSelect={options.onSectionSelect}
-        onSelectedIndex={vi.fn()}
+        onSelectedIndex={options.onSelectedIndex ?? vi.fn()}
         onSegmentChange={vi.fn()}
         onRegionChange={vi.fn()}
         onSettingsChange={vi.fn()}
