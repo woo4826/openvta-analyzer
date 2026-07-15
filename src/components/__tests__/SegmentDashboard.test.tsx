@@ -8,13 +8,13 @@ import { SegmentDashboard } from "../SegmentDashboard";
 describe("SegmentDashboard", () => {
   it("renders visible widgets with dedicated drag handles", () => {
     const preferences = defaultSegmentWorkbenchPreferences();
-    preferences.visibleWidgets.opportunities = false;
+    preferences.visibleWidgets.evidence = false;
 
     render(
       <I18nProvider>
         <SegmentDashboard layouts={preferences.layouts} visibleWidgets={preferences.visibleWidgets} onLayouts={vi.fn()}>
           {{
-            opportunities: <DashboardWidget id="opportunities" title="Opportunities">loss</DashboardWidget>,
+            evidence: <DashboardWidget id="evidence" title="Evidence">evidence</DashboardWidget>,
             map: <DashboardWidget id="map" title="Map">map</DashboardWidget>,
             telemetry: <DashboardWidget id="telemetry" title="Telemetry">graph</DashboardWidget>,
           }}
@@ -22,7 +22,7 @@ describe("SegmentDashboard", () => {
       </I18nProvider>,
     );
 
-    expect(screen.queryByRole("region", { name: "Opportunities" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Evidence" })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Map" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Move Map widget" })).toHaveClass("dashboard-widget-handle");
     expect(screen.getByRole("region", { name: "Telemetry" })).toBeVisible();

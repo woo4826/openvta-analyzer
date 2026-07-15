@@ -126,11 +126,10 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.getByRole("rowheader", { name: /Lap 2/ })).toBeVisible();
 
     await user.selectOptions(within(controls).getByRole("combobox", { name: "Visible laps" }), "focus-only");
-    await user.click(within(controls).getByRole("checkbox", { name: "Time-loss ranking" }));
+    expect(within(controls).queryByRole("checkbox", { name: "Time-loss ranking" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Time-loss ranking" })).not.toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(SEGMENT_WORKBENCH_STORAGE_KEY) ?? "{}")).toMatchObject({
       lapVisibility: "focus-only",
-      visibleWidgets: { opportunities: false },
     });
   });
 

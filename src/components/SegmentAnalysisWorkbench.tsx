@@ -26,7 +26,6 @@ import type {
 } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentLapTable } from "./SegmentLapTable";
-import { SegmentOpportunityRanking } from "./SegmentOpportunityRanking";
 import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
 import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
 import { SegmentVariationChart } from "./SegmentVariationChart";
@@ -98,9 +97,6 @@ export function SegmentAnalysisWorkbench({
     () => focused ? synchronizeAccelerationToTrajectory(points, sensors, focused.trajectory) : undefined,
     [focused, points, sensors],
   );
-  const visibleSectionIds = useMemo(() => new Set(workbench.navigationSections.map((section) => section.id)), [workbench.navigationSections]);
-  const visibleOpportunities = useMemo(() => workbench.opportunities.filter((opportunity) =>
-    visibleSectionIds.has(opportunity.section.id)), [visibleSectionIds, workbench.opportunities]);
   const totalDistanceMeters = useMemo(() => Math.max(
     1,
     ...profile.sections.flatMap((section) => [section.startDistanceMeters, section.endDistanceMeters]),
@@ -315,17 +311,6 @@ export function SegmentAnalysisWorkbench({
         onLayouts={updateLayouts}
       >
         {{
-          opportunities: (
-            <DashboardWidget id="opportunities" title={t("lap.workbench.widget.opportunities")}>
-              <SegmentOpportunityRanking
-                opportunities={visibleOpportunities}
-                scope={workbench.scope}
-                focusedLapOrdinal={focused?.ordinal}
-                referenceLapOrdinal={reference?.ordinal}
-                onSection={workbench.selectSection}
-              />
-            </DashboardWidget>
-          ),
           map: (
             <DashboardWidget id="map" title={t("lap.workbench.widget.map")}>
               <SegmentTrajectoryMap

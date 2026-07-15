@@ -9,16 +9,15 @@ import {
 } from "../segmentWorkbenchPreferences";
 
 describe("segment workbench preferences", () => {
-  it("defaults to a focus/reference dashboard with every widget visible", () => {
+  it("defaults to a v2 map-first full-width dashboard without opportunity ranking", () => {
     const preferences = defaultSegmentWorkbenchPreferences();
 
     expect(preferences).toMatchObject({
-      version: 1,
+      version: 2,
       drawerOpen: false,
       lapVisibility: "focus-reference",
       snapToSections: true,
       visibleWidgets: {
-        opportunities: true,
         map: true,
         evidence: true,
         variation: true,
@@ -27,13 +26,16 @@ describe("segment workbench preferences", () => {
       },
     });
     expect(preferences.layouts.lg.map((item) => item.i)).toEqual([
-      "opportunities",
       "map",
       "telemetry",
       "evidence",
       "variation",
       "laps",
     ]);
+    expect(preferences.layouts.lg.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 12 });
+    expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ x: 0, w: 12 });
+    expect(preferences.layouts.md.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 8 });
+    expect(SEGMENT_WORKBENCH_STORAGE_KEY).toBe("openvta.segmentWorkbench.v2");
   });
 
   it("round-trips validated preferences through storage", () => {
@@ -43,7 +45,7 @@ describe("segment workbench preferences", () => {
     preferences.drawerOpen = true;
     preferences.lapVisibility = "focus-only";
     preferences.snapToSections = false;
-    preferences.visibleWidgets.opportunities = false;
+    preferences.visibleWidgets.evidence = false;
     preferences.layouts.lg[0] = { ...preferences.layouts.lg[0], x: 4, y: 3 };
 
     saveSegmentWorkbenchPreferences(preferences, storage);
@@ -62,11 +64,11 @@ describe("segment workbench preferences", () => {
 
     const invalid = {
       getItem: () => JSON.stringify({
-        version: 1,
+        version: 2,
         drawerOpen: "yes",
         lapVisibility: "reference-only",
         snapToSections: 1,
-        visibleWidgets: { opportunities: false, unknown: true },
+        visibleWidgets: { evidence: false, unknown: true },
         layouts: { lg: [{ i: "map", x: Number.NaN, y: 0, w: 6, h: 4 }] },
       }),
       setItem: vi.fn(),
@@ -89,7 +91,7 @@ describe("segment workbench preferences", () => {
   it("does not allow the final visible widget to be hidden", () => {
     const all = defaultSegmentWorkbenchPreferences().visibleWidgets;
     expect(canHideWidget(all, "map")).toBe(true);
-    expect(canHideWidget({ ...all, opportunities: false, evidence: false, variation: false, telemetry: false, laps: false }, "map")).toBe(false);
+    expect(canHideWidget({ ...all, evidence: false, variation: false, telemetry: false, laps: false }, "map")).toBe(false);
   });
 });
 

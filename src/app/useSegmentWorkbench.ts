@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyzeSegmentScope, scopeSourceIndexes } from "../domain/segmentAnalysis";
-import { buildSectionOpportunities } from "../domain/sectionOpportunities";
 import type {
   ActiveSegment,
   AnalysisScope,
   GpsPoint,
   LapResult,
   SegmentAnalysisResult,
-  SectionOpportunity,
   SegmentLapVisibility,
   TrackSection,
 } from "../domain/types";
@@ -33,7 +31,6 @@ export interface SegmentWorkbenchState {
   visibleLapIds: string[];
   axis: SegmentAxis;
   analysis: SegmentAnalysisResult;
-  opportunities: SectionOpportunity[];
   navigationSections: TrackSection[];
   activeSegment?: ActiveSegment;
   selectSection: (sectionId: string) => void;
@@ -123,24 +120,6 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     if (filter === "straights") return section.kind === "straight";
     return true;
   }), [filter, input.sections]);
-  const opportunities = useMemo(() => buildSectionOpportunities(
-    input.points,
-    input.laps,
-    input.analysisLine,
-    input.sections,
-    focusedLapId,
-    referenceLapId,
-    input.includePartialLapSections,
-  ), [
-    focusedLapId,
-    input.analysisLine,
-    input.includePartialLapSections,
-    input.laps,
-    input.points,
-    input.sections,
-    referenceLapId,
-  ]);
-
   const visibleLapIds = useMemo(() => {
     if (input.lapVisibility === "all") return analysis.records.map((record) => record.lapId);
     if (input.lapVisibility === "focus-only") return unique([focusedLapId]);
@@ -218,7 +197,6 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     visibleLapIds,
     axis,
     analysis,
-    opportunities,
     navigationSections,
     activeSegment,
     selectSection,

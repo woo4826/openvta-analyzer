@@ -393,18 +393,6 @@ export interface SegmentAnalysisResult {
   records: SegmentLapRecord[];
 }
 
-export interface SectionOpportunity {
-  section: TrackSection;
-  focusedLapId: string;
-  referenceLapId: string;
-  timeDeltaSeconds: number;
-  pathDeltaMeters?: number;
-  minimumSpeedDeltaKmh?: number;
-  exitSpeedDeltaKmh?: number;
-  consistencyStdDevSeconds?: number;
-  eligibleSampleCount: number;
-}
-
 export interface LapSectionResult {
   id: string;
   lapId: string;
@@ -465,7 +453,6 @@ export interface LapAnalysisSettings {
 export type SegmentLapVisibility = "all" | "focus-reference" | "focus-only";
 
 export type SegmentWidgetId =
-  | "opportunities"
   | "map"
   | "evidence"
   | "variation"
@@ -483,7 +470,7 @@ export interface SegmentWidgetLayout {
 }
 
 export interface SegmentWorkbenchPreferences {
-  version: 1;
+  version: 2;
   drawerOpen: boolean;
   lapVisibility: SegmentLapVisibility;
   snapToSections: boolean;

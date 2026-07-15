@@ -7,10 +7,9 @@ import type {
 
 type JsonStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-export const SEGMENT_WORKBENCH_STORAGE_KEY = "openvta.segmentWorkbench.v1";
+export const SEGMENT_WORKBENCH_STORAGE_KEY = "openvta.segmentWorkbench.v2";
 
 export const SEGMENT_WIDGET_IDS: SegmentWidgetId[] = [
-  "opportunities",
   "map",
   "evidence",
   "variation",
@@ -22,28 +21,26 @@ const lapVisibilities: SegmentLapVisibility[] = ["all", "focus-reference", "focu
 
 const defaultLayouts: Record<string, SegmentWidgetLayout[]> = {
   lg: [
-    { i: "opportunities", x: 0, y: 0, w: 12, h: 4, minW: 4, minH: 3 },
-    { i: "map", x: 0, y: 4, w: 6, h: 8, minW: 4, minH: 5 },
-    { i: "telemetry", x: 6, y: 4, w: 6, h: 8, minW: 4, minH: 5 },
-    { i: "evidence", x: 0, y: 12, w: 4, h: 6, minW: 3, minH: 4 },
-    { i: "variation", x: 4, y: 12, w: 8, h: 6, minW: 4, minH: 4 },
-    { i: "laps", x: 0, y: 18, w: 12, h: 7, minW: 5, minH: 5 },
+    { i: "map", x: 0, y: 0, w: 12, h: 11, minW: 6, minH: 8 },
+    { i: "telemetry", x: 0, y: 11, w: 12, h: 9, minW: 6, minH: 7 },
+    { i: "evidence", x: 0, y: 20, w: 4, h: 7, minW: 3, minH: 5 },
+    { i: "variation", x: 4, y: 20, w: 8, h: 7, minW: 4, minH: 5 },
+    { i: "laps", x: 0, y: 27, w: 12, h: 7, minW: 5, minH: 5 },
   ],
   md: [
-    { i: "opportunities", x: 0, y: 0, w: 8, h: 5, minW: 4, minH: 3 },
-    { i: "map", x: 0, y: 5, w: 4, h: 8, minW: 3, minH: 5 },
-    { i: "telemetry", x: 4, y: 5, w: 4, h: 8, minW: 3, minH: 5 },
-    { i: "evidence", x: 0, y: 13, w: 3, h: 7, minW: 3, minH: 4 },
-    { i: "variation", x: 3, y: 13, w: 5, h: 7, minW: 3, minH: 4 },
-    { i: "laps", x: 0, y: 20, w: 8, h: 8, minW: 4, minH: 5 },
+    { i: "map", x: 0, y: 0, w: 8, h: 10, minW: 4, minH: 8 },
+    { i: "telemetry", x: 0, y: 10, w: 8, h: 9, minW: 4, minH: 7 },
+    { i: "evidence", x: 0, y: 19, w: 3, h: 7, minW: 3, minH: 5 },
+    { i: "variation", x: 3, y: 19, w: 5, h: 7, minW: 3, minH: 5 },
+    { i: "laps", x: 0, y: 26, w: 8, h: 8, minW: 4, minH: 5 },
   ],
-  sm: SEGMENT_WIDGET_IDS.map((i, index) => ({ i, x: 0, y: index * 7, w: 1, h: i === "opportunities" ? 5 : 7, minW: 1, minH: 4 })),
-  xs: SEGMENT_WIDGET_IDS.map((i, index) => ({ i, x: 0, y: index * 7, w: 1, h: i === "opportunities" ? 5 : 7, minW: 1, minH: 4 })),
+  sm: SEGMENT_WIDGET_IDS.map((i, index) => ({ i, x: 0, y: index * 8, w: 1, h: i === "map" || i === "telemetry" ? 9 : 7, minW: 1, minH: 4 })),
+  xs: SEGMENT_WIDGET_IDS.map((i, index) => ({ i, x: 0, y: index * 8, w: 1, h: i === "map" || i === "telemetry" ? 9 : 7, minW: 1, minH: 4 })),
 };
 
 export function defaultSegmentWorkbenchPreferences(): SegmentWorkbenchPreferences {
   return {
-    version: 1,
+    version: 2,
     drawerOpen: false,
     lapVisibility: "focus-reference",
     snapToSections: true,
@@ -61,7 +58,7 @@ export function loadSegmentWorkbenchPreferences(
     if (raw === null) return defaults;
     const value = JSON.parse(raw) as unknown;
     if (!isRecord(value)
-      || value.version !== 1
+      || value.version !== 2
       || typeof value.drawerOpen !== "boolean"
       || !lapVisibilities.includes(value.lapVisibility as SegmentLapVisibility)
       || typeof value.snapToSections !== "boolean"
@@ -70,7 +67,7 @@ export function loadSegmentWorkbenchPreferences(
       return defaults;
     }
     return {
-      version: 1,
+      version: 2,
       drawerOpen: value.drawerOpen,
       lapVisibility: value.lapVisibility as SegmentLapVisibility,
       snapToSections: value.snapToSections,
