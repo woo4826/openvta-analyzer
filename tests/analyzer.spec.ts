@@ -119,6 +119,14 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await page.keyboard.press("Escape");
   await expect(controls).toHaveCount(0);
   await expect(analysisMain.getByRole("button", { name: "Analysis controls" })).toBeFocused();
+  if (viewportWidth > 1180) {
+    await analysisMain.getByRole("button", { name: "Analysis controls" }).click();
+    await analysisMain.getByRole("tab", { name: "Charts" }).click();
+    await expect(page.getByRole("dialog", { name: "Analysis controls" })).toHaveCount(0);
+    await expect(page.locator("html")).not.toHaveClass(/lap-analysis-controls-open/);
+    await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
+    await expect(analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
+  }
 
   await expect.poll(async () => analysisMain.locator(".dashboard-widget-variation canvas, .dashboard-widget-telemetry canvas").evaluateAll((canvases) =>
     canvases.length === 2 && canvases.every((canvas) => {

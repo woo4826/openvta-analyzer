@@ -92,6 +92,27 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(document.documentElement).not.toHaveClass("lap-analysis-controls-open");
   });
 
+  it("closes portaled controls when the preserved workbench becomes inactive", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    const props = {
+      sourceName: "session.Vta", points: fixture.points, sensors: fixture.sensors, laps: fixture.laps, profile: fixture.profile,
+      analysisLine: fixture.profile.centerline, includePartialLapSections: false, onIncludePartialLapSections: vi.fn(),
+      mapSettings: { pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] as [number, number, number, number] }, selectedPointIndex: 0,
+      onSelectedPointIndex: vi.fn(), onMapSettingsChange: vi.fn(), onActiveSegment: vi.fn(), onSaveRange: vi.fn(), onOpenSetup: vi.fn(),
+    };
+    const view = render(<I18nProvider><SegmentAnalysisWorkbench active {...props} /></I18nProvider>);
+
+    await user.click(screen.getByRole("button", { name: "Analysis controls" }));
+    expect(screen.getByRole("dialog", { name: "Analysis controls" })).toBeInTheDocument();
+    expect(document.documentElement).toHaveClass("lap-analysis-controls-open");
+
+    view.rerender(<I18nProvider><SegmentAnalysisWorkbench active={false} {...props} /></I18nProvider>);
+
+    expect(screen.queryByRole("dialog", { name: "Analysis controls" })).not.toBeInTheDocument();
+    expect(document.documentElement).not.toHaveClass("lap-analysis-controls-open");
+  });
+
   it("announces the exact exported analysis filename", async () => {
     const user = userEvent.setup();
     const fixture = data();

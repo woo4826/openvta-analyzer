@@ -185,11 +185,17 @@ export function SegmentAnalysisWorkbench({
       ? current
       : { ...current, layouts });
   }, [updatePreferences]);
+  const controlsOpen = active && preferences.drawerOpen;
 
   useEffect(() => {
     if (!active) return;
     onActiveSegment(workbench.activeSegment);
   }, [active, onActiveSegment, workbench.activeSegment]);
+
+  useEffect(() => {
+    if (active || !preferences.drawerOpen) return;
+    updatePreferences((current) => current.drawerOpen ? { ...current, drawerOpen: false } : current);
+  }, [active, preferences.drawerOpen, updatePreferences]);
 
   useEffect(() => {
     saveSegmentWorkbenchPreferences(preferences);
@@ -230,7 +236,7 @@ export function SegmentAnalysisWorkbench({
   }, [onSelectedPointIndex]);
 
   return (
-    <section className={`segment-workbench lap-wide-panel${preferences.drawerOpen ? " is-controls-open" : ""}`} aria-label={t("lap.workbench.title")}>
+    <section className={`segment-workbench lap-wide-panel${controlsOpen ? " is-controls-open" : ""}`} aria-label={t("lap.workbench.title")}>
       <header className="segment-workbench-header">
         <div>
           <span className="panel-eyebrow">{t("lap.workbench.title")}</span>
@@ -331,7 +337,7 @@ export function SegmentAnalysisWorkbench({
           </button>
         </div>
         <SegmentWorkbenchControls
-          open={preferences.drawerOpen}
+          open={controlsOpen}
           scope={workbench.scope}
           sections={profile.sections}
           totalDistanceMeters={totalDistanceMeters}
