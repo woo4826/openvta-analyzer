@@ -36,7 +36,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const analysisMain = page.locator(".analysis-main");
   await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
   await expect(analysisMain.getByRole("heading", { name: "Lap Explorer" })).toBeVisible();
-  await expect(analysisMain.getByText("Analysis sectors")).toBeVisible();
+  await expect(analysisMain.getByText("Analysis sectors", { exact: true })).toBeVisible();
   const scope = analysisMain.getByLabel("Analysis scope");
   await expect(scope.locator("option").filter({ hasText: "Corner 1" })).toHaveCount(1);
   await scope.selectOption({ label: "Corner 1" });
