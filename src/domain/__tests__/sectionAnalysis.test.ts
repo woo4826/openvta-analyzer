@@ -35,6 +35,29 @@ describe("automatic section lap analysis", () => {
     expect(on.every((result) => result.eligibleForBest)).toBe(true);
   });
 
+  it("rejects partial sections crossed only by an implausible projection jump", () => {
+    const line = {
+      type: "LineString" as const,
+      coordinates: [[0, 0], [0.003, 0], [0.003, 0.0001], [0, 0.0001]],
+    };
+    const points = [
+      gps(0, 0, 0, 80),
+      gps(0.001, 0, 2, 90),
+      gps(0.001, 0.0001, 3, 90),
+      gps(0, 0.0001, 5, 80),
+    ];
+    const lap = makeLap("partial-end", 0, 3, 0, 5, [0, 0], [0, 0.0001]);
+    const partialSections: TrackSection[] = [
+      { id: "early", name: "Early", kind: "straight", startDistanceMeters: 0, endDistanceMeters: 100 },
+      { id: "jumped", name: "Jumped", kind: "corner-right", startDistanceMeters: 100, endDistanceMeters: 550 },
+      { id: "late", name: "Late", kind: "straight", startDistanceMeters: 550, endDistanceMeters: 670 },
+    ];
+
+    const results = analyzeLapSections(points, [lap], line, partialSections, true);
+
+    expect(results.map((result) => result.sectionId)).toEqual(["early"]);
+  });
+
   it("rejects a lap with neither timing boundary", () => {
     const points = [gps(0.0005, 0, 0, 80), gps(0.0015, 0, 5, 80)];
     const lap = makeLap("partial-both", 0, 1, 0, 5, [0.0005, 0], [0.0015, 0]);

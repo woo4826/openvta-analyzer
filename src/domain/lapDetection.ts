@@ -26,6 +26,11 @@ export interface LapDetectionOptions {
   minimumRearmDistanceMeters?: number;
 }
 
+export interface StartFinishInferenceOptions {
+  widthMeters?: number;
+  maximumCandidates?: number;
+}
+
 type GateCrossingDirection = "forward" | "reverse";
 
 interface GateCrossingEvent extends TimedBoundary {
@@ -61,6 +66,49 @@ export function createGateFromRoutePoint(points: GpsPoint[], selectedIndex: numb
     forwardBearingDegrees: heading,
     widthMeters,
   };
+}
+
+/**
+ * Finds a repeatable start/finish line directly from a closed-course recording.
+ * Candidates that do not produce at least one complete lap are ignored. Among
+ * the remaining candidates we prefer the dominant lap count across the route,
+ * consistent lap times and distances, and finally a faster (usually straighter)
+ * crossing point. The dominant-count rule avoids treating a self-intersection as
+ * two artificial laps per real lap.
+ */
+export function inferStartFinishGate(
+  points: GpsPoint[],
+  options: StartFinishInferenceOptions = {},
+): TrackGate | undefined {
+  if (points.length < 4) return undefined;
+  const maximumCandidates = Math.min(96, Math.max(8, Math.trunc(options.maximumCandidates ?? 64)));
+  const widthMeters = Math.min(100, Math.max(20, options.widthMeters ?? 50));
+  const indices = sampledCandidateIndices(points.length, maximumCandidates);
+  return selectInferredGate(indices.flatMap((pointIndex) => {
+    const candidate = evaluateInferenceCandidate(points, pointIndex, widthMeters);
+    return candidate ? [candidate] : [];
+  }));
+}
+
+/**
+ * Browser-friendly start/finish inference. Candidate evaluation is split into
+ * short batches so a large recording cannot block the first interactive paint.
+ */
+export async function inferStartFinishGateAsync(
+  points: GpsPoint[],
+  options: StartFinishInferenceOptions = {},
+): Promise<TrackGate | undefined> {
+  if (points.length < 4) return undefined;
+  const maximumCandidates = Math.min(96, Math.max(8, Math.trunc(options.maximumCandidates ?? 64)));
+  const widthMeters = Math.min(100, Math.max(20, options.widthMeters ?? 50));
+  const indices = sampledCandidateIndices(points.length, maximumCandidates);
+  const candidates: InferredGateCandidate[] = [];
+  for (let index = 0; index < indices.length; index += 1) {
+    const candidate = evaluateInferenceCandidate(points, indices[index], widthMeters);
+    if (candidate) candidates.push(candidate);
+    if (index % 4 === 3) await yieldToBrowser();
+  }
+  return selectInferredGate(candidates);
 }
 
 export function detectGateCrossings(
@@ -333,6 +381,120 @@ function distinctPoint(points: GpsPoint[], selectedIndex: number, direction: -1 
 
 function dot(left: { x: number; y: number }, right: { x: number; y: number }): number {
   return left.x * right.x + left.y * right.y;
+}
+
+interface InferredGateCandidate {
+  gate: TrackGate;
+  pointIndex: number;
+  completeLapCount: number;
+  durationVariation: number;
+  distanceVariation: number;
+  speedKmh: number;
+}
+
+function sampledCandidateIndices(pointCount: number, maximumCandidates: number): number[] {
+  if (pointCount <= maximumCandidates) return Array.from({ length: pointCount }, (_, index) => index);
+  const indices = new Set<number>([0, pointCount - 1]);
+  const step = (pointCount - 1) / (maximumCandidates - 1);
+  for (let index = 1; index < maximumCandidates - 1; index += 1) {
+    indices.add(Math.round(index * step));
+  }
+  return [...indices].sort((left, right) => left - right);
+}
+
+function relativeMedianDeviation(values: number[]): number {
+  if (values.length < 2) return 0;
+  const median = medianValue(values);
+  if (median <= 0) return Number.POSITIVE_INFINITY;
+  return medianValue(values.map((value) => Math.abs(value - median))) / median;
+}
+
+function medianValue(values: number[]): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function evaluateInferenceCandidate(
+  points: GpsPoint[],
+  pointIndex: number,
+  widthMeters: number,
+): InferredGateCandidate | undefined {
+  const gate = createGateFromRoutePoint(points, pointIndex, widthMeters);
+  if (!gate) return undefined;
+  const completeLaps = detectLaps(points, gate).laps.filter((lap) => (
+    lap.completion === "complete" &&
+    lap.validity === "valid" &&
+    lap.durationSeconds !== undefined &&
+    lap.durationSeconds > 0 &&
+    lap.distanceKm >= 0.1
+  ));
+  if (!completeLaps.length) return undefined;
+  const durationVariation = relativeMedianDeviation(completeLaps.map((lap) => lap.durationSeconds!));
+  const distanceVariation = relativeMedianDeviation(completeLaps.map((lap) => lap.distanceKm));
+  if (completeLaps.length >= 2 && (durationVariation > 0.25 || distanceVariation > 0.18)) return undefined;
+  return {
+    gate,
+    pointIndex,
+    completeLapCount: completeLaps.length,
+    durationVariation,
+    distanceVariation,
+    speedKmh: Number.isFinite(points[pointIndex].speedKmh) ? points[pointIndex].speedKmh : 0,
+  };
+}
+
+function selectInferredGate(candidates: InferredGateCandidate[]): TrackGate | undefined {
+  if (!candidates.length) return undefined;
+  const reliableCandidates = candidates.some((candidate) => candidate.completeLapCount >= 2)
+    ? candidates.filter((candidate) => candidate.completeLapCount >= 2)
+    : candidates;
+  const dominantLapCount = modalLapCount(reliableCandidates);
+  const selected = reliableCandidates.reduce((best, candidate) => (
+    isBetterInference(candidate, best, dominantLapCount) ? candidate : best
+  ));
+  return selected.gate;
+}
+
+function modalLapCount(candidates: InferredGateCandidate[]): number {
+  const frequencies = new Map<number, number>();
+  const spatialVotes = new Set<string>();
+  for (const candidate of candidates) {
+    const center = gateCenter(candidate.gate);
+    const spatialKey = `${Math.round(center[0] * 20_000)}:${Math.round(center[1] * 20_000)}`;
+    const vote = `${spatialKey}:${candidate.completeLapCount}`;
+    if (spatialVotes.has(vote)) continue;
+    spatialVotes.add(vote);
+    frequencies.set(candidate.completeLapCount, (frequencies.get(candidate.completeLapCount) ?? 0) + 1);
+  }
+  return [...frequencies.entries()]
+    .sort(([leftCount, leftFrequency], [rightCount, rightFrequency]) => (
+      rightFrequency - leftFrequency || rightCount - leftCount
+    ))[0][0];
+}
+
+function isBetterInference(
+  candidate: InferredGateCandidate,
+  current: InferredGateCandidate,
+  dominantLapCount: number,
+): boolean {
+  const candidateCountDeviation = Math.abs(candidate.completeLapCount - dominantLapCount);
+  const currentCountDeviation = Math.abs(current.completeLapCount - dominantLapCount);
+  if (candidateCountDeviation !== currentCountDeviation) {
+    return candidateCountDeviation < currentCountDeviation;
+  }
+  const candidateVariation = candidate.durationVariation + candidate.distanceVariation;
+  const currentVariation = current.durationVariation + current.distanceVariation;
+  if (Math.abs(candidateVariation - currentVariation) > 0.001) {
+    return candidateVariation < currentVariation;
+  }
+  if (Math.abs(candidate.speedKmh - current.speedKmh) > 1) {
+    return candidate.speedKmh > current.speedKmh;
+  }
+  return candidate.pointIndex < current.pointIndex;
+}
+
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function toTimedBoundary(event: GateCrossingEvent): TimedBoundary {

@@ -59,7 +59,7 @@ describe("App lap GPS source", () => {
     expect(screen.getByRole("dialog", { name: "Track Library" })).toBeVisible();
   });
 
-  it("analyzes one source, switches it exclusively on the Lap tab, and restores multi-source toggling elsewhere", async () => {
+  it("analyzes one source without the unrelated inspector and follows source choices made in Overview", async () => {
     const user = userEvent.setup();
     render(<I18nProvider><App /></I18nProvider>);
 
@@ -75,7 +75,13 @@ describe("App lap GPS source", () => {
       pointSources: ["ImuHeading"],
     });
 
-    await user.click(screen.getByRole("button", { name: "Raw GPS (37)" }));
+    expect(screen.queryByRole("button", { name: "Raw GPS (37)" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Overview" }));
+    expect(screen.getByRole("button", { name: "Raw GPS (37)" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Enhanced (35)" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Enhanced (35)" }));
+    await user.click(screen.getByRole("tab", { name: "Lap Analysis" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("lap-analysis")).toHaveAttribute("data-point-count", "37");
@@ -88,18 +94,7 @@ describe("App lap GPS source", () => {
       pointSources: ["RawGps"],
     });
 
-    await user.click(screen.getByRole("tab", { name: "Overview" }));
-    expect(screen.getByRole("button", { name: "Raw GPS (37)" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Enhanced (35)" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("button", { name: "Enhanced (35)" }));
-    expect(screen.getByRole("button", { name: "Enhanced (35)" })).toHaveAttribute("aria-pressed", "false");
-    await user.click(screen.getByRole("button", { name: "Enhanced (35)" }));
-    expect(screen.getByRole("button", { name: "Enhanced (35)" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("tab", { name: "Lap Analysis" }));
-    expect(screen.getByTestId("lap-analysis")).toHaveAttribute("data-point-count", "37");
-    expect(screen.getByTestId("lap-analysis")).toHaveAttribute("data-source-visibility", "true,false");
+    expect(screen.queryByRole("button", { name: "Raw GPS (37)" })).not.toBeInTheDocument();
   });
 
   it("applies the workspace transform mode to table sensor rows", async () => {

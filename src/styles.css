@@ -255,6 +255,10 @@ textarea {
   align-items: start;
 }
 
+.workspace-grid-laps {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+}
+
 .file-rail,
 .analysis-main,
 .analysis-inspector {
@@ -409,6 +413,240 @@ footer.privacy-note {
   align-items: start;
 }
 
+.lap-analysis-viewbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 48px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: 0 3px 12px rgb(16 24 32 / 8%);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.lap-analysis-viewbar .tabs {
+  border-bottom: 0;
+}
+
+.lap-analysis-viewbar .tab {
+  min-height: 38px;
+  border-radius: var(--radius-2);
+}
+
+.lap-analysis-viewbar .tab.active,
+.lap-analysis-viewbar .tab[aria-selected="true"] {
+  color: #ffffff;
+  background: var(--color-teal);
+  box-shadow: none;
+}
+
+.lap-analysis-context,
+.lap-setup-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.lap-analysis-context > span:first-child {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lap-opportunity-overview {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.lap-performance-header {
+  border-color: #b8d6d2;
+  box-shadow: 0 6px 18px rgb(15 118 110 / 7%);
+}
+
+.lap-primary-selector {
+  min-width: min(330px, 100%);
+}
+
+.lap-primary-selector select {
+  min-height: 36px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  padding: 0 var(--space-4);
+  background: var(--color-surface);
+}
+
+.lap-opportunity-metrics {
+  grid-template-columns: repeat(4, minmax(145px, 1fr));
+}
+
+.lap-opportunity-stage {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(520px, 1.5fr) minmax(310px, 0.72fr);
+  gap: var(--space-6);
+  align-items: stretch;
+}
+
+.lap-opportunity-map-panel,
+.lap-opportunity-list-panel {
+  min-height: 620px;
+}
+
+.lap-opportunity-map-panel .panel-body {
+  height: calc(100% - 58px);
+}
+
+.lap-opportunity-map-panel .map-shell {
+  min-height: 535px;
+  height: 100%;
+}
+
+.lap-opportunity-list-panel .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.lap-opportunity-list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.lap-opportunity-card {
+  width: 100%;
+  min-height: 104px;
+  border: 1px solid var(--color-border);
+  border-left: 5px solid var(--color-blue);
+  border-radius: var(--radius-3);
+  padding: var(--space-5);
+  color: var(--color-text);
+  background: var(--color-surface);
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  text-align: left;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.lap-opportunity-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-border-strong);
+  box-shadow: 0 5px 14px rgb(16 24 32 / 9%);
+}
+
+.lap-opportunity-card:focus-visible {
+  outline: 3px solid rgb(43 108 176 / 35%);
+  outline-offset: 2px;
+}
+
+.lap-opportunity-card.selected {
+  border-color: #9f87d4;
+  border-left-color: #7c3aed;
+  background: #f7f3ff;
+  box-shadow: 0 0 0 1px rgb(124 58 237 / 12%);
+}
+
+.lap-opportunity-card.opportunity-high:not(.selected) {
+  border-left-color: var(--color-red);
+}
+
+.lap-opportunity-card.opportunity-medium:not(.selected) {
+  border-left-color: var(--color-amber);
+}
+
+.lap-opportunity-rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--color-shell-elevated);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.lap-opportunity-copy,
+.lap-opportunity-loss {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.lap-opportunity-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-lg);
+  white-space: nowrap;
+}
+
+.lap-opportunity-copy span,
+.lap-opportunity-copy small,
+.lap-opportunity-loss small {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.lap-opportunity-loss {
+  justify-items: end;
+  color: var(--color-red);
+  font-variant-numeric: tabular-nums;
+}
+
+.lap-opportunity-loss strong {
+  font-size: var(--text-lg);
+}
+
+.lap-gps-evidence {
+  margin: auto 0 0;
+  color: var(--color-text-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.lap-opportunity-empty {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-4);
+}
+
+.lap-opportunity-empty p,
+.lap-analysis-onboarding p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: var(--line-normal);
+}
+
+.lap-analysis-onboarding .panel-body {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.lap-telemetry-chart .chart {
+  height: 500px;
+}
+
+.lap-setup-summary {
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
 .lap-wide-panel {
   grid-column: 1 / -1;
 }
@@ -477,6 +715,25 @@ footer.privacy-note {
 
   .lap-wide-panel {
     grid-column: auto;
+  }
+
+  .lap-opportunity-stage {
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  }
+}
+
+@media (max-width: 1240px) {
+  .lap-opportunity-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lap-opportunity-map-panel,
+  .lap-opportunity-list-panel {
+    min-height: 0;
+  }
+
+  .lap-opportunity-map-panel .map-shell {
+    min-height: 500px;
   }
 }
 
@@ -1376,6 +1633,25 @@ tbody tr:hover {
     grid-column: auto;
   }
 
+  .lap-analysis-viewbar {
+    position: static;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lap-analysis-viewbar .tabs,
+  .lap-analysis-viewbar .tab {
+    width: 100%;
+  }
+
+  .lap-analysis-viewbar .tab {
+    justify-content: center;
+  }
+
+  .lap-opportunity-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .map-shell {
     min-height: 380px;
   }
@@ -1418,6 +1694,23 @@ tbody tr:hover {
     align-self: stretch;
   }
 
+  .lap-opportunity-card {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .lap-opportunity-loss {
+    grid-column: 2;
+    justify-items: start;
+  }
+
+  .lap-opportunity-map-panel .map-shell {
+    min-height: 420px;
+  }
+
+  .lap-telemetry-chart .chart {
+    height: 440px;
+  }
+
   .lap-explorer-chart .chart {
     height: 330px;
   }
@@ -1457,6 +1750,10 @@ tbody tr:hover {
   }
 
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lap-opportunity-metrics {
     grid-template-columns: 1fr;
   }
 
@@ -1516,5 +1813,15 @@ tbody tr:hover {
   .tour-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lap-opportunity-card {
+    transition: none;
+  }
+
+  .lap-opportunity-card:hover {
+    transform: none;
   }
 }

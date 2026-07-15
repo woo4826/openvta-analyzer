@@ -9,7 +9,7 @@ import {
   resampleLapByDistance,
   theoreticalBestSeconds,
 } from "../domain/lapAnalysis";
-import { createGateFromRoutePoint, detectLaps } from "../domain/lapDetection";
+import { createGateFromRoutePoint, detectLaps, inferStartFinishGateAsync } from "../domain/lapDetection";
 import { lookupOsmTracks, scoreTrackProfile, type OsmLookupStatus, type OsmTrackCandidate } from "../domain/osmTracks";
 import {
   loadLapAnalysisSettings,
@@ -32,7 +32,7 @@ import type {
   TrackSection,
 } from "../domain/types";
 
-export type TrackLookupState = "idle" | "cache" | "searching" | OsmLookupStatus | "imported" | "manual";
+export type TrackLookupState = "idle" | "cache" | "searching" | OsmLookupStatus | "imported" | "manual" | "generated";
 
 interface FileLapWorkspace {
   profile?: TrackProfileV1;
@@ -100,6 +100,7 @@ export function useLapWorkspace(
   const [files, setFiles] = useState<Record<string, FileLapWorkspace>>({});
   const [settings, setSettings] = useState(() => loadLapAnalysisSettings());
   const lookupStarted = useRef(new Set<string>());
+  const persistedAutomaticProfiles = useRef(new Set<string>());
   const current = fileId ? files[fileId] ?? emptyWorkspace() : emptyWorkspace();
   const gate = current.profile?.startFinish ?? current.manualGate;
 
@@ -115,6 +116,11 @@ export function useLapWorkspace(
     if (!fileId || points.length < 2 || lookupStarted.current.has(fileId)) return;
     lookupStarted.current.add(fileId);
     let cancelled = false;
+    let inferredGatePromise: Promise<TrackGate | undefined> | undefined;
+    const getInferredGate = () => {
+      inferredGatePromise ??= inferStartFinishGateAsync(points);
+      return inferredGatePromise;
+    };
     const setForFile = (updater: (workspace: FileLapWorkspace) => FileLapWorkspace) => {
       if (cancelled) return;
       setFiles((previous) => ({
@@ -128,9 +134,9 @@ export function useLapWorkspace(
         .map((profile) => ({ ...scoreTrackProfile(profile, points), profile }))
         .filter((candidate) => candidate.medianDistanceMeters <= 60 && candidate.lengthRatio >= 0.65 && candidate.lengthRatio <= 1.35)
         .sort((left, right) => left.score - right.score);
-      const cachedProfile = cached[0]?.profile;
-      const cachedAmbiguous = cached.length > 1 && cached[1].score <= cached[0].score * 1.18;
-      if (cachedAmbiguous) {
+      const cachedResolution = resolveCachedProfile(cached);
+      const cachedProfile = cachedResolution.profile;
+      if (cachedResolution.ambiguous) {
         setForFile((workspace) => ({
           ...workspace,
           profile: undefined,
@@ -142,19 +148,37 @@ export function useLapWorkspace(
       }
       const isFresh = cachedProfile ? isFreshProfile(cachedProfile) : false;
       if (cachedProfile) {
+        const profile = addInferredGate(
+          cachedProfile,
+          cachedProfile.startFinish ? undefined : await getInferredGate(),
+        );
+        if (profile !== cachedProfile) await saveTrackProfile(profile);
         setForFile((workspace) => ({
           ...workspace,
-          profile: cachedProfile,
+          profile,
           lookupState: isFresh ? "matched" : "searching",
           candidates: cached,
         }));
       }
       if (cachedProfile && isFresh) return;
 
-      setForFile((workspace) => ({ ...workspace, lookupState: "searching" }));
+      setForFile((workspace) => ({
+        ...workspace,
+        lookupState: "searching",
+      }));
       const result = await lookupOsmTracks(points);
       if (result.status === "matched" && result.candidates[0]) {
-        const profile = result.candidates[0].profile;
+        const mergedProfiles = result.candidates.map((candidate, index) => (
+          index === 0 ? mergeLocalAnalysis(candidate.profile, cachedProfile) : candidate.profile
+        ));
+        const inferredGate = mergedProfiles.some((profile) => !profile.startFinish)
+          ? await getInferredGate()
+          : undefined;
+        const candidates = result.candidates.map((candidate, index) => ({
+          ...candidate,
+          profile: addInferredGate(mergedProfiles[index], inferredGate),
+        }));
+        const profile = candidates[0].profile;
         await saveTrackProfile(profile);
         setForFile((workspace) => workspace.lookupState === "imported" || workspace.lookupState === "manual"
           ? workspace
@@ -163,16 +187,20 @@ export function useLapWorkspace(
               profile,
               lookupState: "matched",
               lookupMessage: undefined,
-              candidates: result.candidates,
+              candidates,
             });
         return;
       }
+      const inferredGate = result.status !== "ambiguous" ? await getInferredGate() : undefined;
       setForFile((workspace) => workspace.lookupState === "imported" || workspace.lookupState === "manual"
         ? workspace
         : {
             ...workspace,
-            lookupState: result.status,
-            lookupMessage: result.message,
+            manualGate: result.status !== "ambiguous" && !(workspace.profile?.startFinish || workspace.manualGate)
+              ? inferredGate
+              : workspace.manualGate,
+            lookupState: inferredGate && result.status !== "ambiguous" ? "generated" : result.status,
+            lookupMessage: inferredGate && result.status !== "ambiguous" ? undefined : result.message,
             candidates: result.candidates,
           });
     })();
@@ -273,7 +301,22 @@ export function useLapWorkspace(
         },
       };
     });
-  }, [fileId, fileName, generatedSections, points, representativeCenterline]);
+  }, [current.profile, fileId, fileName, generatedSections, points, representativeCenterline]);
+
+  useEffect(() => {
+    const profile = current.profile;
+    if (
+      !profile?.startFinish ||
+      !profile.analysisLine ||
+      !profile.sections.some((section) => section.source === "automatic")
+    ) return;
+    const revision = `${profile.id}:${profile.updatedAt}`;
+    if (persistedAutomaticProfiles.current.has(revision)) return;
+    persistedAutomaticProfiles.current.add(revision);
+    void saveTrackProfile(profile).catch(() => {
+      persistedAutomaticProfiles.current.delete(revision);
+    });
+  }, [current.profile]);
 
   useEffect(() => {
     if (!fileId) return;
@@ -333,13 +376,17 @@ export function useLapWorkspace(
   }, [update]);
 
   const chooseCandidate = useCallback((profileId: string) => {
-    update((workspace) => {
-      const candidate = workspace.candidates.find((item) => item.profile.id === profileId);
-      const profile = candidate?.profile;
-      if (profile) void saveTrackProfile(profile);
-      return profile ? { ...workspace, profile, lookupState: "matched" } : workspace;
-    });
-  }, [update]);
+    const candidate = current.candidates.find((item) => item.profile.id === profileId);
+    if (!candidate) return;
+    void (async () => {
+      const inferredGate = candidate.profile.startFinish ? undefined : await inferStartFinishGateAsync(points);
+      const profile = addInferredGate(candidate.profile, inferredGate);
+      await saveTrackProfile(profile);
+      update((workspace) => workspace.candidates.some((item) => item.profile.id === profileId)
+        ? { ...workspace, profile, lookupState: "matched" }
+        : workspace);
+    })();
+  }, [current.candidates, points, update]);
 
   const useSelectedPointAsStartFinish = useCallback((pointIndex: number) => {
     const nextGate = createGateFromRoutePoint(points, pointIndex);
@@ -680,6 +727,38 @@ function isFreshProfile(profile: TrackProfileV1): boolean {
   if (profile.source.kind !== "osm") return true;
   const fetchedAt = profile.source.fetchedAt ? Date.parse(profile.source.fetchedAt) : Number.NaN;
   return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < 30 * 24 * 60 * 60 * 1000;
+}
+
+function addInferredGate(profile: TrackProfileV1, inferredGate: TrackGate | undefined): TrackProfileV1 {
+  if (profile.startFinish || !inferredGate) return profile;
+  return touchProfile({ ...profile, startFinish: inferredGate });
+}
+
+function resolveCachedProfile(candidates: OsmTrackCandidate[]): { profile?: TrackProfileV1; ambiguous: boolean } {
+  const best = candidates[0];
+  if (!best) return { ambiguous: false };
+  const nearbyThreshold = Math.max(best.score * 1.18, best.score + 8);
+  const nearby = candidates.filter((candidate) => candidate.score <= nearbyThreshold);
+  if (nearby.length <= 1) return { profile: best.profile, ambiguous: false };
+
+  const reusablePresets = nearby.filter((candidate) => candidate.profile.source.kind !== "recording");
+  const hasGeneratedFallback = nearby.some((candidate) => candidate.profile.source.kind === "recording");
+  if (reusablePresets.length === 1 && hasGeneratedFallback) {
+    return { profile: reusablePresets[0].profile, ambiguous: false };
+  }
+  return { ambiguous: true };
+}
+
+function mergeLocalAnalysis(remote: TrackProfileV1, local: TrackProfileV1 | undefined): TrackProfileV1 {
+  if (!local || local.id !== remote.id) return remote;
+  return {
+    ...remote,
+    analysisLine: local.analysisLine ?? remote.analysisLine,
+    startFinish: local.startFinish ?? remote.startFinish,
+    sectorGates: local.sectorGates.length ? local.sectorGates : remote.sectorGates,
+    sections: local.sections.length ? local.sections : remote.sections,
+    pitLane: local.pitLane ?? remote.pitLane,
+  };
 }
 
 function recordingProfile(

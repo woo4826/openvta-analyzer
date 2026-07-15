@@ -79,6 +79,36 @@ describe("useLapWorkspace", () => {
     expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
   });
 
+  it("prefers a reusable analyzed preset over a similarly scored generated fallback", async () => {
+    const points = multiLapPoints();
+    const reusable = {
+      ...osmCandidate().profile,
+      id: "saved-preset",
+      name: "Saved full course",
+      source: { kind: "user" as const },
+    };
+    const generated = {
+      ...reusable,
+      id: "generated-fallback",
+      name: "Recording fallback",
+      startFinish: createGateFromRoutePoint(points, 0),
+      source: { kind: "recording" as const },
+    };
+    mocks.listTrackProfiles.mockResolvedValue([generated, reusable]);
+    mocks.scoreTrackProfile.mockImplementation((profile: TrackProfileV1) => ({
+      profile,
+      medianDistanceMeters: profile.id === generated.id ? 0.5 : 6,
+      lengthRatio: 1,
+      score: profile.id === generated.id ? 0.5 : 6,
+    }));
+
+    const { result } = renderHook(() => useLapWorkspace("file-1", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.lookupState).toBe("matched"));
+    expect(result.current.profile?.id).toBe(reusable.id);
+    expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
+  });
+
   it("proposes sections from the fastest valid complete lap rather than the OSM centerline", async () => {
     const candidate = osmCandidate();
     mocks.lookupOsmTracks.mockResolvedValue({ status: "ambiguous", candidates: [candidate] });
@@ -110,6 +140,113 @@ describe("useLapWorkspace", () => {
     expect(result.current.sectionResults.length).toBeGreaterThan(result.current.profile!.sections.length);
     expect(result.current.automaticTheoreticalBestSeconds).toBeGreaterThan(0);
     expect(parseTrackProfile(exportTrackProfile(result.current.profile!)).error).toBeUndefined();
+    await waitFor(() => expect(mocks.saveTrackProfile).toHaveBeenCalledWith(expect.objectContaining({
+      id: result.current.profile!.id,
+      source: { kind: "recording" },
+      sections: expect.arrayContaining([expect.objectContaining({ source: "automatic" })]),
+    })));
+  });
+
+  it("generates and persists a reusable preset when no saved or OSM track matches", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-auto", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.lookupState).toBe("generated"));
+    await waitFor(() => expect(result.current.profile?.sections.length).toBeGreaterThan(0));
+
+    expect(result.current.profile).toMatchObject({
+      id: "recording-file-auto",
+      source: { kind: "recording" },
+      startFinish: expect.objectContaining({ kind: "start-finish" }),
+    });
+    expect(result.current.detection?.laps.filter((lap) => lap.completion === "complete")).toHaveLength(2);
+    expect(result.current.profile?.sections.every((section) => section.source === "automatic")).toBe(true);
+    await waitFor(() => expect(mocks.saveTrackProfile).toHaveBeenCalledWith(expect.objectContaining({
+      id: "recording-file-auto",
+      startFinish: expect.any(Object),
+      sections: expect.arrayContaining([expect.objectContaining({ source: "automatic" })]),
+    })));
+  });
+
+  it("adds the inferred gate and automatic sections to a matched preset that only has a centerline", async () => {
+    const candidate = osmCandidate();
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "matched", candidates: [candidate] });
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-osm", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.lookupState).toBe("matched"));
+    await waitFor(() => expect(result.current.profile?.sections.length).toBeGreaterThan(0));
+
+    expect(result.current.profile).toMatchObject({
+      id: candidate.profile.id,
+      source: { kind: "osm" },
+      startFinish: expect.objectContaining({ kind: "start-finish" }),
+    });
+    expect(result.current.sectionResults.length).toBeGreaterThan(0);
+  });
+
+  it("re-seeds automatic sections when a refreshed profile replaces a prepared cached profile", async () => {
+    const candidate = osmCandidate();
+    const stale: TrackProfileV1 = {
+      ...candidate.profile,
+      id: "cached-stale",
+      source: { kind: "osm", fetchedAt: "2025-01-01T00:00:00.000Z" },
+    };
+    mocks.listTrackProfiles.mockResolvedValue([stale]);
+    mocks.scoreTrackProfile.mockReturnValue({ medianDistanceMeters: 5, lengthRatio: 1, score: 5 });
+    const lookup = deferred<{ status: "matched"; candidates: OsmTrackCandidate[] }>();
+    mocks.lookupOsmTracks.mockReturnValue(lookup.promise);
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-refresh", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.profile?.id).toBe("cached-stale"));
+    await waitFor(() => expect(result.current.profile?.sections.length).toBeGreaterThan(0));
+
+    await act(async () => lookup.resolve({ status: "matched", candidates: [candidate] }));
+    await waitFor(() => expect(result.current.profile?.id).toBe(candidate.profile.id));
+    await waitFor(() => expect(result.current.profile?.sections.length).toBeGreaterThan(0));
+  });
+
+  it("preserves local gates and edited sections when the same OSM preset is refreshed", async () => {
+    const candidate = osmCandidate();
+    const points = multiLapPoints();
+    const localSection = {
+      id: "driver-section",
+      name: "Driver braking zone",
+      kind: "corner-right" as const,
+      startDistanceMeters: 0,
+      endDistanceMeters: 100,
+      source: "user" as const,
+    };
+    const stale: TrackProfileV1 = {
+      ...candidate.profile,
+      startFinish: createGateFromRoutePoint(points, 0),
+      analysisLine: { type: "LineString", coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [localSection],
+      source: { kind: "osm", fetchedAt: "2025-01-01T00:00:00.000Z" },
+    };
+    mocks.listTrackProfiles.mockResolvedValue([stale]);
+    mocks.scoreTrackProfile.mockReturnValue({ medianDistanceMeters: 5, lengthRatio: 1, score: 5 });
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "matched", candidates: [candidate] });
+    const { result } = renderHook(() => useLapWorkspace("file-preserve", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.lookupState).toBe("matched"));
+
+    expect(result.current.profile?.sections).toEqual([localSection]);
+    expect(result.current.profile?.startFinish).toEqual(stale.startFinish);
+    expect(result.current.profile?.analysisLine).toEqual(stale.analysisLine);
+  });
+
+  it("keeps an open route trackless when automatic lap inference is not defensible", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = Array.from({ length: 20 }, (_, index) => gpsPoint(index, 37, 127 + index * 0.0002));
+    const { result } = renderHook(() => useLapWorkspace("file-open", "drive.Vta", points));
+
+    await waitFor(() => expect(result.current.lookupState).toBe("no-match"));
+
+    expect(result.current.gate).toBeUndefined();
+    expect(result.current.profile).toBeUndefined();
   });
 
   it("preserves edited sections unless automatic replacement is explicit", async () => {
@@ -393,4 +530,12 @@ function multiLapPoints(): GpsPoint[] {
     ...gpsPoint(index, latitude, longitude),
     elapsedRealtimeNanos: elapsed[index] * 1_000_000_000,
   }));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
 }

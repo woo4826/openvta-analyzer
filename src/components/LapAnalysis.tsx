@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Flag, MapPinned, Scissors, Upload } from "lucide-react";
 import type { LapWorkspace } from "../app/useLapWorkspace";
 import { analyzeCorners } from "../domain/lapAnalysis";
+import { analyzeLapOpportunities } from "../domain/opportunityAnalysis";
 import { downloadText } from "../domain/export";
 import {
   cornerResultsCsv,
@@ -25,9 +26,11 @@ import { useI18n } from "../i18n/useI18n";
 import type { Translate } from "../i18n/messages";
 import type { TranslationKey } from "../i18n/locales";
 import { LapExplorer } from "./LapExplorer";
+import { LapOpportunityOverview } from "./LapOpportunityOverview";
+import { LapTelemetryChart } from "./LapTelemetryChart";
 import { PointTimeline } from "./PointTimeline";
 import { RouteMap, type LapMapOverlay } from "./RouteMap";
-import { FilePickerButton, Metric, Panel, StatusBadge } from "./ui";
+import { FilePickerButton, Panel, StatusBadge, Tabs } from "./ui";
 
 interface LapAnalysisProps {
   fileName: string;
@@ -44,6 +47,7 @@ interface LapAnalysisProps {
 
 const LAP_COLORS = ["#0f766e", "#d97706", "#2563eb", "#be3b3b", "#7c3aed"];
 const EMPTY_LAPS: LapResult[] = [];
+type LapAnalysisView = "insights" | "compare" | "setup";
 
 export function LapAnalysis({
   fileName,
@@ -58,6 +62,8 @@ export function LapAnalysis({
   workspace,
 }: LapAnalysisProps) {
   const { t } = useI18n();
+  const [activeView, setActiveView] = useState<LapAnalysisView>("insights");
+  const [selectedSectionId, setSelectedSectionId] = useState<string>();
   const [importError, setImportError] = useState<string>();
   const [gateWidthDraft, setGateWidthDraft] = useState(workspace.gate?.widthMeters ?? 50);
   const [gateBearingDraft, setGateBearingDraft] = useState(workspace.gate?.forwardBearingDegrees ?? 0);
@@ -76,6 +82,23 @@ export function LapAnalysis({
   const fastest = laps
     .filter((lap) => lap.completion === "complete" && lap.validity === "valid" && lap.durationSeconds !== undefined)
     .sort((left, right) => left.durationSeconds! - right.durationSeconds!)[0];
+  const completeLapCount = laps.filter((lap) => lap.completion === "complete").length;
+  const opportunities = useMemo(
+    () => analyzeLapOpportunities(workspace.primaryLapId, workspace.profile?.sections ?? [], workspace.sectionResults, 3),
+    [workspace.primaryLapId, workspace.profile?.sections, workspace.sectionResults],
+  );
+  const effectiveSectionId = selectedSectionId ?? opportunities.opportunities[0]?.sectionId;
+  const selectedOpportunity = opportunities.opportunities.find((item) => item.sectionId === effectiveSectionId);
+  const selectedSection = workspace.profile?.sections.find((section) => section.id === effectiveSectionId);
+  const bestSelectedSectionResult = useMemo(
+    () => workspace.sectionResults
+      .filter((result) => result.sectionId === effectiveSectionId && result.eligibleForBest)
+      .sort((left, right) => left.durationSeconds - right.durationSeconds)[0],
+    [effectiveSectionId, workspace.sectionResults],
+  );
+  const telemetryReferenceLap = laps.find((lap) => lap.id === (selectedOpportunity?.bestLapId ?? bestSelectedSectionResult?.lapId))
+    ?? laps.find((lap) => lap.id === workspace.referenceLapId);
+  const insightsReady = Boolean(primaryLap && workspace.analysisLine && workspace.profile?.sections.length && workspace.sectionResults.length);
   const bestSectorSeconds = useMemo(() => {
     const best = new Map<number, number>();
     for (const sector of workspace.sectors) {
@@ -105,6 +128,16 @@ export function LapAnalysis({
     setGateWidthDraft(workspace.gate.widthMeters);
     setGateBearingDraft(workspace.gate.forwardBearingDegrees);
   }, [workspace.gate]);
+
+  useEffect(() => {
+    const firstOpportunity = opportunities.opportunities[0]?.sectionId;
+    const sections = workspace.profile?.sections ?? [];
+    if (!selectedSectionId && firstOpportunity) {
+      setSelectedSectionId(firstOpportunity);
+    } else if (selectedSectionId && !sections.some((section) => section.id === selectedSectionId)) {
+      setSelectedSectionId(firstOpportunity);
+    }
+  }, [opportunities.opportunities, selectedSectionId, workspace.profile?.sections]);
 
   async function importTrack(files: File[]) {
     const file = files[0];
@@ -152,200 +185,207 @@ export function LapAnalysis({
 
   return (
     <section className="lap-analysis-grid">
-      <Panel
-        title={t("lap.title")}
-        eyebrow={t("lap.subtitle")}
-        actions={<StatusBadge tone={lookupTone(workspace.lookupState)}>{lookupLabel(workspace.lookupState, t)}</StatusBadge>}
-      >
-        <div className="lap-track-toolbar">
-          <FilePickerButton
-            accept=".json,.openvta-track.json,application/json"
-            onFiles={(files) => void importTrack(files)}
-            icon={<Upload size={16} aria-hidden />}
-          >
-            {t("lap.importTrack")}
-          </FilePickerButton>
-          <button type="button" className="button" onClick={() => void saveAndExportProfile()}>
-            <Download size={16} aria-hidden />
-            {t("lap.saveExportTrack")}
-          </button>
-          <button type="button" className="button primary" onClick={useSelectedPointAsStartFinish}>
-            <Flag size={16} aria-hidden />
-            {t("lap.useSelectedPoint")}
-          </button>
-          <button type="button" className="button" onClick={() => workspace.addSectorGate(selectedPointIndex)} disabled={!workspace.gate}>
-            <MapPinned size={16} aria-hidden />
-            {t("lap.addSectorGate")}
-          </button>
-        </div>
-        <p className="lap-privacy-note">{t("lap.osmPrivacy")}</p>
-        {importError ? <p className="inline-error" role="alert">{importError}</p> : null}
-        {workspace.lookupMessage ? <p className="inline-warning">{workspace.lookupMessage}</p> : null}
-        {workspace.detection?.warnings.length ? (
-          <div className="lap-detection-warnings" role="status">
-            {workspace.detection.warnings.map((warning) => (
-              <p className="inline-warning" key={warning}>{localizeLapDetectionWarning(warning, t)}</p>
-            ))}
-          </div>
-        ) : null}
-        {workspace.candidates.length > 1 && workspace.lookupState === "ambiguous" ? (
-          <label className="field">
-            <span>{t("lap.chooseCandidate")}</span>
-            <select defaultValue="" onChange={(event) => workspace.chooseCandidate(event.target.value)}>
-              <option value="" disabled>{t("lap.chooseCandidatePlaceholder")}</option>
-              {workspace.candidates.map((candidate) => (
-                <option key={candidate.profile.id} value={candidate.profile.id}>
-                  {candidate.profile.name} · {candidate.medianDistanceMeters.toFixed(0)} m
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <div className="metric-grid lap-track-metrics">
-          <Metric label={t("lap.trackProfile")} value={workspace.profile?.name ?? t("lap.trackless")} detail={workspace.profile?.source.kind ?? t("lap.manualGate")} />
-          <Metric label={t("lap.selectedPoint")} value={String(selectedPointIndex + 1)} detail={points[selectedPointIndex] ? `${points[selectedPointIndex].speedKmh.toFixed(1)} km/h` : undefined} />
-          <Metric label={t("lap.detectedLaps")} value={String(laps.filter((lap) => lap.completion === "complete").length)} detail={`${laps.filter((lap) => lap.completion !== "complete").length} ${t("lap.partialShort")}`} />
-          <Metric label={t("lap.fastestLap")} value={fastest?.durationSeconds === undefined ? "—" : formatLapTime(fastest.durationSeconds)} />
-          <Metric label={t("lap.theoreticalBest")} value={workspace.theoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.theoreticalBestSeconds)} />
-          <Metric label={t("lap.sectorCount")} value={String(workspace.profile?.sectorGates.length ? workspace.profile.sectorGates.length + 1 : 0)} />
-          <Metric label={t("lap.automaticTheoreticalBest")} value={workspace.automaticTheoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.automaticTheoreticalBestSeconds)} />
-          <Metric label={t("lap.analysisSectorCount")} value={String(workspace.profile?.sections.length ?? 0)} />
-        </div>
-        {workspace.gate ? (
-          <div className="form-grid lap-gate-form">
-            <label className="field">
-              <span>{t("lap.gateWidth")}</span>
-              <input
-                type="number"
-                min={10}
-                max={200}
-                value={gateWidthDraft}
-                onChange={(event) => setGateWidthDraft(Number(event.target.value))}
-              />
-            </label>
-            <label className="field">
-              <span>{t("lap.forwardBearing")}</span>
-              <input
-                type="number"
-                min={0}
-                max={359.9}
-                step={0.1}
-                value={gateBearingDraft}
-                onChange={(event) => setGateBearingDraft(Number(event.target.value))}
-              />
-            </label>
-            <button type="button" className="button" onClick={applyGateChanges}>{t("lap.applyGateChanges")}</button>
-          </div>
-        ) : <div className="empty-state">{t("lap.noGateHelp")}</div>}
-        {workspace.profile?.source.kind === "osm" ? (
-          <p className="lap-attribution">{workspace.profile.source.attribution} · ODbL 1.0</p>
-        ) : null}
-      </Panel>
-
-      <Panel title={t("lap.routeAndGate")} className="lap-map-panel">
-        <RouteMap
-          points={points}
-          selectedIndex={selectedPointIndex}
-          sourceVisibility={sourceVisibility}
-          settings={mapSettings}
-          segment={activeSegment}
-          trackCenterline={workspace.profile?.centerline}
-          sectionCenterline={workspace.sectionCenterline}
-          trackSections={workspace.profile?.sections}
-          gates={gates}
-          lapOverlays={overlays}
-          onSelectedIndex={onSelectedPointIndex}
-          onSegmentChange={onActiveSegment}
-          onRegionChange={() => undefined}
-          onSettingsChange={onMapSettingsChange}
+      <div className="lap-analysis-viewbar lap-wide-panel">
+        <Tabs
+          ariaLabel={t("lap.view.aria")}
+          items={[
+            { id: "insights", label: t("lap.view.insights") },
+            { id: "compare", label: t("lap.view.compare") },
+            { id: "setup", label: t("lap.view.setup") },
+          ]}
+          value={activeView}
+          onChange={(value) => setActiveView(value as LapAnalysisView)}
         />
-        <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
-      </Panel>
+        <div className="lap-analysis-context">
+          <span>{workspace.profile?.name ?? t("lap.trackless")}</span>
+          <StatusBadge tone={lookupTone(workspace.lookupState)}>{lookupLabel(workspace.lookupState, t)}</StatusBadge>
+        </div>
+      </div>
 
-      <Panel
-        title={t("lap.lapList")}
-        actions={<span className="lap-selection-count">{workspace.selectedLapIds.length}/5 {t("lap.selected")}</span>}
-        className="lap-wide-panel"
-      >
-        {laps.length ? (
-          <div className="table-wrap">
-            <table className="lap-table">
-              <thead>
-                <tr>
-                  <th>{t("lap.compare")}</th>
-                  <th>{t("lap.lap")}</th>
-                  <th>{t("lap.completion")}</th>
-                  <th>{t("lap.duration")}</th>
-                  <th>{t("lap.deltaFastest")}</th>
-                  <th>{t("lap.distance")}</th>
-                  <th>{t("lap.avgSpeed")}</th>
-                  <th>{t("lap.validity")}</th>
-                  <th>{t("lap.flags")}</th>
-                  <th>{t("lap.primary")}</th>
-                  <th>{t("lap.reference")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {laps.map((lap) => {
-                  const selected = workspace.selectedLapIds.includes(lap.id);
-                  return (
-                    <tr key={lap.id} className={workspace.primaryLapId === lap.id ? "lap-primary-row" : undefined}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          aria-label={`${t("lap.compare")} ${lapLabel(lap, t)}`}
-                          checked={selected}
-                          disabled={!selected && workspace.selectedLapIds.length >= 5}
-                          onChange={() => workspace.toggleLapSelection(lap.id)}
-                        />
-                      </td>
-                      <th scope="row">{lapLabel(lap, t)}</th>
-                      <td><StatusBadge tone={lap.completion === "complete" ? "success" : "warning"}>{completionLabel(lap, t)}</StatusBadge></td>
-                      <td>{lap.durationSeconds === undefined ? "—" : formatLapTime(lap.durationSeconds)}</td>
-                      <td>{lap.durationSeconds === undefined || fastest?.durationSeconds === undefined ? "—" : formatDelta(lap.durationSeconds - fastest.durationSeconds)}</td>
-                      <td>{lap.distanceKm.toFixed(3)} km</td>
-                      <td>{lap.averageSpeedKmh.toFixed(1)} km/h</td>
-                      <td>
-                        <select aria-label={`${t("lap.validity")} ${lapLabel(lap, t)}`} value={lap.validity} onChange={(event) => workspace.setLapValidity(lap.id, event.target.value as LapResult["validity"])}>
-                          <option value="valid">{t("lap.valid")}</option>
-                          <option value="invalid">{t("lap.invalid")}</option>
-                          <option value="excluded">{t("lap.excluded")}</option>
-                        </select>
-                      </td>
-                      <td>
-                        {lap.flags.length ? (
-                          <div className="lap-flag-list">
-                            {lap.flags.map((flag) => (
-                              <StatusBadge key={flag} tone={lapFlagTone(flag)}>{lapFlagLabel(flag, t)}</StatusBadge>
-                            ))}
-                          </div>
-                        ) : "—"}
-                      </td>
-                      <td><input type="radio" name="primary-lap" aria-label={`${t("lap.primary")} ${lapLabel(lap, t)}`} checked={workspace.primaryLapId === lap.id} onChange={() => workspace.setPrimaryLap(lap.id)} /></td>
-                      <td><input type="radio" name="reference-lap" aria-label={`${t("lap.reference")} ${lapLabel(lap, t)}`} checked={workspace.referenceLapId === lap.id} disabled={lap.completion !== "complete" || lap.validity !== "valid"} onChange={() => workspace.setReferenceLap(lap.id)} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : <div className="empty-state">{workspace.gate ? t("lap.noLaps") : t("lap.noGateHelp")}</div>}
-        {workspace.selectedLapIds.length >= 5 ? <p className="inline-warning">{t("lap.maxFive")}</p> : null}
-      </Panel>
+      {workspace.lookupMessage ? <p className="inline-warning lap-wide-panel">{workspace.lookupMessage}</p> : null}
+      {workspace.detection?.warnings.length ? (
+        <div className="lap-detection-warnings lap-wide-panel" role="status">
+          {workspace.detection.warnings.map((warning) => (
+            <p className="inline-warning" key={warning}>{localizeLapDetectionWarning(warning, t)}</p>
+          ))}
+        </div>
+      ) : null}
 
-      <LapExplorer
-        profileId={workspace.profile?.id}
-        points={points}
-        laps={laps}
-        selectedLapIds={workspace.selectedLapIds}
-        primaryLapId={workspace.primaryLapId}
-        referenceLapId={workspace.referenceLapId}
-        analysisLine={workspace.analysisLine}
-        sections={workspace.profile?.sections ?? []}
-        sectionResults={workspace.sectionResults}
-      />
+      {activeView === "insights" ? (
+        insightsReady ? (
+          <>
+            <LapOpportunityOverview
+              points={points}
+              laps={laps}
+              primaryLapId={workspace.primaryLapId}
+              onPrimaryLap={workspace.setPrimaryLap}
+              fastestSeconds={fastest?.durationSeconds}
+              theoreticalBestSeconds={workspace.automaticTheoreticalBestSeconds}
+              sections={workspace.profile?.sections ?? []}
+              sectionResults={workspace.sectionResults}
+              selectedSectionId={selectedSection?.id}
+              onSelectSection={setSelectedSectionId}
+              selectedPointIndex={selectedPointIndex}
+              onSelectedPointIndex={onSelectedPointIndex}
+              sourceVisibility={sourceVisibility}
+              mapSettings={mapSettings}
+              onMapSettingsChange={onMapSettingsChange}
+              activeSegment={activeSegment}
+              onActiveSegment={onActiveSegment}
+              trackCenterline={workspace.profile?.centerline}
+              sectionCenterline={workspace.sectionCenterline}
+              gates={gates}
+              trackName={workspace.profile?.name}
+            />
+            <LapTelemetryChart
+              points={points}
+              primaryLap={primaryLap}
+              referenceLap={telemetryReferenceLap}
+              analysisLine={workspace.analysisLine}
+              section={selectedSection}
+              selectedPointIndex={selectedPointIndex}
+              onSelectedPointIndex={onSelectedPointIndex}
+              onActiveSegment={onActiveSegment}
+            />
+          </>
+        ) : (
+          <>
+            <Panel
+              title={t("lap.insights.title")}
+              eyebrow={t("lap.insights.eyebrow")}
+              className="lap-analysis-onboarding lap-wide-panel"
+              actions={(
+                <StatusBadge tone={!workspace.gate || completeLapCount ? "info" : "warning"}>
+                  {!workspace.gate
+                    ? t("lap.trackless")
+                    : completeLapCount
+                      ? t("lap.insights.sectionsPending")
+                      : t("lap.noLaps")}
+                </StatusBadge>
+              )}
+            >
+              <p>{t("lap.view.noAnalysis")}</p>
+              <div className="row-actions">
+                <button type="button" className="button primary" onClick={useSelectedPointAsStartFinish}>
+                  <Flag size={16} aria-hidden />{t("lap.useSelectedPoint")}
+                </button>
+                {workspace.canGenerateAutomaticSections ? (
+                  <button type="button" className="button" onClick={() => workspace.recalculateAutomaticSections(Boolean(workspace.profile?.sections.length))}>
+                    {t("lap.recalculateAutomatic")}
+                  </button>
+                ) : null}
+                <button type="button" className="button" onClick={() => setActiveView("setup")}>{t("lap.view.openSetup")}</button>
+              </div>
+            </Panel>
+            <Panel title={t("lap.routeAndGate")} className="lap-map-panel lap-wide-panel">
+              <RouteMap
+                points={points}
+                selectedIndex={selectedPointIndex}
+                sourceVisibility={sourceVisibility}
+                settings={mapSettings}
+                segment={activeSegment}
+                trackCenterline={workspace.profile?.centerline}
+                sectionCenterline={workspace.sectionCenterline}
+                trackSections={workspace.profile?.sections}
+                gates={gates}
+                lapOverlays={overlays}
+                onSelectedIndex={onSelectedPointIndex}
+                onSegmentChange={onActiveSegment}
+                onRegionChange={() => undefined}
+                onSettingsChange={onMapSettingsChange}
+              />
+              <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
+            </Panel>
+          </>
+        )
+      ) : null}
 
-      <Panel title={t("lap.corrections")} className="lap-wide-panel">
+      {activeView === "compare" ? (
+        <>
+          <Panel
+            title={t("lap.lapList")}
+            actions={<span className="lap-selection-count">{workspace.selectedLapIds.length}/5 {t("lap.selected")}</span>}
+            className="lap-wide-panel"
+          >
+            {laps.length ? (
+              <div className="table-wrap">
+                <table className="lap-table">
+                  <thead><tr><th>{t("lap.compare")}</th><th>{t("lap.lap")}</th><th>{t("lap.completion")}</th><th>{t("lap.duration")}</th><th>{t("lap.deltaFastest")}</th><th>{t("lap.distance")}</th><th>{t("lap.avgSpeed")}</th><th>{t("lap.validity")}</th><th>{t("lap.flags")}</th><th>{t("lap.primary")}</th><th>{t("lap.reference")}</th></tr></thead>
+                  <tbody>{laps.map((lap) => {
+                    const selected = workspace.selectedLapIds.includes(lap.id);
+                    return (
+                      <tr key={lap.id} className={workspace.primaryLapId === lap.id ? "lap-primary-row" : undefined}>
+                        <td><input type="checkbox" aria-label={`${t("lap.compare")} ${lapLabel(lap, t)}`} checked={selected} disabled={!selected && workspace.selectedLapIds.length >= 5} onChange={() => workspace.toggleLapSelection(lap.id)} /></td>
+                        <th scope="row">{lapLabel(lap, t)}</th>
+                        <td><StatusBadge tone={lap.completion === "complete" ? "success" : "warning"}>{completionLabel(lap, t)}</StatusBadge></td>
+                        <td>{lap.durationSeconds === undefined ? "—" : formatLapTime(lap.durationSeconds)}</td>
+                        <td>{lap.durationSeconds === undefined || fastest?.durationSeconds === undefined ? "—" : formatDelta(lap.durationSeconds - fastest.durationSeconds)}</td>
+                        <td>{lap.distanceKm.toFixed(3)} km</td>
+                        <td>{lap.averageSpeedKmh.toFixed(1)} km/h</td>
+                        <td><select aria-label={`${t("lap.validity")} ${lapLabel(lap, t)}`} value={lap.validity} onChange={(event) => workspace.setLapValidity(lap.id, event.target.value as LapResult["validity"])}><option value="valid">{t("lap.valid")}</option><option value="invalid">{t("lap.invalid")}</option><option value="excluded">{t("lap.excluded")}</option></select></td>
+                        <td>{lap.flags.length ? <div className="lap-flag-list">{lap.flags.map((flag) => <StatusBadge key={flag} tone={lapFlagTone(flag)}>{lapFlagLabel(flag, t)}</StatusBadge>)}</div> : "—"}</td>
+                        <td><input type="radio" name="primary-lap" aria-label={`${t("lap.primary")} ${lapLabel(lap, t)}`} checked={workspace.primaryLapId === lap.id} onChange={() => workspace.setPrimaryLap(lap.id)} /></td>
+                        <td><input type="radio" name="reference-lap" aria-label={`${t("lap.reference")} ${lapLabel(lap, t)}`} checked={workspace.referenceLapId === lap.id} disabled={lap.completion !== "complete" || lap.validity !== "valid"} onChange={() => workspace.setReferenceLap(lap.id)} /></td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            ) : <div className="empty-state">{workspace.gate ? t("lap.noLaps") : t("lap.noGateHelp")}</div>}
+            {workspace.selectedLapIds.length >= 5 ? <p className="inline-warning">{t("lap.maxFive")}</p> : null}
+          </Panel>
+          <LapExplorer
+            profileId={workspace.profile?.id}
+            points={points}
+            laps={laps}
+            selectedLapIds={workspace.selectedLapIds}
+            primaryLapId={workspace.primaryLapId}
+            referenceLapId={workspace.referenceLapId}
+            analysisLine={workspace.analysisLine}
+            sections={workspace.profile?.sections ?? []}
+            sectionResults={workspace.sectionResults}
+            scopeId={selectedSectionId}
+            onScopeIdChange={(scopeId) => setSelectedSectionId(scopeId === "whole-lap" ? undefined : scopeId)}
+          />
+        </>
+      ) : null}
+
+      {activeView === "setup" ? (
+        <>
+          <Panel title={t("lap.title")} eyebrow={t("lap.subtitle")} className="lap-wide-panel">
+            <div className="lap-setup-summary">
+              <StatusBadge tone={lookupTone(workspace.lookupState)}>{workspace.profile?.name ?? t("lap.trackless")}</StatusBadge>
+              <span>{t("lap.selectedPoint")}: {selectedPointIndex + 1}</span>
+              <span>{t("lap.detectedLaps")}: {completeLapCount}</span>
+              <span>{t("lap.analysisSectorCount")}: {workspace.profile?.sections.length ?? 0}</span>
+            </div>
+            <div className="lap-track-toolbar">
+              <FilePickerButton accept=".json,.openvta-track.json,application/json" onFiles={(files) => void importTrack(files)} icon={<Upload size={16} aria-hidden />}>{t("lap.importTrack")}</FilePickerButton>
+              <button type="button" className="button" onClick={() => void saveAndExportProfile()}><Download size={16} aria-hidden />{t("lap.saveExportTrack")}</button>
+              <button type="button" className="button primary" onClick={useSelectedPointAsStartFinish}><Flag size={16} aria-hidden />{t("lap.useSelectedPoint")}</button>
+              <button type="button" className="button" onClick={() => workspace.addSectorGate(selectedPointIndex)} disabled={!workspace.gate}><MapPinned size={16} aria-hidden />{t("lap.addSectorGate")}</button>
+            </div>
+            <p className="lap-privacy-note">{t("lap.osmPrivacy")}</p>
+            {importError ? <p className="inline-error" role="alert">{importError}</p> : null}
+            {workspace.candidates.length > 1 && workspace.lookupState === "ambiguous" ? (
+              <label className="field"><span>{t("lap.chooseCandidate")}</span><select defaultValue="" onChange={(event) => workspace.chooseCandidate(event.target.value)}><option value="" disabled>{t("lap.chooseCandidatePlaceholder")}</option>{workspace.candidates.map((candidate) => <option key={candidate.profile.id} value={candidate.profile.id}>{candidate.profile.name} · {candidate.medianDistanceMeters.toFixed(0)} m</option>)}</select></label>
+            ) : null}
+            {workspace.gate ? (
+              <div className="form-grid lap-gate-form">
+                <label className="field"><span>{t("lap.gateWidth")}</span><input type="number" min={10} max={200} value={gateWidthDraft} onChange={(event) => setGateWidthDraft(Number(event.target.value))} /></label>
+                <label className="field"><span>{t("lap.forwardBearing")}</span><input type="number" min={0} max={359.9} step={0.1} value={gateBearingDraft} onChange={(event) => setGateBearingDraft(Number(event.target.value))} /></label>
+                <button type="button" className="button" onClick={applyGateChanges}>{t("lap.applyGateChanges")}</button>
+              </div>
+            ) : <div className="empty-state">{t("lap.noGateHelp")}</div>}
+            {workspace.profile?.source.kind === "osm" ? <p className="lap-attribution">{workspace.profile.source.attribution} · ODbL 1.0</p> : null}
+          </Panel>
+
+          <Panel title={t("lap.routeAndGate")} className="lap-map-panel lap-wide-panel">
+            <RouteMap points={points} selectedIndex={selectedPointIndex} sourceVisibility={sourceVisibility} settings={mapSettings} segment={activeSegment} trackCenterline={workspace.profile?.centerline} sectionCenterline={workspace.sectionCenterline} trackSections={workspace.profile?.sections} gates={gates} lapOverlays={overlays} onSelectedIndex={onSelectedPointIndex} onSegmentChange={onActiveSegment} onRegionChange={() => undefined} onSettingsChange={onMapSettingsChange} />
+            <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
+          </Panel>
+
+          <Panel title={t("lap.corrections")} className="lap-wide-panel">
         <div className="lap-track-toolbar">
           <button type="button" className="button" disabled={!workspace.gate} onClick={() => workspace.addBoundary(selectedPointIndex)}>
             <Scissors size={16} aria-hidden />
@@ -363,9 +403,9 @@ export function LapAnalysis({
             ))}
           </div>
         ) : null}
-      </Panel>
+          </Panel>
 
-      <Panel
+          <Panel
         title={t("lap.sectors")}
         actions={(
           <label className="lap-option-check">
@@ -410,9 +450,9 @@ export function LapAnalysis({
             </table>
           </div>
         ) : <div className="empty-state">{t("lap.noSectors")}</div>}
-      </Panel>
+          </Panel>
 
-      <Panel
+          <Panel
         title={t("lap.sections")}
         actions={(
           <button
@@ -438,9 +478,9 @@ export function LapAnalysis({
             ))}
           </div>
         ) : <div className="empty-state">{t("lap.noSections")}</div>}
-      </Panel>
+          </Panel>
 
-      <Panel title={t("lap.corners")} className="lap-wide-panel">
+          <Panel title={t("lap.corners")} className="lap-wide-panel">
         {corners.length ? (
           <div className="table-wrap">
             <table><thead><tr><th>{t("lap.section")}</th><th>{t("lap.duration")}</th><th>{t("lap.entrySpeed")}</th><th>{t("lap.minimumSpeed")}</th><th>{t("lap.exitSpeed")}</th><th>{t("lap.maxLateralG")}</th><th>{t("lap.maxDecelerationG")}</th></tr></thead>
@@ -448,9 +488,9 @@ export function LapAnalysis({
             </table>
           </div>
         ) : <div className="empty-state">{t("lap.noCornerMetrics")}</div>}
-      </Panel>
+          </Panel>
 
-      <Panel title={t("lap.exports")} className="lap-wide-panel">
+          <Panel title={t("lap.exports")} className="lap-wide-panel">
         <div className="lap-track-toolbar">
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.laps.csv`, lapResultsCsv(laps), "text/csv")}>{t("lap.exportLaps")}</button>
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.sectors.csv`, sectorResultsCsv(workspace.sectors), "text/csv")}>{t("lap.exportSectors")}</button>
@@ -458,7 +498,9 @@ export function LapAnalysis({
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.analysis-sectors.csv`, sectionResultsCsv(workspace.sectionResults), "text/csv")}>{t("lap.exportAnalysisSectors")}</button>
           <button type="button" className="button primary" onClick={exportAllAnalysis}><Download size={16} aria-hidden />{t("lap.exportAnalysis")}</button>
         </div>
-      </Panel>
+          </Panel>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -572,12 +614,13 @@ function lookupLabel(state: LapWorkspace["lookupState"], t: Translate): string {
     "invalid-route": "lap.lookup.invalidRoute",
     imported: "lap.lookup.imported",
     manual: "lap.lookup.manual",
+    generated: "lap.lookup.generated",
   };
   return t(keys[state]);
 }
 
 function lookupTone(state: LapWorkspace["lookupState"]): "neutral" | "success" | "warning" | "danger" | "info" {
-  if (state === "matched" || state === "imported" || state === "manual") return "success";
+  if (state === "matched" || state === "imported" || state === "manual" || state === "generated") return "success";
   if (state === "offline" || state === "no-match" || state === "invalid-route") return "warning";
   if (state === "searching" || state === "cache") return "info";
   return "neutral";
