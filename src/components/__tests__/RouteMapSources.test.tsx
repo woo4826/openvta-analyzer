@@ -119,6 +119,20 @@ describe("RouteMap source updates", () => {
     expect(map.jumpTo).toHaveBeenCalledWith({ center: [128.001, 38.001] });
   });
 
+  it("can move the selected marker without recentering the comparison viewport", async () => {
+    const view = render(wrappedRoute(0, false, { followSelectedPoint: false }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.sources.get("selected-point-source")?.setData).toHaveBeenCalled());
+    map.sources.get("selected-point-source")?.setData.mockClear();
+    map.jumpTo.mockClear();
+
+    view.rerender(wrappedRoute(1, false, { followSelectedPoint: false }));
+
+    await waitFor(() => expect(map.sources.get("selected-point-source")?.setData).toHaveBeenCalledOnce());
+    expect(map.jumpTo).not.toHaveBeenCalled();
+  });
+
   it("publishes section overlays to the MapLibre source", async () => {
     render(wrappedRoute(0, true));
     await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
@@ -325,6 +339,7 @@ function wrappedRoute(
     lapOverlays?: ComponentProps<typeof RouteMap>["lapOverlays"];
     heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
     ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
+    followSelectedPoint?: boolean;
   } = {},
 ) {
   return (
@@ -347,6 +362,7 @@ function wrappedRoute(
         lapOverlays={options.lapOverlays}
         heatSegments={options.heatSegments}
         ghostMarkers={options.ghostMarkers}
+        followSelectedPoint={options.followSelectedPoint}
         showRoutePoints={options.showRoutePoints}
         interactiveRoutePoints={options.interactiveRoutePoints}
         showRouteLine={options.showRouteLine}

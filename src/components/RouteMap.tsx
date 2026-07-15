@@ -65,6 +65,7 @@ interface RouteMapProps {
   interactiveRoutePoints?: boolean;
   showRouteLine?: boolean;
   interactionPoints?: GpsPoint[];
+  followSelectedPoint?: boolean;
   onSectionSelect?: (sectionId: string) => void;
   onSelectedIndex: (index: number) => void;
   onSegmentChange?: (segment?: ActiveSegment) => void;
@@ -91,6 +92,7 @@ export function RouteMap({
   interactiveRoutePoints = showRoutePoints,
   showRouteLine = true,
   interactionPoints,
+  followSelectedPoint = true,
   onSectionSelect,
   onSelectedIndex,
   onSegmentChange,
@@ -284,7 +286,7 @@ export function RouteMap({
     focusFrameRef.current = window.requestAnimationFrame(() => {
       if (!mapRef.current) return;
       updateSelectedPoint(mapRef.current, selected);
-      if (selected) {
+      if (selected && followSelectedPoint) {
         mapRef.current.jumpTo({
           center: [selected.longitude, selected.latitude],
         });
@@ -295,7 +297,7 @@ export function RouteMap({
         window.cancelAnimationFrame(focusFrameRef.current);
       }
     };
-  }, [points, selectedIndex, styleLoaded]);
+  }, [followSelectedPoint, points, selectedIndex, styleLoaded]);
 
   function fitRoute() {
     if (!mapRef.current || !points.length) {

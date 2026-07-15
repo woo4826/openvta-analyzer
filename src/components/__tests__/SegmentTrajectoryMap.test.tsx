@@ -18,6 +18,7 @@ vi.mock("../RouteMap", () => ({
       data-show-route-line={String(props.showRouteLine)}
       data-track-centerline={String(Boolean(props.trackCenterline))}
       data-track-sections={String(props.trackSections?.length ?? 0)}
+      data-follow-selected={String(props.followSelectedPoint)}
     >
       {props.ghostMarkers?.map((ghost) => <span key={ghost.id}>{ghost.label}</span>)}
     </div>
@@ -39,6 +40,7 @@ describe("SegmentTrajectoryMap", () => {
     expect(overlays.some((overlay: { id: string }) => overlay.id === "lap-3")).toBe(false);
     expect(map).toHaveAttribute("data-show-route-line", "false");
     expect(map).toHaveAttribute("data-track-centerline", "false");
+    expect(map).toHaveAttribute("data-follow-selected", "false");
     expect(JSON.parse(map.getAttribute("data-interaction-indexes")!)).toEqual([0, 1, 2]);
     expect(map).not.toHaveAttribute("data-heat");
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();

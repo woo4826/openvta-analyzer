@@ -168,6 +168,7 @@ export function SegmentTrajectoryMap({
         showRoutePoints={false}
         interactiveRoutePoints
         interactionPoints={focusedInteractionPoints}
+        followSelectedPoint={false}
         onSectionSelect={onSectionSelect}
         onSelectedIndex={onSelectedIndex}
         onSegmentChange={onSegmentChange}

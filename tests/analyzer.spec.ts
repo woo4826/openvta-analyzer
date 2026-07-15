@@ -42,8 +42,27 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     const workbenchBox = await analysisMain.locator(".segment-workbench").boundingBox();
     expect(workbenchBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(page.viewportSize()?.height ?? 0);
   }
-  await expect(analysisMain.getByRole("region", { name: "Time-loss ranking" })).toBeVisible();
+  await expect(analysisMain.getByRole("region", { name: "Time-loss ranking" })).toHaveCount(0);
   await expect(analysisMain.getByRole("region", { name: "Trajectory map" })).toBeVisible();
+  const dashboard = analysisMain.locator(".segment-dashboard-shell");
+  const mapWidget = analysisMain.locator(".dashboard-widget-map");
+  const dashboardBox = await dashboard.boundingBox();
+  const initialMapBox = await mapWidget.boundingBox();
+  expect(dashboardBox).not.toBeNull();
+  expect(initialMapBox).not.toBeNull();
+  expect(initialMapBox!.width / dashboardBox!.width).toBeGreaterThan(0.94);
+  expect(initialMapBox!.height).toBeGreaterThan(650);
+
+  const layerTrigger = analysisMain.getByRole("button", { name: "Lap layers" });
+  await layerTrigger.click();
+  const layerDialog = analysisMain.getByRole("dialog", { name: "Lap layers" });
+  const layerVisibility = layerDialog.getByRole("checkbox", { name: /Lap \d+ visible/ });
+  expect(await layerVisibility.count()).toBeGreaterThan(1);
+  await layerDialog.getByRole("button", { name: "Show all" }).click();
+  await expect.poll(() => layerVisibility.evaluateAll((inputs) => inputs.every((input) => (input as HTMLInputElement).checked))).toBe(true);
+  await layerDialog.getByRole("button", { name: "Auto styles" }).click();
+  await expect.poll(() => layerVisibility.evaluateAll((inputs) => inputs.filter((input) => (input as HTMLInputElement).checked).length)).toBeLessThanOrEqual(2);
+  await layerDialog.getByRole("button", { name: "Close lap layers" }).click();
 
   const workbenchHeader = analysisMain.locator(".segment-workbench-header");
   const headerBeforeControls = await workbenchHeader.boundingBox();
@@ -81,18 +100,18 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" })).toBeVisible();
   await expect(analysisMain.locator(".segment-telemetry-readout")).toContainText(/Timestamp · [1-9]\d* samples/);
   await analysisMain.locator(".dashboard-widget-telemetry").scrollIntoViewIfNeeded();
-  await analysisMain.getByRole("button", { name: "Detailed channels" }).click();
-  await expect.poll(async () => (await analysisMain.locator(".segment-telemetry-panel canvas").boundingBox())!.height).toBeGreaterThan(600);
-  await analysisMain.getByRole("button", { name: "Detailed channels" }).click();
-  await analysisMain.getByRole("button", { name: "Select range", exact: true }).click();
+  await expect(analysisMain.getByRole("button", { name: "Detailed channels" })).toHaveCount(0);
+  await expect(analysisMain.getByRole("button", { name: "Select range", exact: true })).toHaveCount(0);
+  await expect(analysisMain.getByRole("button", { name: "Zoom", exact: true })).toHaveCount(0);
+  await expect(analysisMain.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
   const telemetryCanvas = analysisMain.locator(".segment-telemetry-panel canvas");
   const telemetryBox = await telemetryCanvas.boundingBox();
   expect(telemetryBox).not.toBeNull();
-  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.28, telemetryBox!.y + telemetryBox!.height * 0.1);
-  await page.mouse.down();
-  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.62, telemetryBox!.y + telemetryBox!.height * 0.1, { steps: 12 });
-  await page.mouse.up();
-  await expect(analysisMain.locator(".segment-workbench-header")).toContainText(/Custom range · \d+–\d+ m/);
+  const cursorDistance = analysisMain.locator(".segment-telemetry-readout > div").first().locator("dd");
+  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.22, telemetryBox!.y + telemetryBox!.height * 0.16);
+  const earlyCursor = await cursorDistance.textContent();
+  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.76, telemetryBox!.y + telemetryBox!.height * 0.16);
+  await expect.poll(() => cursorDistance.textContent()).not.toBe(earlyCursor);
 
   await analysisMain.getByRole("button", { name: "Analysis controls" }).click();
   controls = analysisMain.getByRole("dialog", { name: "Analysis controls" });
@@ -100,8 +119,8 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(controls.getByRole("button", { name: "Time", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(controls.getByRole("checkbox", { name: /Include completed sectors from partial laps/ })).toBeVisible();
   await controls.getByRole("combobox", { name: "Visible laps" }).selectOption("focus-only");
-  await controls.getByRole("checkbox", { name: "Time-loss ranking" }).uncheck();
-  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v1") ?? "{}")?.lapVisibility)).toBe("focus-only");
+  await expect(controls.getByRole("checkbox", { name: "Time-loss ranking" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.lapVisibility)).toBe("focus-only");
   await controls.getByRole("button", { name: "Close analysis controls" }).click();
 
   await expect(analysisMain.getByRole("region", { name: "Time-loss ranking" })).toHaveCount(0);
@@ -111,23 +130,9 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
 
   if ((page.viewportSize()?.width ?? 0) > 680) {
     const savedMapLayout = () => page.evaluate(() => {
-      const preferences = JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v1") ?? "{}");
-      return preferences.layouts?.lg?.find((item: { i: string }) => item.i === "map") as { x: number; h: number } | undefined;
+      const preferences = JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}");
+      return preferences.layouts?.lg?.find((item: { i: string }) => item.i === "map") as { x: number; y: number; h: number } | undefined;
     });
-    const mapBeforeDrag = await savedMapLayout();
-    const mapWidget = analysisMain.locator(".dashboard-widget-map");
-    const mapHandle = analysisMain.getByRole("button", { name: "Move Trajectory map widget" });
-    await mapHandle.scrollIntoViewIfNeeded();
-    const mapBox = await mapWidget.boundingBox();
-    const handleBox = await mapHandle.boundingBox();
-    expect(mapBox).not.toBeNull();
-    expect(handleBox).not.toBeNull();
-    await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(handleBox!.x + handleBox!.width / 2 + mapBox!.width, handleBox!.y + handleBox!.height / 2, { steps: 12 });
-    await page.mouse.up();
-    await expect.poll(async () => (await savedMapLayout())?.x).not.toBe(mapBeforeDrag?.x);
-
     await mapWidget.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollBy(0, 320));
     const resizeHandle = analysisMain.locator(".react-grid-item:has(.dashboard-widget-map) > .react-resizable-handle");

@@ -21,10 +21,10 @@ Vitest, Testing Library, Vite, Aside, GitHub Pages.
 - Modify `src/components/__tests__/SegmentDashboard.test.tsx`
 - Modify `src/components/__tests__/SegmentAnalysisWorkbench.test.tsx`
 
-- [ ] Assert preferences use a v2 key and contain no `opportunities` widget.
-- [ ] Assert desktop/tablet map and telemetry each occupy full width, map first.
-- [ ] Assert the workbench has no Time-loss ranking control or region.
-- [ ] Run the focused tests and confirm the old implementation fails.
+- [x] Assert preferences use a v2 key and contain no `opportunities` widget.
+- [x] Assert desktop/tablet map and telemetry each occupy full width, map first.
+- [x] Assert the workbench has no Time-loss ranking control or region.
+- [x] Run the focused tests and confirm the old implementation fails.
 
 ## Task 2: Remove opportunity ranking end-to-end
 
@@ -39,10 +39,10 @@ Vitest, Testing Library, Vite, Aside, GitHub Pages.
 - Delete `src/components/SegmentOpportunityRanking.tsx`
 - Delete `src/components/__tests__/SegmentOpportunityRanking.test.tsx`
 
-- [ ] Remove widget, state, calculations, rendering, and dedicated types/tests.
-- [ ] Update workbench controls and preference normalization implicitly through
+- [x] Remove widget, state, calculations, rendering, and dedicated types/tests.
+- [x] Update workbench controls and preference normalization implicitly through
       the reduced widget ID list.
-- [ ] Run `rg` to prove no production opportunity import remains.
+- [x] Run `rg` to prove no production opportunity import remains.
 
 ## Task 3: Add deterministic editable map layers
 
@@ -59,15 +59,15 @@ Vitest, Testing Library, Vite, Aside, GitHub Pages.
 - Modify `src/i18n/lapLocales.ts`
 - Modify `src/styles.css`
 
-- [ ] Write failing pure tests for focused/reference/other automatic styles and
+- [x] Write failing pure tests for focused/reference/other automatic styles and
       override/reset behavior.
-- [ ] Write failing component tests for visibility, color, style, opacity, show
+- [x] Write failing component tests for visibility, color, style, opacity, show
       comparison, show all, and auto reset.
-- [ ] Build all eligible lap overlays, hide non-role laps by default, and stop
+- [x] Build all eligible lap overlays, hide non-role laps by default, and stop
       supplying colored section/heat geometry in the comparison map.
-- [ ] Render solid/dashed/dotted MapLibre filtered layers and SVG dash arrays.
-- [ ] Add accessible localized layer controls and compact legend styling.
-- [ ] Run focused domain/component tests.
+- [x] Render solid/dashed/dotted MapLibre filtered layers and SVG dash arrays.
+- [x] Add accessible localized layer controls and compact legend styling.
+- [x] Run focused domain/component tests.
 
 ## Task 4: Fix continuous pointer tracking
 
@@ -78,12 +78,12 @@ Vitest, Testing Library, Vite, Aside, GitHub Pages.
 - Modify `src/components/SegmentTelemetryChart.tsx`
 - Modify `src/components/__tests__/SegmentTelemetryChart.test.tsx`
 
-- [ ] Add a failing test that invokes a ZRender mousemove in the grid and expects
+- [x] Add a failing test that invokes a ZRender mousemove in the grid and expects
       a converted domain callback without a series event.
-- [ ] Add `onHoverDomain`, use `containPixel`/`convertFromPixel`, RAF throttle,
+- [x] Add `onHoverDomain`, use `containPixel`/`convertFromPixel`, RAF throttle,
       and immediately render the cursor.
-- [ ] Resolve hover domain to the nearest focused trajectory source point.
-- [ ] Remove the series `mouseover` dependency and verify cleanup.
+- [x] Resolve hover domain to the nearest focused trajectory source point.
+- [x] Remove the series `mouseover` dependency and verify cleanup.
 
 ## Task 5: Simplify telemetry and enlarge the workbench
 
@@ -96,24 +96,23 @@ Vitest, Testing Library, Vite, Aside, GitHub Pages.
 - Modify `src/styles.css`
 - Modify affected component tests
 
-- [ ] Keep only speed, measured acceleration, and Delta-T metrics.
-- [ ] Remove range/zoom/detailed/reset buttons and keyboard range form.
-- [ ] Change title copy to Lap telemetry.
-- [ ] Use the full browser width for the workbench and viewport-aware minimum
+- [x] Keep only speed, measured acceleration, and Delta-T metrics.
+- [x] Remove range/zoom/detailed/reset buttons and keyboard range form.
+- [x] Change title copy to Lap telemetry.
+- [x] Use the full browser width for the workbench and viewport-aware minimum
       map/chart heights.
-- [ ] Store new default layout under v2 so old six-column placement cannot win.
+- [x] Store new default layout under v2 so old six-column placement cannot win.
 
 ## Task 6: Verify, deploy, and prove production behavior
 
-- [ ] Run `pnpm typecheck`.
-- [ ] Run `pnpm lint`.
-- [ ] Run `pnpm test`.
-- [ ] Run `pnpm build`.
-- [ ] Run `pnpm test:e2e` without installing or launching a separate browser.
-- [ ] Start the existing Vite server only if needed and use Aside with the
+- [x] Run `pnpm typecheck`.
+- [x] Run `pnpm lint`.
+- [x] Run `pnpm test`.
+- [x] Run `pnpm build`.
+- [x] Run `pnpm test:e2e` without installing or launching a separate browser.
+- [x] Start the existing Vite server only if needed and use Aside with the
       supplied local VTA for visual and interaction QA.
 - [ ] Commit intentionally on `main`, push `origin/main`, and monitor GitHub
       Pages deployment to success.
 - [ ] Reload the deployed URL in Aside and repeat map layer and cursor smoke
       checks.
-
