@@ -21,6 +21,8 @@ export interface LapExplorerProps {
   analysisLine?: LineString;
   sections: TrackSection[];
   sectionResults: LapSectionResult[];
+  scopeId?: string;
+  onScopeIdChange?: (scopeId: string) => void;
 }
 
 const LAP_COLORS = ["#0f766e", "#d97706", "#2563eb", "#be3b3b", "#7c3aed"];
@@ -36,17 +38,29 @@ export function LapExplorer({
   analysisLine,
   sections,
   sectionResults,
+  scopeId: controlledScopeId,
+  onScopeIdChange,
 }: LapExplorerProps) {
   const { t } = useI18n();
-  const [scopeId, setScopeId] = useState(WHOLE_LAP);
+  const [internalScopeId, setInternalScopeId] = useState(WHOLE_LAP);
+  const scopeId = controlledScopeId ?? internalScopeId;
   const [filter, setFilter] = useState<SectionFilter>("all");
 
+  function selectScope(scope: string) {
+    if (controlledScopeId === undefined) setInternalScopeId(scope);
+    onScopeIdChange?.(scope);
+  }
+
   useEffect(() => {
-    setScopeId(WHOLE_LAP);
+    selectScope(WHOLE_LAP);
+    // The profile identity is the reset boundary for both controlled and internal scope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId]);
 
   useEffect(() => {
-    if (scopeId !== WHOLE_LAP && !sections.some((section) => section.id === scopeId)) setScopeId(WHOLE_LAP);
+    if (scopeId !== WHOLE_LAP && !sections.some((section) => section.id === scopeId)) selectScope(WHOLE_LAP);
+    // `selectScope` intentionally follows the latest controlled callback without resetting valid scopes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeId, sections]);
 
   const selectedLaps = useMemo(
@@ -106,13 +120,13 @@ export function LapExplorer({
             className="button icon-button"
             aria-label={t("lap.explorer.previous")}
             disabled={scopeIndex <= 0}
-            onClick={() => setScopeId(navigationIds[scopeIndex - 1])}
+            onClick={() => selectScope(navigationIds[scopeIndex - 1])}
           >
             <ChevronLeft size={16} aria-hidden />
           </button>
           <label className="field lap-explorer-scope">
             <span>{t("lap.explorer.scope")}</span>
-            <select value={scopeId} onChange={(event) => setScopeId(event.target.value)}>
+            <select value={scopeId} onChange={(event) => selectScope(event.target.value)}>
               <option value={WHOLE_LAP}>{t("lap.explorer.wholeLap")}</option>
               {navigationSections.map((section) => (
                 <option value={section.id} key={section.id}>{section.name}</option>
@@ -124,7 +138,7 @@ export function LapExplorer({
             className="button icon-button"
             aria-label={t("lap.explorer.next")}
             disabled={scopeIndex < 0 || scopeIndex >= navigationIds.length - 1}
-            onClick={() => setScopeId(navigationIds[scopeIndex + 1])}
+            onClick={() => selectScope(navigationIds[scopeIndex + 1])}
           >
             <ChevronRight size={16} aria-hidden />
           </button>
@@ -163,7 +177,7 @@ export function LapExplorer({
                       return <td key={lap.id}>{result ? metricCell(result) : "—"}</td>;
                     })}
                     <td>
-                      <button type="button" className="button ghost" aria-label={t("lap.explorer.analyzeAria", { scope: section.name })} onClick={() => setScopeId(section.id)}>
+                      <button type="button" className="button ghost" aria-label={t("lap.explorer.analyzeAria", { scope: section.name })} onClick={() => selectScope(section.id)}>
                         {t("lap.explorer.analyze")}
                       </button>
                     </td>

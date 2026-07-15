@@ -1,4 +1,5 @@
 import { render, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GpsPoint, MapSettings } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -129,11 +130,39 @@ describe("RouteMap source updates", () => {
     expect(map.layers.has("track-sections")).toBe(true);
   });
 
+  it("can hide dense route points so loss-colored sections remain readable", async () => {
+    render(wrappedRoute(0, true, { showRoutePoints: false }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+
+    await waitFor(() => expect(map.sources.get("route-points-source")?.setData).toHaveBeenCalled());
+    const data = map.sources.get("route-points-source")!.setData.mock.calls.at(-1)?.[0] as { features: unknown[] };
+    expect(data.features).toEqual([]);
+  });
+
   it("renders section overlays in the coordinate fallback", async () => {
     mapMock.MapDouble.shouldThrow = true;
     const view = render(wrappedRoute(0, true));
 
     expect(await view.findByTestId("track-section-section-1")).toHaveAttribute("points");
+  });
+
+  it("uses loss styling and selects a section in the coordinate fallback", async () => {
+    mapMock.MapDouble.shouldThrow = true;
+    const user = userEvent.setup();
+    const onSectionSelect = vi.fn();
+    const view = render(wrappedRoute(0, true, {
+      onSectionSelect,
+      sectionVisuals: { "section-1": { color: "#be3b3b", width: 13, opacity: 0.75 } },
+    }));
+
+    const section = await view.findByRole("button", { name: "Corner 1" });
+    expect(section).toHaveAttribute("stroke", "#be3b3b");
+    expect(section).toHaveAttribute("stroke-width", "13");
+    expect(section).toHaveAttribute("stroke-opacity", "0.75");
+
+    await user.click(section);
+    expect(onSectionSelect).toHaveBeenCalledWith("section-1");
   });
 });
 
@@ -141,7 +170,15 @@ function renderRoute(selectedIndex: number) {
   return render(wrappedRoute(selectedIndex));
 }
 
-function wrappedRoute(selectedIndex: number, includeSections = false) {
+function wrappedRoute(
+  selectedIndex: number,
+  includeSections = false,
+  options: {
+    onSectionSelect?: (sectionId: string) => void;
+    sectionVisuals?: Record<string, { color: string; width?: number; opacity?: number }>;
+    showRoutePoints?: boolean;
+  } = {},
+) {
   return (
     <I18nProvider>
       <RouteMap
@@ -157,6 +194,9 @@ function wrappedRoute(selectedIndex: number, includeSections = false) {
           startDistanceMeters: 0,
           endDistanceMeters: 120,
         }] : undefined}
+        sectionVisuals={options.sectionVisuals}
+        showRoutePoints={options.showRoutePoints}
+        onSectionSelect={options.onSectionSelect}
         onSelectedIndex={vi.fn()}
         onSegmentChange={vi.fn()}
         onRegionChange={vi.fn()}

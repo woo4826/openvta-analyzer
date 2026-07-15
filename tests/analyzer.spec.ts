@@ -35,13 +35,21 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
 
   const analysisMain = page.locator(".analysis-main");
   await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
+  await expect(analysisMain.getByRole("tab", { name: "Insights" })).toHaveAttribute("aria-selected", "true");
+  await expect(analysisMain.getByRole("heading", { name: "Session performance" })).toBeVisible();
+  await expect(analysisMain.getByRole("heading", { name: "Time-loss map" })).toBeVisible();
+  await expect(analysisMain.getByRole("heading", { name: "Biggest time-loss opportunities" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Synchronized speed, GPS-derived acceleration, and Delta-T chart" })).toBeVisible();
+
+  await analysisMain.getByRole("tab", { name: "Compare" }).click();
   await expect(analysisMain.getByRole("heading", { name: "Lap Explorer" })).toBeVisible();
-  await expect(analysisMain.getByText("Analysis sectors", { exact: true })).toBeVisible();
   const scope = analysisMain.getByLabel("Analysis scope");
   await expect(scope.locator("option").filter({ hasText: "Corner 1" })).toHaveCount(1);
   await scope.selectOption({ label: "Corner 1" });
   await expect(analysisMain.getByRole("heading", { name: "Corner 1 lap comparison" })).toBeVisible();
   await expect(analysisMain.getByRole("table", { name: "Selected scope lap metrics" })).toBeVisible();
+
+  await analysisMain.getByRole("tab", { name: "Setup" }).click();
   await expect(analysisMain.getByRole("button", { name: "Export analysis sectors CSV" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });

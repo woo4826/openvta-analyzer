@@ -1,5 +1,5 @@
 import type { LineString, Position } from "geojson";
-import { bearingDegrees, projectCoordinateToLineProgress, routeDistanceMeters } from "./geometry";
+import { bearingDegrees, haversineMeters, projectCoordinateToLineProgress, routeDistanceMeters } from "./geometry";
 import { lapDistanceSamples } from "./lapAnalysis";
 import type {
   GpsPoint,
@@ -13,6 +13,8 @@ import type {
 const GRAVITY_MPS2 = 9.80665;
 const PROGRESS_TOLERANCE_METERS = 1;
 const BACKWARD_NOISE_METERS = 20;
+const PROGRESS_JUMP_TOLERANCE_METERS = 15;
+const MAX_PROJECTED_TO_DRIVEN_RATIO = 3;
 
 export function analyzeLapSections(
   points: GpsPoint[],
@@ -36,7 +38,8 @@ export function analyzeLapSections(
       if (
         endDistanceMeters <= startDistanceMeters ||
         startDistanceMeters < observedStart - PROGRESS_TOLERANCE_METERS ||
-        endDistanceMeters > observedEnd + PROGRESS_TOLERANCE_METERS
+        endDistanceMeters > observedEnd + PROGRESS_TOLERANCE_METERS ||
+        !hasPlausibleProgressContinuity(samples, startDistanceMeters, endDistanceMeters)
       ) {
         return [];
       }
@@ -75,6 +78,27 @@ export function analyzeLapSections(
     const best = bestBySection.get(result.sectionId);
     return best === undefined ? result : { ...result, deltaBestSeconds: result.durationSeconds - best };
   });
+}
+
+function hasPlausibleProgressContinuity(
+  samples: LapDistanceSample[],
+  startDistanceMeters: number,
+  endDistanceMeters: number,
+): boolean {
+  for (let index = 1; index < samples.length; index += 1) {
+    const left = samples[index - 1];
+    const right = samples[index];
+    if (right.distanceMeters <= startDistanceMeters || left.distanceMeters >= endDistanceMeters) continue;
+    const projectedAdvance = Math.max(0, right.distanceMeters - left.distanceMeters);
+    const drivenDistance = haversineMeters(
+      [left.longitude, left.latitude],
+      [right.longitude, right.latitude],
+    );
+    if (projectedAdvance > drivenDistance * MAX_PROJECTED_TO_DRIVEN_RATIO + PROGRESS_JUMP_TOLERANCE_METERS) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function scopedLapComparison(

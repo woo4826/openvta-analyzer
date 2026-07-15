@@ -1,32 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption } from "echarts";
+import { brushSegmentFromOption, chartPointIndex, toBrushSelectedPayload } from "./chartInteraction";
 
 export interface ChartPanelProps {
   title: string;
   ariaLabel?: string;
   option: EChartsOption;
   className?: string;
+  eyebrow?: ReactNode;
+  actions?: ReactNode;
   onPoint?: (index: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
 }
 
-interface PointEventPayload {
-  dataIndex?: unknown;
-  data?: unknown;
-  value?: unknown;
-}
-
-interface BrushSelectedPayload {
-  batch?: BrushBatchPayload[];
-}
-
-interface BrushBatchPayload {
-  selected?: Array<{ dataIndex?: unknown }>;
-  areas?: Array<{ coordRange?: unknown; coordRanges?: unknown }>;
-}
-
-export function ChartPanel({ title, ariaLabel, option, className, onPoint, onBrushSegment }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, onPoint, onBrushSegment }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const hoverFrameRef = useRef<number | undefined>(undefined);
@@ -56,7 +44,7 @@ export function ChartPanel({ title, ariaLabel, option, className, onPoint, onBru
       onPoint?.(index);
     };
     const handleClick = (...args: unknown[]) => {
-      const index = toPointIndex(args[0]);
+      const index = chartPointIndex(args[0]);
       if (index === undefined) {
         return;
       }
@@ -64,7 +52,7 @@ export function ChartPanel({ title, ariaLabel, option, className, onPoint, onBru
       emitPoint(index, true);
     };
     const handleHover = (...args: unknown[]) => {
-      const index = toPointIndex(args[0]);
+      const index = chartPointIndex(args[0]);
       if (index === undefined || lastPointIndexRef.current === index) {
         return;
       }
@@ -86,7 +74,7 @@ export function ChartPanel({ title, ariaLabel, option, className, onPoint, onBru
       if (!params) {
         return;
       }
-      const segment = getBrushSegment(params);
+      const segment = brushSegmentFromOption(params, option);
       if (segment) {
         onBrushSegment?.(segment.startIndex, segment.endIndex);
       }
@@ -120,112 +108,15 @@ export function ChartPanel({ title, ariaLabel, option, className, onPoint, onBru
   return (
     <section className={mergedClass}>
       <div className="panel-header">
-        <h3>{title}</h3>
+        <div>
+          {eyebrow ? <span className="panel-eyebrow">{eyebrow}</span> : null}
+          <h3>{title}</h3>
+        </div>
+        {actions ? <div className="row-actions">{actions}</div> : null}
       </div>
       <div className="panel-body">
         <div className="chart" ref={ref} role="img" aria-label={ariaLabel ?? `${title} chart`} />
       </div>
     </section>
   );
-}
-
-function toPointEventPayload(value: unknown): PointEventPayload | undefined {
-  return isObject(value) ? value : undefined;
-}
-
-function toPointIndex(value: unknown): number | undefined {
-  const params = toPointEventPayload(value);
-  if (!params) {
-    return undefined;
-  }
-  const coordinateIndex = firstCoordinateValue(params.value) ?? firstCoordinateValue(params.data);
-  if (coordinateIndex !== undefined) {
-    return Math.round(coordinateIndex);
-  }
-  return typeof params.dataIndex === "number" && Number.isFinite(params.dataIndex) ? Math.trunc(params.dataIndex) : undefined;
-}
-
-function toBrushSelectedPayload(value: unknown): BrushSelectedPayload | undefined {
-  if (!isObject(value) || !("batch" in value)) {
-    return undefined;
-  }
-  return value as BrushSelectedPayload;
-}
-
-function getBrushSegment(params: BrushSelectedPayload): { startIndex: number; endIndex: number } | undefined {
-  const selectedIndexes =
-    params.batch?.flatMap((batch) =>
-      batch.selected?.flatMap((selection) => numericArray(selection.dataIndex)) ?? [],
-    ) ?? [];
-  if (selectedIndexes.length) {
-    return toSegment(selectedIndexes);
-  }
-
-  const coordinateValues =
-    params.batch?.flatMap((batch) =>
-      batch.areas?.flatMap((area) => [
-        ...coordinateRangePairs(area.coordRange).flat(),
-        ...coordinateRangePairs(area.coordRanges).flat(),
-      ]) ?? [],
-    ) ?? [];
-  if (coordinateValues.length >= 2) {
-    return toSegment(coordinateValues);
-  }
-
-  return undefined;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function numericArray(value: unknown): number[] {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return [value];
-  }
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is number => typeof item === "number" && Number.isFinite(item));
-}
-
-function firstCoordinateValue(value: unknown): number | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-  const first = value[0];
-  return typeof first === "number" && Number.isFinite(first) ? first : undefined;
-}
-
-function coordinateRangePairs(value: unknown): number[][] {
-  if (isNumericPair(value)) {
-    return [value];
-  }
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const directPairs = value.filter(isNumericPair);
-  if (directPairs.length) {
-    return [directPairs[0]];
-  }
-  return value.flatMap((item) => coordinateRangePairs(item));
-}
-
-function isNumericPair(value: unknown): value is [number, number] {
-  return (
-    Array.isArray(value) &&
-    value.length >= 2 &&
-    typeof value[0] === "number" &&
-    Number.isFinite(value[0]) &&
-    typeof value[1] === "number" &&
-    Number.isFinite(value[1])
-  );
-}
-
-function toSegment(values: number[]): { startIndex: number; endIndex: number } {
-  const rounded = values.map((value) => Math.round(value));
-  return {
-    startIndex: Math.min(...rounded),
-    endIndex: Math.max(...rounded),
-  };
 }

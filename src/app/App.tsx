@@ -410,7 +410,7 @@ export function App() {
             onSample={loadSample}
           />
         ) : (
-          <div className="workspace-grid">
+          <div className={`workspace-grid${activeTab === "laps" ? " workspace-grid-laps" : ""}`}>
             <aside className="file-rail" data-tour="file-rail">
               <FileTray
                 files={files}
@@ -533,26 +533,27 @@ export function App() {
               ))}
             </section>
 
-            <aside className="analysis-inspector">
-              <div data-tour="workspace-status">
-                <WorkspaceStatus
-                  sourceVisibility={effectiveSourceVisibility}
-                  onSourceVisibility={updateSourceVisibility}
-                  rawGpsCount={activeFile.gpsPoints.length}
-                  enhancedGpsCount={activeFile.enhancedPoints.length}
-                  sensorCount={activeFile.sensorPoints.length}
-                  transformMode={transformMode}
-                  onTransformMode={setTransformMode}
-                  calibrationReady={Boolean(calibration)}
-                  filterReady={filterTransformReady}
-                  onOpenCalibration={() => setActiveTab("calibration")}
-                  activeSegment={activeSegment}
-                  visiblePointCount={visibleGpsPoints.length}
-                  onActiveSegment={setActiveSegment}
-                  singleSourceMode={activeTab === "laps"}
-                />
-              </div>
-            </aside>
+            {activeTab !== "laps" ? (
+              <aside className="analysis-inspector">
+                <div data-tour="workspace-status">
+                  <WorkspaceStatus
+                    sourceVisibility={effectiveSourceVisibility}
+                    onSourceVisibility={updateSourceVisibility}
+                    rawGpsCount={activeFile.gpsPoints.length}
+                    enhancedGpsCount={activeFile.enhancedPoints.length}
+                    sensorCount={activeFile.sensorPoints.length}
+                    transformMode={transformMode}
+                    onTransformMode={setTransformMode}
+                    calibrationReady={Boolean(calibration)}
+                    filterReady={filterTransformReady}
+                    onOpenCalibration={() => setActiveTab("calibration")}
+                    activeSegment={activeSegment}
+                    visiblePointCount={visibleGpsPoints.length}
+                    onActiveSegment={setActiveSegment}
+                  />
+                </div>
+              </aside>
+            ) : null}
           </div>
         )}
 

@@ -13,9 +13,16 @@ export interface LapMapOverlay {
   points: GpsPoint[];
 }
 
+export interface TrackSectionVisual {
+  color: string;
+  width?: number;
+  opacity?: number;
+}
+
 const EMPTY_GATES: TrackGate[] = [];
 const EMPTY_LAP_OVERLAYS: LapMapOverlay[] = [];
 const EMPTY_TRACK_SECTIONS: TrackSection[] = [];
+const EMPTY_SECTION_VISUALS: Record<string, TrackSectionVisual> = {};
 
 interface RouteMapProps {
   points: GpsPoint[];
@@ -29,6 +36,9 @@ interface RouteMapProps {
   trackSections?: TrackSection[];
   gates?: TrackGate[];
   lapOverlays?: LapMapOverlay[];
+  sectionVisuals?: Record<string, TrackSectionVisual>;
+  showRoutePoints?: boolean;
+  onSectionSelect?: (sectionId: string) => void;
   onSelectedIndex: (index: number) => void;
   onSegmentChange: (segment?: ActiveSegment) => void;
   onRegionChange: (region?: AxisAlignedRegion) => void;
@@ -47,6 +57,9 @@ export function RouteMap({
   trackSections = EMPTY_TRACK_SECTIONS,
   gates = EMPTY_GATES,
   lapOverlays = EMPTY_LAP_OVERLAYS,
+  sectionVisuals = EMPTY_SECTION_VISUALS,
+  showRoutePoints = true,
+  onSectionSelect,
   onSelectedIndex,
   onSegmentChange,
   onRegionChange,
@@ -58,6 +71,8 @@ export function RouteMap({
   const [mapFailed, setMapFailed] = useState(false);
   const [styleLoaded, setStyleLoaded] = useState(false);
   const focusFrameRef = useRef<number>();
+  const onSectionSelectRef = useRef(onSectionSelect);
+  onSectionSelectRef.current = onSectionSelect;
   const bounds = useMemo(() => coordinateBounds(points), [points]);
   const segmentPoints = useMemo(() => selectedSegmentPoints(points, segment), [points, segment]);
   const routePolyline = useMemo(() => bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, points]);
@@ -74,9 +89,10 @@ export function RouteMap({
   const sectionPolylines = useMemo(
     () => bounds ? sectionGeometry.map((section) => ({
       ...section,
+      visual: sectionVisuals[section.id],
       polyline: section.line.coordinates.map((coordinate) => toSvgCoordinate(coordinate, bounds)).join(" "),
     })) : [],
-    [bounds, sectionGeometry],
+    [bounds, sectionGeometry, sectionVisuals],
   );
   const lapPolylines = useMemo(
     () => bounds ? lapOverlays.map((overlay) => ({
@@ -92,7 +108,7 @@ export function RouteMap({
     })) : [],
     [bounds, gates],
   );
-  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds ? points.map((point, index) => {
+  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds && showRoutePoints ? points.map((point, index) => {
     const [cx, cy] = toSvgPointArray(point, bounds);
     return (
       <circle
@@ -107,7 +123,7 @@ export function RouteMap({
         style={{ pointerEvents: "auto", cursor: "pointer" }}
       />
     );
-  }) : [], [bounds, mapFailed, onSelectedIndex, points, settings.pointSize, settings.speedThresholds]);
+  }) : [], [bounds, mapFailed, onSelectedIndex, points, settings.pointSize, settings.speedThresholds, showRoutePoints]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !points.length) {
@@ -171,6 +187,16 @@ export function RouteMap({
         map.on("mouseleave", "route-points", () => {
           map.getCanvas().style.cursor = "";
         });
+        map.on("click", "track-sections", (event) => {
+          const sectionId = event.features?.[0]?.properties?.id;
+          if (typeof sectionId === "string") onSectionSelectRef.current?.(sectionId);
+        });
+        map.on("mouseenter", "track-sections", () => {
+          if (onSectionSelectRef.current) map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", "track-sections", () => {
+          map.getCanvas().style.cursor = "";
+        });
       });
       mapRef.current = map;
       const fitTimer = window.setTimeout(() => fitRoute(), 350);
@@ -190,8 +216,8 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, sectionGeometry);
-  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, sectionGeometry]);
+    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, sectionGeometry, sectionVisuals, showRoutePoints);
+  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, sectionGeometry, sectionVisuals, showRoutePoints]);
 
   useEffect(() => {
     if (!mapRef.current || !styleLoaded) {
@@ -321,11 +347,22 @@ export function RouteMap({
               data-testid={`track-section-${section.id}`}
               points={section.polyline}
               fill="none"
-              stroke={trackSectionColor(section.kind)}
-              strokeOpacity="0.92"
-              strokeWidth="8"
+              stroke={section.visual?.color ?? trackSectionColor(section.kind)}
+              strokeOpacity={section.visual?.opacity ?? 0.92}
+              strokeWidth={section.visual?.width ?? 8}
               strokeLinejoin="round"
               strokeLinecap="round"
+              role={onSectionSelect ? "button" : undefined}
+              tabIndex={onSectionSelect ? 0 : undefined}
+              aria-label={onSectionSelect ? section.name : undefined}
+              onClick={() => onSectionSelect?.(section.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSectionSelect?.(section.id);
+                }
+              }}
+              style={onSectionSelect ? { cursor: "pointer" } : undefined}
             />
           ) : null)}
           {lapPolylines.map((overlay) => overlay.polyline ? (
@@ -515,6 +552,8 @@ function updateMapRoute(
   gates: TrackGate[],
   lapOverlays: LapMapOverlay[],
   sectionGeometry: TrackSectionGeometry[],
+  sectionVisuals: Record<string, TrackSectionVisual>,
+  showRoutePoints: boolean,
 ) {
   if (!map.isStyleLoaded() || !points.length) {
     return;
@@ -542,11 +581,11 @@ function updateMapRoute(
   };
   const pointData: FeatureCollection<Point> = {
     type: "FeatureCollection",
-    features: points.map((point, index) => ({
+    features: showRoutePoints ? points.map((point, index) => ({
       type: "Feature",
       properties: { index, speedKmh: point.speedKmh },
       geometry: { type: "Point", coordinates: [point.longitude, point.latitude] },
-    })),
+    })) : [],
   };
   const selectedData: FeatureCollection<Point> = {
     type: "FeatureCollection",
@@ -580,7 +619,14 @@ function updateMapRoute(
     type: "FeatureCollection",
     features: sectionGeometry.map((section) => ({
       type: "Feature",
-      properties: { id: section.id, name: section.name, kind: section.kind, color: trackSectionColor(section.kind) },
+      properties: {
+        id: section.id,
+        name: section.name,
+        kind: section.kind,
+        color: sectionVisuals[section.id]?.color ?? trackSectionColor(section.kind),
+        width: sectionVisuals[section.id]?.width ?? 8,
+        opacity: sectionVisuals[section.id]?.opacity ?? 0.92,
+      },
       geometry: section.line,
     })),
   };
@@ -696,7 +742,7 @@ function updateMapRoute(
       type: "line",
       source: "track-section-source",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": ["get", "color"], "line-width": 8, "line-opacity": 0.92 },
+      paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": ["get", "opacity"] },
     });
   }
   if (!map.getLayer("lap-overlays")) {

@@ -1,8 +1,40 @@
 import { describe, expect, it } from "vitest";
 import type { GpsPoint, TrackGate } from "../types";
-import { createGateFromRoutePoint, detectGateCrossings, detectLaps } from "../lapDetection";
+import { createGateFromRoutePoint, detectGateCrossings, detectLaps, inferStartFinishGate } from "../lapDetection";
 
 describe("lap detection", () => {
+  it("infers a repeatable start/finish gate after a non-repeating pit exit", () => {
+    const points = [
+      gps(-0.0015, -0.0015, 0),
+      gps(-0.001, -0.001, 1),
+      ...repeatedCircuitPoints(2),
+    ];
+
+    const gate = inferStartFinishGate(points);
+    const result = gate ? detectLaps(points, gate) : undefined;
+
+    expect(gate).toBeDefined();
+    expect(result?.laps.filter((lap) => lap.completion === "complete").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not invent a start/finish gate for an open route", () => {
+    const points = Array.from({ length: 20 }, (_, index) => gps(index * 0.0002, 0, index));
+
+    expect(inferStartFinishGate(points)).toBeUndefined();
+  });
+
+  it("prefers the dominant full-course lap count over a repeated self-intersection", () => {
+    const points = doubleCrossingCircuitPoints(3);
+
+    const gate = inferStartFinishGate(points, { maximumCandidates: points.length });
+    const completeLapCount = gate
+      ? detectLaps(points, gate).laps.filter((lap) => lap.completion === "complete").length
+      : 0;
+
+    expect(gate).toBeDefined();
+    expect(completeLapCount).toBe(2);
+  });
+
   it("creates a directional gate perpendicular to the route", () => {
     const points = [gps(-0.0002, 0, 0), gps(0, 0, 1), gps(0.0002, 0, 2)];
     const gate = createGateFromRoutePoint(points, 1);
@@ -105,6 +137,15 @@ describe("lap detection", () => {
   });
 });
 
+function repeatedCircuitPoints(startIndex: number): GpsPoint[] {
+  const circuit: Array<[number, number]> = [
+    [-0.0005, 0], [0.0005, 0], [0.0008, 0.0004], [0, 0.0008], [-0.0008, 0.0004],
+    [-0.0005, 0], [0.0005, 0], [0.0008, 0.0004], [0, 0.0008], [-0.0008, 0.0004],
+    [-0.0005, 0], [0.0005, 0],
+  ];
+  return circuit.map(([longitude, latitude], offset) => gps(longitude, latitude, startIndex + offset));
+}
+
 function startGate(): TrackGate {
   return {
     id: "start-finish",
@@ -132,6 +173,17 @@ function multiLapPoints(lapCount: number): GpsPoint[] {
     coordinates.push(...lap);
   }
   coordinates.push([0.0005, 0]);
+  return coordinates.map(([longitude, latitude], index) => gps(longitude, latitude, index));
+}
+
+function doubleCrossingCircuitPoints(lapCount: number): GpsPoint[] {
+  const coordinates: Array<[number, number]> = [[-0.0003, 0]];
+  const lap = [
+    [0.0003, 0], [0.001, 0], [0.001, 0.001], [-0.001, 0.001], [-0.001, 0], [-0.0003, 0],
+    [0.0003, 0], [0.001, 0], [0.001, -0.001], [-0.001, -0.001], [-0.001, 0], [-0.0003, 0],
+  ] as Array<[number, number]>;
+  for (let index = 0; index < lapCount; index += 1) coordinates.push(...lap);
+  coordinates.push([0.0003, 0]);
   return coordinates.map(([longitude, latitude], index) => gps(longitude, latitude, index));
 }
 
