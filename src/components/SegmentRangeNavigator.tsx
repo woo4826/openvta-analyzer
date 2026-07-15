@@ -1,31 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import type { AnalysisScope, TrackSection } from "../domain/types";
-import type { SegmentFilter } from "../app/useSegmentWorkbench";
 import { useI18n } from "../i18n/useI18n";
 import { snapRangeToBoundaries } from "./segmentRange";
 
 interface SegmentRangeNavigatorProps {
   scope: AnalysisScope;
-  filter: SegmentFilter;
   sections: TrackSection[];
   totalDistanceMeters: number;
   snapToSections: boolean;
   onWholeLap: () => void;
-  onFilter: (filter: SegmentFilter) => void;
-  onSection: (sectionId: string) => void;
   onRange: (startDistanceMeters: number, endDistanceMeters: number) => void;
 }
 
 export function SegmentRangeNavigator({
   scope,
-  filter,
   sections,
   totalDistanceMeters,
   snapToSections,
   onWholeLap,
-  onFilter,
-  onSection,
   onRange,
 }: SegmentRangeNavigatorProps) {
   const { t } = useI18n();
@@ -37,12 +30,6 @@ export function SegmentRangeNavigator({
     return [0, max];
   }, [max, scope, selected]);
   const [draftRange, setDraftRange] = useState(scopeRange);
-  const visibleSections = useMemo(() => sections.filter((section) => {
-    if (filter === "corners") return section.kind !== "straight";
-    if (filter === "straights") return section.kind === "straight";
-    return true;
-  }), [filter, sections]);
-
   useEffect(() => setDraftRange(scopeRange), [scopeRange]);
 
   const commitRange = (values: number[]) => {
@@ -68,35 +55,19 @@ export function SegmentRangeNavigator({
         </button>
       </div>
 
-      <div className="segmented-control segment-filter" role="group" aria-label={t("lap.workbench.sectionFilter")}>
-        {([
-          ["all", t("lap.workbench.all")],
-          ["corners", t("lap.workbench.corners")],
-          ["straights", t("lap.workbench.straights")],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" aria-pressed={filter === id} onClick={() => onFilter(id)}>{label}</button>
-        ))}
-      </div>
-
-      <div className="segment-proportion-strip" aria-label={t("lap.workbench.trackSections")}>
+      <div className="segment-proportion-strip" aria-hidden="true">
         {sections.map((section) => {
-          const compatible = visibleSections.includes(section);
           const left = clamp(section.startDistanceMeters / max * 100, 0, 100);
           const width = clamp((section.endDistanceMeters - section.startDistanceMeters) / max * 100, 0.35, 100 - left);
           return (
-            <button
-              type="button"
+            <span
               key={section.id}
-              className={`segment-proportion-section ${section.kind}${compatible ? "" : " is-filtered"}`}
+              className={`segment-proportion-section ${section.kind}`}
               style={{ left: `${left}%`, width: `${width}%` }}
-              aria-label={`${section.name}, ${Math.round(section.startDistanceMeters)}–${Math.round(section.endDistanceMeters)} m`}
-              aria-pressed={scope.kind === "section" && scope.sectionId === section.id}
-              disabled={!compatible}
               title={`${section.name} · ${Math.round(section.endDistanceMeters - section.startDistanceMeters)} m`}
-              onClick={() => onSection(section.id)}
             >
               {width >= 3 ? <span>{compactSectionLabel(section)}</span> : null}
-            </button>
+            </span>
           );
         })}
       </div>

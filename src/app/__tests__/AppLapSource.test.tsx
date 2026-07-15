@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GpsPoint, SensorPoint, SourceVisibility } from "../../domain/types";
@@ -21,14 +22,21 @@ vi.mock("../../components/Tables", () => ({
   ),
 }));
 vi.mock("../../components/LapAnalysis", () => ({
-  LapAnalysis: ({ points, sourceVisibility }: { points: GpsPoint[]; sourceVisibility: SourceVisibility }) => (
-    <div
-      data-testid="lap-analysis"
-      data-point-count={points.length}
-      data-point-sources={[...new Set(points.map((point) => point.source))].join(",")}
-      data-source-visibility={`${sourceVisibility.rawGps},${sourceVisibility.enhancedGps}`}
-    />
-  ),
+  LapAnalysis: ({ active, points, sourceVisibility }: { active: boolean; points: GpsPoint[]; sourceVisibility: SourceVisibility }) => {
+    const [marker, setMarker] = useState("initial");
+    return (
+      <div
+        data-testid="lap-analysis"
+        data-active={String(active)}
+        data-marker={marker}
+        data-point-count={points.length}
+        data-point-sources={[...new Set(points.map((point) => point.source))].join(",")}
+        data-source-visibility={`${sourceVisibility.rawGps},${sourceVisibility.enhancedGps}`}
+      >
+        <button type="button" onClick={() => setMarker("preserved")}>Set lap state</button>
+      </div>
+    );
+  },
 }));
 
 import { App } from "../App";
@@ -77,7 +85,10 @@ describe("App lap GPS source", () => {
 
     expect(screen.queryByRole("button", { name: "Raw GPS (37)" })).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Set lap state" }));
     await user.click(screen.getByRole("tab", { name: "Overview" }));
+    expect(screen.getByTestId("lap-analysis")).toHaveAttribute("data-active", "false");
+    expect(screen.getByTestId("lap-analysis")).toHaveAttribute("data-marker", "preserved");
     expect(screen.getByRole("button", { name: "Raw GPS (37)" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Enhanced (35)" })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "Enhanced (35)" }));

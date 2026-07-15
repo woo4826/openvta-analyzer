@@ -50,6 +50,8 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.queryByTestId("map-state")).not.toBeInTheDocument();
     expect(screen.queryByTestId("chart-state")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analysis controls" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Focused lap" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Reference lap" })).toBeVisible();
   });
 
   it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {
@@ -76,14 +78,14 @@ describe("SegmentAnalysisWorkbench", () => {
 
     expect(screen.getByTestId("map-state")).toHaveTextContent("segment=none");
 
-    await user.click(screen.getByRole("button", { name: "Analysis controls" }));
-    expect(screen.getByRole("region", { name: "Segment Analysis Workbench" })).toHaveClass("is-controls-open");
-    const controls = screen.getByRole("dialog", { name: "Analysis controls" });
-    await user.click(within(controls).getByRole("button", { name: "Corner 1, 10–90 m" }));
+    await user.click(screen.getByRole("button", { name: /^Corner 1/ }));
     expect(screen.getByText(/Corner 1 · 10–90 m/)).toBeVisible();
-    await user.selectOptions(within(controls).getByRole("combobox", { name: "Focused lap" }), "lap-1");
+    await user.click(screen.getByRole("button", { name: "Next section" }));
+    expect(screen.getByText(/Straight 1 · 90–111 m/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Previous section" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Focused lap" }), "lap-1");
     expect(screen.getByTestId("map-state")).toHaveTextContent("roles=lap-1,lap-2");
-    await user.selectOptions(within(controls).getByRole("combobox", { name: "Focused lap" }), "lap-2");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Focused lap" }), "lap-2");
     expect(screen.getByTestId("map-state")).toHaveTextContent("roles=lap-2,lap-1");
     expect(screen.getByTestId("chart-state")).toHaveTextContent("roles=lap-2,lap-1");
     expect(screen.getByTestId("chart-state")).toHaveTextContent("sync=timestamp:1");
@@ -202,7 +204,10 @@ function data(lapCount = 2): { points: GpsPoint[]; sensors: SensorPoint[]; laps:
       centerline: { type: "LineString", coordinates: [[0, 0], [0.001, 0]] },
       direction: "clockwise",
       sectorGates: [],
-      sections: [{ id: "c1", name: "Corner 1", kind: "corner-right", startDistanceMeters: 10, endDistanceMeters: 90 }],
+      sections: [
+        { id: "c1", name: "Corner 1", kind: "corner-right", startDistanceMeters: 10, endDistanceMeters: 90 },
+        { id: "s1", name: "Straight 1", kind: "straight", startDistanceMeters: 90, endDistanceMeters: 111 },
+      ],
       source: { kind: "user" },
       updatedAt: "2026-07-15T00:00:00.000Z",
     },

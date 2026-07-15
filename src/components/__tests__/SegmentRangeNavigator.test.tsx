@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { TrackSection } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -14,18 +13,12 @@ const sections: TrackSection[] = [
 ];
 
 describe("SegmentRangeNavigator", () => {
-  it("renders proportional sections and selects a named section", async () => {
-    const user = userEvent.setup();
-    const onSection = vi.fn();
-    renderNavigator({ onSection });
-
-    const straight = screen.getByRole("button", { name: "Straight 1, 0–400 m" });
-    const corner = screen.getByRole("button", { name: "Corner 1, 400–550 m" });
+  it("renders the proportional overview as presentation rather than tiny targets", () => {
+    const { container } = renderNavigator();
+    const [straight, corner] = [...container.querySelectorAll<HTMLElement>(".segment-proportion-section")];
     expect(straight).toHaveStyle({ left: "0%", width: "40%" });
     expect(corner).toHaveStyle({ left: "40%", width: "15%" });
-
-    await user.click(corner);
-    expect(onSection).toHaveBeenCalledWith("corner-1");
+    expect(screen.queryByRole("button", { name: /Corner 1/ })).not.toBeInTheDocument();
   });
 
   it("exposes two labelled, keyboard-operable range thumbs", () => {
@@ -42,20 +35,8 @@ describe("SegmentRangeNavigator", () => {
     expect(onRange).toHaveBeenCalledWith(101, 800);
   });
 
-  it("filters section buttons without changing the full distance scale", async () => {
-    const user = userEvent.setup();
-    const onFilter = vi.fn();
-    const { rerender } = renderNavigator({ onFilter });
-
-    await user.click(screen.getByRole("button", { name: "Corners" }));
-    expect(onFilter).toHaveBeenCalledWith("corners");
-
-    rerender(<I18nProvider><SegmentRangeNavigator
-      scope={{ kind: "whole-lap" }} filter="corners" sections={sections} totalDistanceMeters={1000}
-      snapToSections onWholeLap={vi.fn()} onFilter={onFilter} onSection={vi.fn()} onRange={vi.fn()}
-    /></I18nProvider>);
-    expect(screen.getByRole("button", { name: "Straight 1, 0–400 m" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Corner 1, 400–550 m" })).toBeEnabled();
+  it("keeps the full distance scale available for custom ranges", () => {
+    renderNavigator();
     expect(screen.getByText("1000 m")).toBeVisible();
   });
 
@@ -68,13 +49,10 @@ describe("SegmentRangeNavigator", () => {
 function renderNavigator(overrides: Partial<React.ComponentProps<typeof SegmentRangeNavigator>> = {}) {
   const props: React.ComponentProps<typeof SegmentRangeNavigator> = {
     scope: { kind: "whole-lap" },
-    filter: "all",
     sections,
     totalDistanceMeters: 1000,
     snapToSections: true,
     onWholeLap: vi.fn(),
-    onFilter: vi.fn(),
-    onSection: vi.fn(),
     onRange: vi.fn(),
     ...overrides,
   };

@@ -30,6 +30,7 @@ import { RouteMap, type LapMapOverlay } from "./RouteMap";
 import { FilePickerButton, Panel, StatusBadge, Tabs } from "./ui";
 
 interface LapAnalysisProps {
+  active?: boolean;
   fileName: string;
   points: GpsPoint[];
   sensors: SensorPoint[];
@@ -48,6 +49,7 @@ const EMPTY_LAPS: LapResult[] = [];
 type LapAnalysisView = "insights" | "setup";
 
 export function LapAnalysis({
+  active = true,
   fileName,
   points,
   sensors,
@@ -201,7 +203,7 @@ export function LapAnalysis({
       <div className="lap-analysis-view-content" hidden={activeView !== "insights"}>
         {insightsReady && workspace.profile && workspace.analysisLine ? (
           <SegmentAnalysisWorkbench
-            active={activeView === "insights"}
+            active={active && activeView === "insights"}
             sourceName={fileName}
             points={points}
             sensors={sensors}

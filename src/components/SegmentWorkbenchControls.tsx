@@ -7,25 +7,15 @@ import type {
   TrackSection,
 } from "../domain/types";
 import { SEGMENT_WIDGET_IDS, canHideWidget } from "../domain/segmentWorkbenchPreferences";
-import type { SegmentAxis, SegmentFilter } from "../app/useSegmentWorkbench";
+import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentRangeNavigator } from "./SegmentRangeNavigator";
-
-export interface LapControlOption {
-  id: string;
-  label: string;
-}
 
 interface SegmentWorkbenchControlsProps {
   open: boolean;
   scope: AnalysisScope;
-  filter: SegmentFilter;
   sections: TrackSection[];
   totalDistanceMeters: number;
-  focusedLapId?: string;
-  referenceLapId?: string;
-  focusOptions: LapControlOption[];
-  referenceOptions: LapControlOption[];
   lapVisibility: SegmentLapVisibility;
   axis: SegmentAxis;
   includePartialLapSections: boolean;
@@ -33,15 +23,11 @@ interface SegmentWorkbenchControlsProps {
   snapToSections: boolean;
   visibleWidgets: Record<SegmentWidgetId, boolean>;
   onOpenChange: (open: boolean) => void;
-  onFocusedLap: (lapId: string) => void;
-  onReferenceLap: (lapId: string) => void;
   onLapVisibility: (mode: SegmentLapVisibility) => void;
   onAxis: (axis: SegmentAxis) => void;
   onIncludePartialLapSections: (include: boolean) => void;
   onSnapToSections: (snap: boolean) => void;
   onWholeLap: () => void;
-  onFilter: (filter: SegmentFilter) => void;
-  onSection: (sectionId: string) => void;
   onRange: (startDistanceMeters: number, endDistanceMeters: number) => void;
   onWidgetVisibility: (widgetId: SegmentWidgetId, visible: boolean) => void;
   onResetLayout: () => void;
@@ -50,13 +36,8 @@ interface SegmentWorkbenchControlsProps {
 export function SegmentWorkbenchControls({
   open,
   scope,
-  filter,
   sections,
   totalDistanceMeters,
-  focusedLapId,
-  referenceLapId,
-  focusOptions,
-  referenceOptions,
   lapVisibility,
   axis,
   includePartialLapSections,
@@ -64,15 +45,11 @@ export function SegmentWorkbenchControls({
   snapToSections,
   visibleWidgets,
   onOpenChange,
-  onFocusedLap,
-  onReferenceLap,
   onLapVisibility,
   onAxis,
   onIncludePartialLapSections,
   onSnapToSections,
   onWholeLap,
-  onFilter,
-  onSection,
   onRange,
   onWidgetVisibility,
   onResetLayout,
@@ -121,18 +98,6 @@ export function SegmentWorkbenchControls({
           <fieldset className="segment-control-group">
             <legend>{t("lap.workbench.comparison")}</legend>
             <label className="field">
-              <span>{t("lap.workbench.focusedLap")}</span>
-              <select aria-label={t("lap.workbench.focusedLap")} value={focusedLapId ?? ""} onChange={(event) => onFocusedLap(event.target.value)}>
-                {focusOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>{t("lap.workbench.referenceLap")}</span>
-              <select aria-label={t("lap.workbench.referenceLap")} value={referenceLapId ?? ""} onChange={(event) => onReferenceLap(event.target.value)}>
-                {referenceOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="field">
               <span>{t("lap.workbench.visibleLaps")}</span>
               <select aria-label={t("lap.workbench.visibleLaps")} value={lapVisibility} onChange={(event) => onLapVisibility(event.target.value as SegmentLapVisibility)}>
                 <option value="all">{t("lap.workbench.visibleAll")}</option>
@@ -145,13 +110,10 @@ export function SegmentWorkbenchControls({
 
           <SegmentRangeNavigator
             scope={scope}
-            filter={filter}
             sections={sections}
             totalDistanceMeters={totalDistanceMeters}
             snapToSections={snapToSections}
             onWholeLap={onWholeLap}
-            onFilter={onFilter}
-            onSection={onSection}
             onRange={onRange}
           />
 

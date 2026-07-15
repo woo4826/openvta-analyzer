@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineString } from "geojson";
-import { Download, Save, Settings2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
 import { projectCoordinateToLineProgress } from "../domain/geometry";
@@ -31,6 +31,7 @@ import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
 import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
 import { SegmentVariationChart } from "./SegmentVariationChart";
 import { SegmentWorkbenchControls } from "./SegmentWorkbenchControls";
+import { SegmentScopeRibbon } from "./SegmentScopeRibbon";
 import { SegmentDashboard } from "./SegmentDashboard";
 import { DashboardWidget } from "./DashboardWidget";
 
@@ -139,6 +140,17 @@ export function SegmentAnalysisWorkbench({
         completed: partialCompletedSectorCount,
         theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds),
       });
+  const focusOptions = workbench.analysis.records.filter((record) => record.trajectory.length > 1);
+  const referenceOptions = workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest && record.trajectory.length > 1);
+  const selectedSectionId = workbench.scope.kind === "section" ? workbench.scope.sectionId : undefined;
+  const navigationIndex = selectedSectionId
+    ? workbench.navigationSections.findIndex((section) => section.id === selectedSectionId)
+    : -1;
+  const selectAdjacentSection = (direction: -1 | 1) => {
+    const nextIndex = navigationIndex < 0 && direction === 1 ? 0 : navigationIndex + direction;
+    const nextSection = workbench.navigationSections[nextIndex];
+    if (nextSection) workbench.selectSection(nextSection.id);
+  };
 
   const updatePreferences = useCallback((update: (current: SegmentWorkbenchPreferences) => SegmentWorkbenchPreferences) => {
     setPreferences((current) => update(current));
@@ -262,56 +274,69 @@ export function SegmentAnalysisWorkbench({
       ) : null}
 
       <div className="segment-comparison-bar" aria-label={t("lap.workbench.comparisonControls")}>
-        <span className="comparison-role is-focus">
+        <label className="comparison-role is-focus">
           <span><i aria-hidden />{t("lap.workbench.focusedLap")}</span>
-          <strong>{focused ? workbenchLapLabel(focused, t) : "—"}</strong>
-        </span>
+          <select aria-label={t("lap.workbench.focusedLap")} value={workbench.focusedLapId ?? ""} onChange={(event) => workbench.setFocusedLap(event.target.value)}>
+            {focusOptions.map((record) => <option key={record.lapId} value={record.lapId}>{lapControlLabel(record, t)}</option>)}
+          </select>
+        </label>
         <span className="comparison-separator" aria-hidden>↔</span>
-        <span className="comparison-role is-reference">
+        <label className="comparison-role is-reference">
           <span><i aria-hidden />{t("lap.workbench.referenceLap")}</span>
-          <strong>{reference ? workbenchLapLabel(reference, t) : "—"}</strong>
-        </span>
-        <span className="comparison-scope"><small>{t("lap.workbench.selectedScope")}</small><strong>{scopeName}</strong></span>
+          <select aria-label={t("lap.workbench.referenceLap")} value={workbench.referenceLapId ?? ""} onChange={(event) => workbench.setReferenceLap(event.target.value)}>
+            {referenceOptions.map((record) => <option key={record.lapId} value={record.lapId}>{lapControlLabel(record, t)}</option>)}
+          </select>
+        </label>
+        <div className="comparison-scope">
+          <small>{t("lap.workbench.selectedScope")}</small>
+          <strong>{scopeName}</strong>
+          <span>{t("lap.workbench.trackDefinition")}: {Math.round(totalDistanceMeters)} m · {t("lap.workbench.comparableCoverage")}: {Math.round(workbench.analysis.range.startDistanceMeters)}–{Math.round(workbench.analysis.range.endDistanceMeters)} m</span>
+        </div>
+        <div className="comparison-navigation">
+          <button type="button" className="icon-button button ghost" aria-label={t("lap.workbench.previousSection")} disabled={navigationIndex <= 0} onClick={() => selectAdjacentSection(-1)}>
+            <ChevronLeft size={18} aria-hidden />
+          </button>
+          <button type="button" className="icon-button button ghost" aria-label={t("lap.workbench.nextSection")} disabled={workbench.navigationSections.length === 0 || navigationIndex >= workbench.navigationSections.length - 1} onClick={() => selectAdjacentSection(1)}>
+            <ChevronRight size={18} aria-hidden />
+          </button>
+        </div>
+        <SegmentWorkbenchControls
+          open={preferences.drawerOpen}
+          scope={workbench.scope}
+          sections={profile.sections}
+          totalDistanceMeters={totalDistanceMeters}
+          lapVisibility={preferences.lapVisibility}
+          axis={workbench.axis}
+          includePartialLapSections={includePartialLapSections}
+          partialImpact={partialImpact}
+          snapToSections={preferences.snapToSections}
+          visibleWidgets={preferences.visibleWidgets}
+          onOpenChange={(drawerOpen) => updatePreferences((current) => ({ ...current, drawerOpen }))}
+          onLapVisibility={(lapVisibility) => updatePreferences((current) => ({ ...current, lapVisibility }))}
+          onAxis={workbench.setAxis}
+          onIncludePartialLapSections={onIncludePartialLapSections}
+          onSnapToSections={(snapToSections) => updatePreferences((current) => ({ ...current, snapToSections }))}
+          onWholeLap={workbench.resetScope}
+          onRange={(start, end) => workbench.selectRange(start, end, "manual")}
+          onWidgetVisibility={(widgetId, visible) => updatePreferences((current) => {
+            if (!visible && !canHideWidget(current.visibleWidgets, widgetId)) return current;
+            return { ...current, visibleWidgets: { ...current.visibleWidgets, [widgetId]: visible } };
+          })}
+          onResetLayout={() => updatePreferences((current) => ({
+            ...current,
+            layouts: defaultSegmentWorkbenchPreferences().layouts,
+          }))}
+        />
         <span className="sr-only" role="status" aria-live="polite">{focused ? workbenchLapLabel(focused, t) : "—"} {t("lap.workbench.focusVs")} {reference ? workbenchLapLabel(reference, t) : "—"} · {scopeName}</span>
       </div>
 
-      <SegmentWorkbenchControls
-        open={preferences.drawerOpen}
+      <SegmentScopeRibbon
         scope={workbench.scope}
         filter={workbench.filter}
-        sections={profile.sections}
-        totalDistanceMeters={totalDistanceMeters}
-        focusedLapId={workbench.focusedLapId}
-        referenceLapId={workbench.referenceLapId}
-        focusOptions={workbench.analysis.records
-          .filter((record) => record.trajectory.length > 1)
-          .map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
-        referenceOptions={workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest).map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
-        lapVisibility={preferences.lapVisibility}
-        axis={workbench.axis}
-        includePartialLapSections={includePartialLapSections}
-        partialImpact={partialImpact}
-        snapToSections={preferences.snapToSections}
-        visibleWidgets={preferences.visibleWidgets}
-        onOpenChange={(drawerOpen) => updatePreferences((current) => ({ ...current, drawerOpen }))}
-        onFocusedLap={workbench.setFocusedLap}
-        onReferenceLap={workbench.setReferenceLap}
-        onLapVisibility={(lapVisibility) => updatePreferences((current) => ({ ...current, lapVisibility }))}
-        onAxis={workbench.setAxis}
-        onIncludePartialLapSections={onIncludePartialLapSections}
-        onSnapToSections={(snapToSections) => updatePreferences((current) => ({ ...current, snapToSections }))}
+        sections={workbench.navigationSections}
         onWholeLap={workbench.resetScope}
         onFilter={workbench.setFilter}
         onSection={workbench.selectSection}
-        onRange={(start, end) => workbench.selectRange(start, end, "manual")}
-        onWidgetVisibility={(widgetId, visible) => updatePreferences((current) => {
-          if (!visible && !canHideWidget(current.visibleWidgets, widgetId)) return current;
-          return { ...current, visibleWidgets: { ...current.visibleWidgets, [widgetId]: visible } };
-        })}
-        onResetLayout={() => updatePreferences((current) => ({
-          ...current,
-          layouts: defaultSegmentWorkbenchPreferences().layouts,
-        }))}
       />
 
       {active ? <>
@@ -456,6 +481,10 @@ function workbenchLapLabel(record: SegmentLapRecord, t: T): string {
   if (record.completion === "partial-end") return t("lap.workbench.closingFragment");
   if (record.completion === "partial-both") return t("lap.workbench.incompleteRecording");
   return `${t("lap.lap")} ${record.ordinal}`;
+}
+
+function lapControlLabel(record: SegmentLapRecord, t: T): string {
+  return `${workbenchLapLabel(record, t)} · ${formatTime(record.durationSeconds)}`;
 }
 
 function gpsConfidenceLabel(confidence: SegmentLapRecord["gpsConfidence"], t: T): string {

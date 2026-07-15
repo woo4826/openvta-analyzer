@@ -453,8 +453,9 @@ export function App() {
                     />
                   ) : null}
 
-                  {tab.key === "laps" && activeTab === "laps" ? (
+                  {tab.key === "laps" ? (
                     <LapAnalysis
+                      active={activeTab === "laps"}
                       fileName={activeFile.sourceName}
                       points={lapGpsSource?.points ?? []}
                       sensors={chartSensors}

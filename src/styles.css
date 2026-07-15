@@ -811,10 +811,23 @@ footer.privacy-note {
 
 .comparison-scope {
   margin-left: auto;
+  display: grid;
+  gap: 1px;
 }
 
 .comparison-scope small {
   color: var(--color-text-muted);
+}
+
+.comparison-scope > span {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.comparison-navigation {
+  display: flex;
+  gap: var(--space-1);
 }
 
 .segment-range-editor {
@@ -1087,16 +1100,14 @@ footer.privacy-note {
 }
 
 .segment-controls-trigger {
-  position: fixed;
-  bottom: 18px;
-  left: 12px;
-  z-index: 54;
-  box-shadow: 0 8px 24px rgb(16 24 32 / 24%);
+  position: static;
+  z-index: auto;
+  min-height: 44px;
+  box-shadow: none;
 }
 
 .segment-controls-trigger.is-open {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
 }
 
 .segment-controls-scrim {
@@ -2736,12 +2747,6 @@ tbody tr:hover {
     bottom: 8px;
     left: 8px;
     width: calc(100vw - 16px);
-  }
-
-  .segment-controls-trigger {
-    top: auto;
-    bottom: 16px;
-    left: 16px;
   }
 
   .segment-widget-switches {
