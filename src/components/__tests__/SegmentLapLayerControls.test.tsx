@@ -53,6 +53,25 @@ describe("SegmentLapLayerControls", () => {
     expect(onShowAll).toHaveBeenCalledOnce();
     expect(onReset).toHaveBeenCalledOnce();
   });
+
+  it("contains keyboard focus and restores the layer trigger on Escape", async () => {
+    const user = userEvent.setup();
+    render(<I18nProvider><SegmentLapLayerControls
+      layers={layers()}
+      onLayer={vi.fn()}
+      onShowComparison={vi.fn()}
+      onShowAll={vi.fn()}
+      onReset={vi.fn()}
+    /></I18nProvider>);
+    const trigger = screen.getByRole("button", { name: "Lap layers" });
+
+    await user.click(trigger);
+    expect(screen.getByRole("button", { name: "Close lap layers" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Lap layers" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });
 
 function layers(): LapMapLayerStyle[] {

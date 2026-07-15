@@ -10,6 +10,7 @@ import { SEGMENT_WIDGET_IDS, canHideWidget } from "../domain/segmentWorkbenchPre
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentRangeNavigator } from "./SegmentRangeNavigator";
+import { useContainedPanelFocus } from "./useContainedPanelFocus";
 
 interface SegmentWorkbenchControlsProps {
   open: boolean;
@@ -55,19 +56,17 @@ export function SegmentWorkbenchControls({
   onResetLayout,
 }: SegmentWorkbenchControlsProps) {
   const { t } = useI18n();
+  const { panelRef, triggerRef } = useContainedPanelFocus(open, () => onOpenChange(false));
 
   useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onOpenChange, open]);
+    document.documentElement.classList.toggle("lap-analysis-controls-open", open);
+    return () => document.documentElement.classList.remove("lap-analysis-controls-open");
+  }, [open]);
 
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         className={`button primary segment-controls-trigger${open ? " is-open" : ""}`}
         aria-expanded={open}
@@ -79,6 +78,7 @@ export function SegmentWorkbenchControls({
       </button>
       {open ? <button type="button" className="segment-controls-scrim" aria-label={t("lap.workbench.closeControls")} onClick={() => onOpenChange(false)} /> : null}
       {open ? <aside
+        ref={panelRef}
         id="segment-workbench-controls"
         className="segment-controls-drawer is-open"
         role="dialog"

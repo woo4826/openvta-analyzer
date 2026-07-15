@@ -54,6 +54,27 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.getByRole("combobox", { name: "Reference lap" })).toBeVisible();
   });
 
+  it("contains advanced-control focus and restores its persistent trigger", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    render(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
+      analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
+      mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
+      onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()} onActiveSegment={vi.fn()} onSaveRange={vi.fn()} onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+    const trigger = screen.getByRole("button", { name: "Analysis controls" });
+
+    await user.click(trigger);
+    expect(within(screen.getByRole("dialog", { name: "Analysis controls" })).getByRole("button", { name: "Close analysis controls" })).toHaveFocus();
+    expect(document.documentElement).toHaveClass("lap-analysis-controls-open");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Analysis controls" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(document.documentElement).not.toHaveClass("lap-analysis-controls-open");
+  });
+
   it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {
     const user = userEvent.setup();
     const fixture = data();

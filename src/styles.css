@@ -246,6 +246,7 @@ textarea {
   flex-direction: column;
   gap: var(--space-6);
   background: var(--color-surface-muted);
+  transition: margin-left 180ms ease, width 180ms ease;
 }
 
 .workspace.is-lap-analysis {
@@ -678,22 +679,22 @@ footer.privacy-note {
 
 /* Segment Analysis Workbench */
 .segment-workbench {
-  --segment-controls-reserved-space: 0px;
   min-width: 0;
-  padding-left: var(--segment-controls-reserved-space);
   display: grid;
   gap: var(--space-6);
-  transition: padding-left 180ms ease;
 }
 
 @media (min-width: 1181px) {
-  .segment-workbench.is-controls-open {
-    --segment-controls-reserved-space: min(426px, calc(100vw - 720px));
+  html.lap-analysis-controls-open .workspace.is-lap-analysis {
+    width: calc(100% - 434px);
+    margin-left: 434px;
+    margin-right: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .segment-workbench {
+  .segment-workbench,
+  .workspace {
     transition: none;
   }
 }
@@ -2756,6 +2757,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 1180px) {
+  .segment-controls-scrim {
+    display: block;
+  }
+
   .workspace-grid {
     grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
   }
@@ -2850,6 +2855,42 @@ tbody tr:hover {
     bottom: 8px;
     left: 8px;
     width: calc(100vw - 16px);
+  }
+
+  .segment-comparison-bar {
+    position: static;
+  }
+
+  .segment-lap-layer-controls {
+    position: static;
+    max-width: none;
+    margin-bottom: var(--space-2);
+  }
+
+  .segment-lap-layer-trigger {
+    width: 100%;
+  }
+
+  .segment-lap-layer-panel {
+    width: 100%;
+    max-height: min(620px, calc(100vh - 96px));
+  }
+
+  .map-toolbar {
+    top: var(--space-2);
+    right: var(--space-2);
+    left: var(--space-2);
+    max-width: none;
+  }
+
+  .map-control-group .icon-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .segment-telemetry-context {
+    grid-template-columns: 1fr;
   }
 
   .segment-widget-switches {
@@ -3077,12 +3118,6 @@ tbody tr:hover {
 
   .segment-workbench-header {
     padding: var(--space-6);
-  }
-
-  .segment-lap-layer-controls {
-    top: var(--space-2);
-    left: var(--space-2);
-    max-width: calc(100% - 16px);
   }
 
   .segment-lap-layer-panel {

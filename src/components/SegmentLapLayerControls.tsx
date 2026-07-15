@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Layers3, X } from "lucide-react";
 import type { LapMapLayerOverride, LapMapLayerStyle } from "../domain/lapMapLayers";
 import { useI18n } from "../i18n/useI18n";
+import { useContainedPanelFocus } from "./useContainedPanelFocus";
 
 interface SegmentLapLayerControlsProps {
   layers: LapMapLayerStyle[];
@@ -20,10 +21,12 @@ export function SegmentLapLayerControls({
 }: SegmentLapLayerControlsProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const { panelRef, triggerRef } = useContainedPanelFocus(open, () => setOpen(false));
 
   return (
     <div className="segment-lap-layer-controls">
       <button
+        ref={triggerRef}
         type="button"
         className="button segment-lap-layer-trigger"
         aria-label={t("lap.workbench.lapLayers")}
@@ -35,7 +38,7 @@ export function SegmentLapLayerControls({
         <span>{layers.filter((layer) => layer.visible).length}/{layers.length}</span>
       </button>
       {open ? (
-        <section className="segment-lap-layer-panel" role="dialog" aria-label={t("lap.workbench.lapLayers")}>
+        <section ref={panelRef} className="segment-lap-layer-panel" role="dialog" aria-label={t("lap.workbench.lapLayers")}>
           <header>
             <div>
               <span className="panel-eyebrow">{t("lap.workbench.mapComparison")}</span>
