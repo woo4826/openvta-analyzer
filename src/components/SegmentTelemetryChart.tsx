@@ -189,7 +189,10 @@ function synchronizationLabel(
   t: ReturnType<typeof useI18n>["t"],
 ): string {
   if (!series?.samples.length) return t("lap.workbench.imuUnavailable");
-  return t(series.method === "timestamp"
-    ? "lap.workbench.imuSyncTimestamp"
-    : "lap.workbench.imuSyncLineOrder", { samples: series.samples.length });
+  const labelKey = {
+    timestamp: "lap.workbench.imuSyncTimestamp",
+    "sensor-clock": "lap.workbench.imuSyncSensorClock",
+    "line-order": "lap.workbench.imuSyncLineOrder",
+  } as const satisfies Record<SynchronizedAccelerationSeries["method"], Parameters<typeof t>[0]>;
+  return t(labelKey[series.method], { samples: series.samples.length });
 }

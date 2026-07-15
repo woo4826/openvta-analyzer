@@ -26,6 +26,129 @@ describe("sensor synchronization", () => {
     expect(result?.samples[0].accelXG).toBeCloseTo(1);
   });
 
+  it("maps asymmetric sensor rows by inferred sensor clock instead of line density", () => {
+    const result = synchronizeAccelerationToTrajectory(
+      [gps({ index: 0, lineNumber: 10 }), gps({ index: 1, lineNumber: 90 })],
+      [
+        sensor({ index: 0, lineNumber: 9, elapsedSeconds: 0 }),
+        sensor({ index: 1, lineNumber: 11, elapsedSeconds: 0 }),
+        sensor({ index: 2, lineNumber: 20, elapsedSeconds: 5 }),
+        sensor({ index: 3, lineNumber: 89, elapsedSeconds: 10 }),
+        sensor({ index: 4, lineNumber: 91, elapsedSeconds: 10 }),
+      ],
+      [
+        trajectorySample({ sourceIndex: 0, sourcePosition: 0, distanceMeters: 0, elapsedSeconds: 0 }),
+        trajectorySample({ sourceIndex: 1, sourcePosition: 1, distanceMeters: 100, elapsedSeconds: 10 }),
+      ],
+    );
+
+    expect(result?.method).toBe("sensor-clock");
+    expect(result?.samples.find((sample) => sample.sensorIndex === 2)).toMatchObject({
+      distanceMeters: 50,
+      elapsedSeconds: 5,
+      sourceIndex: 1,
+    });
+  });
+
+  it("interpolates inferred sensor clocks for fractional trajectory source positions", () => {
+    const result = synchronizeAccelerationToTrajectory(
+      [gps({ index: 0, lineNumber: 10 }), gps({ index: 1, lineNumber: 90 })],
+      [
+        sensor({ index: 0, lineNumber: 9, elapsedSeconds: 0 }),
+        sensor({ index: 1, lineNumber: 11, elapsedSeconds: 0 }),
+        sensor({ index: 2, lineNumber: 20, elapsedSeconds: 5 }),
+        sensor({ index: 3, lineNumber: 89, elapsedSeconds: 10 }),
+        sensor({ index: 4, lineNumber: 91, elapsedSeconds: 10 }),
+      ],
+      [
+        trajectorySample({ sourceIndex: 0, sourcePosition: 0.25, distanceMeters: 0, elapsedSeconds: 0 }),
+        trajectorySample({ sourceIndex: 1, sourcePosition: 0.75, distanceMeters: 100, elapsedSeconds: 10 }),
+      ],
+    );
+
+    expect(result?.method).toBe("sensor-clock");
+    expect(result?.samples.find((sample) => sample.sensorIndex === 2)).toMatchObject({
+      distanceMeters: 50,
+      elapsedSeconds: 5,
+      sourceIndex: 1,
+    });
+  });
+
+  it("does not extrapolate a sensor clock for unbracketed GPS rows", () => {
+    const result = synchronizeAccelerationToTrajectory(
+      [
+        gps({ index: 0, lineNumber: 5 }),
+        gps({ index: 1, lineNumber: 20 }),
+        gps({ index: 2, lineNumber: 40 }),
+      ],
+      [
+        sensor({ index: 0, lineNumber: 10, elapsedSeconds: 0 }),
+        sensor({ index: 1, lineNumber: 15, elapsedSeconds: 1 }),
+        sensor({ index: 2, lineNumber: 25, elapsedSeconds: 5 }),
+        sensor({ index: 3, lineNumber: 35, elapsedSeconds: 9 }),
+        sensor({ index: 4, lineNumber: 45, elapsedSeconds: 11 }),
+      ],
+      [
+        trajectorySample({ sourceIndex: 0, distanceMeters: 0, elapsedSeconds: 0 }),
+        trajectorySample({ sourceIndex: 1, distanceMeters: 50, elapsedSeconds: 5 }),
+        trajectorySample({ sourceIndex: 2, distanceMeters: 100, elapsedSeconds: 10 }),
+      ],
+    );
+
+    expect(result?.method).toBe("sensor-clock");
+    expect(result?.samples.map((sample) => sample.sensorIndex)).not.toContain(1);
+  });
+
+  it("drops nonmonotonic inferred sensor-clock anchors", () => {
+    const result = synchronizeAccelerationToTrajectory(
+      [
+        gps({ index: 0, lineNumber: 10 }),
+        gps({ index: 1, lineNumber: 20 }),
+        gps({ index: 2, lineNumber: 30 }),
+        gps({ index: 3, lineNumber: 40 }),
+      ],
+      [
+        sensor({ index: 0, lineNumber: 9, elapsedSeconds: 0 }),
+        sensor({ index: 1, lineNumber: 11, elapsedSeconds: 0 }),
+        sensor({ index: 2, lineNumber: 19, elapsedSeconds: 10 }),
+        sensor({ index: 3, lineNumber: 21, elapsedSeconds: 10 }),
+        sensor({ index: 4, lineNumber: 29, elapsedSeconds: 5 }),
+        sensor({ index: 5, lineNumber: 31, elapsedSeconds: 5 }),
+        sensor({ index: 6, lineNumber: 35, elapsedSeconds: 15 }),
+        sensor({ index: 7, lineNumber: 39, elapsedSeconds: 20 }),
+        sensor({ index: 8, lineNumber: 41, elapsedSeconds: 20 }),
+      ],
+      [
+        trajectorySample({ sourceIndex: 0, distanceMeters: 0, elapsedSeconds: 0 }),
+        trajectorySample({ sourceIndex: 1, distanceMeters: 100, elapsedSeconds: 10 }),
+        trajectorySample({ sourceIndex: 2, distanceMeters: 900, elapsedSeconds: 20 }),
+        trajectorySample({ sourceIndex: 3, distanceMeters: 1_000, elapsedSeconds: 30 }),
+      ],
+    );
+
+    expect(result?.method).toBe("sensor-clock");
+    expect(result?.samples.find((sample) => sample.sensorIndex === 6)?.distanceMeters).toBeCloseTo(550);
+    expect(result?.samples.map((sample) => sample.sensorIndex)).not.toEqual(expect.arrayContaining([4, 5]));
+  });
+
+  it("falls back to line order when fewer than two monotonic sensor-clock anchors survive", () => {
+    const result = synchronizeAccelerationToTrajectory(
+      [gps({ index: 0, lineNumber: 10 }), gps({ index: 1, lineNumber: 20 })],
+      [
+        sensor({ index: 0, lineNumber: 9, elapsedSeconds: 10 }),
+        sensor({ index: 1, lineNumber: 11, elapsedSeconds: 10 }),
+        sensor({ index: 2, lineNumber: 19, elapsedSeconds: 5 }),
+        sensor({ index: 3, lineNumber: 21, elapsedSeconds: 5 }),
+      ],
+      [
+        trajectorySample({ sourceIndex: 0, distanceMeters: 0, elapsedSeconds: 0 }),
+        trajectorySample({ sourceIndex: 1, distanceMeters: 100, elapsedSeconds: 10 }),
+      ],
+    );
+
+    expect(result?.method).toBe("line-order");
+  });
+
   it("coalesces duplicate effective sensor instants by averaging channels", () => {
     const result = synchronizeAccelerationToTrajectory(
       pointsByLine(),

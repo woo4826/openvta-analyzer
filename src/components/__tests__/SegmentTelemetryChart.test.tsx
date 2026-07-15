@@ -63,7 +63,7 @@ describe("segment telemetry chart", () => {
           focusedLapId="lap-2"
           referenceLapId="lap-1"
           axis="time"
-          synchronizedAcceleration={acceleration()}
+          synchronizedAcceleration={acceleration("sensor-clock")}
           cursorDistanceMeters={50}
           onRange={onRange}
           onReset={vi.fn()}
@@ -82,6 +82,7 @@ describe("segment telemetry chart", () => {
     const speed = option.series.find((series: { id: string }) => series.id === "lap-2-speed");
     expect(speed.data[1][0]).toBe(2);
     expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-cursor-x", "2");
+    expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Emit range" }));
     expect(onRange).toHaveBeenCalledWith(1100, 1100);
 
@@ -152,9 +153,9 @@ describe("segment telemetry chart", () => {
   });
 });
 
-function acceleration(): SynchronizedAccelerationSeries {
+function acceleration(method: SynchronizedAccelerationSeries["method"] = "line-order"): SynchronizedAccelerationSeries {
   return {
-    method: "line-order",
+    method,
     samples: [0, 50, 100].map((distance, index) => ({
       sensorIndex: index,
       sourceIndex: 20 + index,

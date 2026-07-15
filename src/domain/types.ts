@@ -342,7 +342,7 @@ export interface SegmentTrajectorySample extends LapComparisonSample {
   accuracyMeters?: number;
 }
 
-export type SensorSynchronizationMethod = "timestamp" | "line-order";
+export type SensorSynchronizationMethod = "timestamp" | "sensor-clock" | "line-order";
 
 export interface SynchronizedAccelerationSample {
   sensorIndex: number;

@@ -14,6 +14,7 @@ interface TrajectoryAnchor {
   distanceMeters: number;
   elapsedSeconds: number;
   timestampNanos?: number;
+  sensorElapsedSeconds?: number;
   lineNumber: number;
 }
 
@@ -27,7 +28,8 @@ export function synchronizeAccelerationToTrajectory(
   trajectory: SegmentTrajectorySample[],
 ): SynchronizedAccelerationSeries | undefined {
   if (!points.length || !sensors.length || trajectory.length < 2) return undefined;
-  const anchors = trajectoryAnchors(points, trajectory);
+  const sensorElapsedByPoint = inferSensorElapsedByPoint(points, sensors);
+  const anchors = trajectoryAnchors(points, trajectory, sensorElapsedByPoint);
   if (anchors.length < 2) return undefined;
 
   const method = synchronizationMethod(anchors, sensors);
@@ -38,7 +40,11 @@ export function synchronizeAccelerationToTrajectory(
   return samples.length ? { method, samples } : undefined;
 }
 
-function trajectoryAnchors(points: GpsPoint[], trajectory: SegmentTrajectorySample[]): TrajectoryAnchor[] {
+function trajectoryAnchors(
+  points: GpsPoint[],
+  trajectory: SegmentTrajectorySample[],
+  sensorElapsedByPoint: Array<number | undefined>,
+): TrajectoryAnchor[] {
   const grouped = new Map<number, SegmentTrajectorySample[]>();
   for (const sample of trajectory) {
     const sourcePosition = finiteNumber(sample.sourcePosition) ?? sample.sourceIndex;
@@ -65,9 +71,46 @@ function trajectoryAnchors(points: GpsPoint[], trajectory: SegmentTrajectorySamp
           finiteNumber(rightPoint.elapsedRealtimeNanos),
           ratio,
         ),
+        sensorElapsedSeconds: interpolateOptional(
+          sensorElapsedByPoint[leftIndex],
+          sensorElapsedByPoint[rightIndex],
+          ratio,
+        ),
         lineNumber: interpolate(leftPoint.lineNumber, rightPoint.lineNumber, ratio),
       };
     });
+}
+
+function inferSensorElapsedByPoint(points: GpsPoint[], sensors: SensorPoint[]): Array<number | undefined> {
+  const sensorRows = sensors
+    .map((sensor) => ({
+      lineNumber: finiteNumber(sensor.lineNumber),
+      elapsedSeconds: finiteNumber(sensor.elapsedSeconds),
+    }))
+    .filter((row): row is { lineNumber: number; elapsedSeconds: number } =>
+      row.lineNumber !== undefined && row.elapsedSeconds !== undefined)
+    .sort((left, right) => left.lineNumber - right.lineNumber);
+
+  return points.map((point) => {
+    const lineNumber = finiteNumber(point.lineNumber);
+    if (lineNumber === undefined) return undefined;
+    let low = 0;
+    let high = sensorRows.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (sensorRows[middle].lineNumber < lineNumber) low = middle + 1;
+      else high = middle;
+    }
+    const right = sensorRows[low];
+    if (right?.lineNumber === lineNumber) return right.elapsedSeconds;
+    const left = sensorRows[low - 1];
+    if (!left || !right) return undefined;
+    return interpolate(
+      left.elapsedSeconds,
+      right.elapsedSeconds,
+      (lineNumber - left.lineNumber) / (right.lineNumber - left.lineNumber),
+    );
+  });
 }
 
 function synchronizationMethod(
@@ -76,7 +119,8 @@ function synchronizationMethod(
 ): SensorSynchronizationMethod {
   const gpsHasTimestamps = anchors.every((anchor) => anchor.timestampNanos !== undefined);
   const sensorsHaveTimestamps = sensors.some((sensor) => finiteNumber(sensor.timestampNanos) !== undefined);
-  return gpsHasTimestamps && sensorsHaveTimestamps ? "timestamp" : "line-order";
+  if (gpsHasTimestamps && sensorsHaveTimestamps) return "timestamp";
+  return monotonicAnchors(anchors, "sensor-clock").length >= 2 ? "sensor-clock" : "line-order";
 }
 
 function monotonicAnchors(
@@ -169,11 +213,15 @@ function coalesceSamples(samples: MappedAccelerationSample[]): SynchronizedAccel
 }
 
 function anchorKey(anchor: TrajectoryAnchor, method: SensorSynchronizationMethod): number | undefined {
-  return method === "timestamp" ? anchor.timestampNanos : anchor.lineNumber;
+  if (method === "timestamp") return anchor.timestampNanos;
+  if (method === "sensor-clock") return anchor.sensorElapsedSeconds;
+  return finiteNumber(anchor.lineNumber);
 }
 
 function sensorKey(sensor: SensorPoint, method: SensorSynchronizationMethod): number | undefined {
-  return method === "timestamp" ? finiteNumber(sensor.timestampNanos) : sensor.lineNumber;
+  if (method === "timestamp") return finiteNumber(sensor.timestampNanos);
+  if (method === "sensor-clock") return finiteNumber(sensor.elapsedSeconds);
+  return finiteNumber(sensor.lineNumber);
 }
 
 function finiteNumber(value: number | undefined): number | undefined {
