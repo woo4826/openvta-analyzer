@@ -8,6 +8,11 @@ export interface LocalPoint {
   y: number;
 }
 
+export interface LineProgressProjection {
+  distanceMeters: number;
+  offsetMeters: number;
+}
+
 export function coordinateOf(point: Pick<GpsPoint, "longitude" | "latitude">): Position {
   return [point.longitude, point.latitude];
 }
@@ -117,6 +122,42 @@ export function pointToLineStringMeters(point: Position, line: LineString): numb
     minimum = Math.min(minimum, Math.hypot(start.x + deltaX * ratio, start.y + deltaY * ratio));
   }
   return minimum;
+}
+
+export function projectCoordinateToLineProgress(
+  coordinate: Position,
+  line: LineString,
+): LineProgressProjection {
+  if (!line.coordinates.length) {
+    return { distanceMeters: 0, offsetMeters: Number.POSITIVE_INFINITY };
+  }
+  if (line.coordinates.length === 1) {
+    return { distanceMeters: 0, offsetMeters: haversineMeters(coordinate, line.coordinates[0]) };
+  }
+  let cumulativeDistanceMeters = 0;
+  let closest: LineProgressProjection = { distanceMeters: 0, offsetMeters: Number.POSITIVE_INFINITY };
+  for (let index = 1; index < line.coordinates.length; index += 1) {
+    const segmentStart = line.coordinates[index - 1];
+    const segmentEnd = line.coordinates[index];
+    const start = toLocalMeters(segmentStart, coordinate);
+    const end = toLocalMeters(segmentEnd, coordinate);
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
+    const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+    const ratio = lengthSquared === 0
+      ? 0
+      : Math.min(1, Math.max(0, -(start.x * deltaX + start.y * deltaY) / lengthSquared));
+    const offsetMeters = Math.hypot(start.x + deltaX * ratio, start.y + deltaY * ratio);
+    const segmentLengthMeters = haversineMeters(segmentStart, segmentEnd);
+    if (offsetMeters < closest.offsetMeters) {
+      closest = {
+        distanceMeters: cumulativeDistanceMeters + segmentLengthMeters * ratio,
+        offsetMeters,
+      };
+    }
+    cumulativeDistanceMeters += segmentLengthMeters;
+  }
+  return closest;
 }
 
 export function normalizeDegrees(value: number): number {

@@ -319,6 +319,25 @@ export interface LapComparisonSample extends LapDistanceSample {
   deltaSeconds: number;
 }
 
+export interface LapSectionResult {
+  id: string;
+  lapId: string;
+  sectionId: string;
+  name: string;
+  kind: TrackSectionKind;
+  durationSeconds: number;
+  deltaBestSeconds?: number;
+  entrySpeedKmh: number;
+  minimumSpeedKmh: number;
+  averageSpeedKmh: number;
+  maximumSpeedKmh: number;
+  exitSpeedKmh: number;
+  maxLateralG?: number;
+  maxDecelerationG?: number;
+  fromPartialLap: boolean;
+  eligibleForBest: boolean;
+}
+
 export interface TimingSectorResult {
   id: string;
   lapId: string;
