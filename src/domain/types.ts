@@ -341,6 +341,23 @@ export interface SegmentTrajectorySample extends LapComparisonSample {
   accuracyMeters?: number;
 }
 
+export type SensorSynchronizationMethod = "timestamp" | "line-order";
+
+export interface SynchronizedAccelerationSample {
+  sensorIndex: number;
+  sourceIndex: number;
+  distanceMeters: number;
+  elapsedSeconds: number;
+  accelXG: number;
+  accelYG: number;
+  accelZG: number;
+}
+
+export interface SynchronizedAccelerationSeries {
+  method: SensorSynchronizationMethod;
+  samples: SynchronizedAccelerationSample[];
+}
+
 export interface SegmentLapRecord {
   lapId: string;
   ordinal: number;
