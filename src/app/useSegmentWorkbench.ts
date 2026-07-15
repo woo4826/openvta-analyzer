@@ -90,18 +90,27 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     effectiveScope,
   ]);
 
-  const recordIds = useMemo(() => new Set(analysis.records.map((record) => record.lapId)), [analysis.records]);
+  const usableRecords = useMemo(
+    () => analysis.records.filter((record) => record.trajectory.length > 1),
+    [analysis.records],
+  );
+  const usableRecordIds = useMemo(
+    () => new Set(usableRecords.map((record) => record.lapId)),
+    [usableRecords],
+  );
   const referenceLapId = analysis.referenceLapId;
-  const latestCompleteLapId = [...analysis.records].reverse().find((record) =>
+  const latestCompleteLapId = [...usableRecords].reverse().find((record) =>
     record.coverage === "complete" && record.completion === "complete" && record.validity === "valid" && record.lapId !== referenceLapId
   )?.lapId;
   const defaultFocusedLapId = latestCompleteLapId
-    ?? (analysis.fastestLapId !== referenceLapId ? analysis.fastestLapId : undefined)
-    ?? analysis.records.find((record) => record.lapId !== referenceLapId)?.lapId
-    ?? referenceLapId;
-  const requestedFocusIsAvailable = requestedFocusedLapId && recordIds.has(requestedFocusedLapId);
+    ?? (analysis.fastestLapId !== referenceLapId && usableRecordIds.has(analysis.fastestLapId ?? "")
+      ? analysis.fastestLapId
+      : undefined)
+    ?? usableRecords.find((record) => record.lapId !== referenceLapId)?.lapId
+    ?? (referenceLapId && usableRecordIds.has(referenceLapId) ? referenceLapId : usableRecords[0]?.lapId);
+  const requestedFocusIsAvailable = requestedFocusedLapId && usableRecordIds.has(requestedFocusedLapId);
   const focusedLapId = requestedFocusIsAvailable
-    && (analysis.records.length < 2 || requestedFocusedLapId !== referenceLapId)
+    && (usableRecords.length < 2 || requestedFocusedLapId !== referenceLapId)
     ? requestedFocusedLapId
     : defaultFocusedLapId;
   const eligibleReferenceRecords = useMemo(() => analysis.records.filter(isEligibleReference), [analysis.records]);
@@ -174,8 +183,8 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   }, [input.sections]);
 
   const setFocusedLap = useCallback((lapId: string) => {
-    if (!recordIds.has(lapId)) return;
-    if (analysis.records.length > 1 && lapId === referenceLapId) {
+    if (!usableRecordIds.has(lapId)) return;
+    if (usableRecords.length > 1 && lapId === referenceLapId) {
       const nextReferenceLapId = focusedLapId
         && focusedLapId !== lapId
         && eligibleReferenceIds.has(focusedLapId)
@@ -185,21 +194,21 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
       setRequestedReferenceLapId(nextReferenceLapId);
     }
     setRequestedFocusedLapId(lapId);
-  }, [analysis.records.length, eligibleReferenceIds, eligibleReferenceRecords, focusedLapId, recordIds, referenceLapId]);
+  }, [eligibleReferenceIds, eligibleReferenceRecords, focusedLapId, referenceLapId, usableRecordIds, usableRecords.length]);
 
   const setReferenceLap = useCallback((lapId: string) => {
     if (!eligibleReferenceIds.has(lapId)) {
       setRequestedReferenceLapId(undefined);
       return;
     }
-    if (analysis.records.length > 1 && lapId === focusedLapId) {
-      const nextFocusedLapId = referenceLapId && referenceLapId !== lapId && recordIds.has(referenceLapId)
+    if (usableRecords.length > 1 && lapId === focusedLapId) {
+      const nextFocusedLapId = referenceLapId && referenceLapId !== lapId && usableRecordIds.has(referenceLapId)
         ? referenceLapId
-        : analysis.records.find((record) => record.lapId !== lapId)?.lapId;
+        : usableRecords.find((record) => record.lapId !== lapId)?.lapId;
       if (nextFocusedLapId) setRequestedFocusedLapId(nextFocusedLapId);
     }
     setRequestedReferenceLapId(lapId);
-  }, [analysis.records, eligibleReferenceIds, focusedLapId, recordIds, referenceLapId]);
+  }, [eligibleReferenceIds, focusedLapId, referenceLapId, usableRecordIds, usableRecords]);
 
   return {
     scope: effectiveScope,

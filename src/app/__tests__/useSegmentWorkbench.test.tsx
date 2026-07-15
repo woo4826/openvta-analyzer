@@ -90,6 +90,23 @@ describe("useSegmentWorkbench", () => {
     expect(single.result.current.referenceLapId).toBe("lap-1");
   });
 
+  it("collapses roles to the only lap with trajectory data in the selected scope", () => {
+    const fixture = workbenchFixtureWithUncoveredPartial();
+    const { result } = renderHook(() => useSegmentWorkbench(fixture));
+
+    expect(result.current.analysis.records).toHaveLength(2);
+    expect(result.current.focusedLapId).toBe("partial-lap");
+    expect(result.current.referenceLapId).toBe("lap-1");
+
+    act(() => result.current.selectSection("s1"));
+
+    expect(result.current.analysis.records.find((record) => record.lapId === "partial-lap")?.trajectory).toHaveLength(0);
+    expect(result.current.focusedLapId).toBe("lap-1");
+    expect(result.current.referenceLapId).toBe("lap-1");
+    act(() => result.current.setFocusedLap("partial-lap"));
+    expect(result.current.focusedLapId).toBe("lap-1");
+  });
+
   it("adapts the spatial scope to the legacy source-index selection without conflating the two models", () => {
     const fixture = workbenchFixture();
     const { result } = renderHook(() => useSegmentWorkbench(fixture));
@@ -173,6 +190,31 @@ function workbenchFixture(lapCount = 2) {
     sections,
     includePartialLapSections: false,
   };
+}
+
+function workbenchFixtureWithUncoveredPartial() {
+  const fixture = workbenchFixture(1);
+  const startIndex = fixture.points.length;
+  fixture.points.push(
+    gps(startIndex, 0, 20),
+    gps(startIndex + 1, 0.0002, 22),
+  );
+  fixture.laps.push({
+    id: "partial-lap",
+    ordinal: 2,
+    completion: "partial-end",
+    validity: "valid",
+    flags: ["in-lap"],
+    start: { id: "partial-start", source: "auto", pointIndex: startIndex, elapsedSeconds: 20, coordinate: [0, 0] },
+    end: { id: "partial-end", source: "session-end", pointIndex: startIndex + 1, elapsedSeconds: 22, coordinate: [0.0002, 0] },
+    startIndex,
+    endIndex: startIndex + 1,
+    durationSeconds: 2,
+    distanceKm: 0.022,
+    averageSpeedKmh: 40,
+    maxSpeedKmh: 40,
+  });
+  return fixture;
 }
 
 function gps(index: number, longitude: number, seconds: number): GpsPoint {

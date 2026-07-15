@@ -277,7 +277,9 @@ export function SegmentAnalysisWorkbench({
         totalDistanceMeters={totalDistanceMeters}
         focusedLapId={workbench.focusedLapId}
         referenceLapId={workbench.referenceLapId}
-        focusOptions={workbench.analysis.records.map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
+        focusOptions={workbench.analysis.records
+          .filter((record) => record.trajectory.length > 1)
+          .map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
         referenceOptions={workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest).map((record) => ({ id: record.lapId, label: workbenchLapLabel(record, t) }))}
         lapVisibility={preferences.lapVisibility}
         axis={workbench.axis}
