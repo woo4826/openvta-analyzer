@@ -6,6 +6,7 @@ import { deriveTrackSectionGeometry, type TrackSectionGeometry } from "../domain
 import type { ActiveSegment, AxisAlignedRegion, GpsPoint, MapSettings, SourceVisibility, TrackGate, TrackSection } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { MapControls } from "./MapControls";
+import type { LapMapLineStyle } from "../domain/lapMapLayers";
 
 export interface LapMapOverlay {
   id: string;
@@ -14,6 +15,7 @@ export interface LapMapOverlay {
   width?: number;
   opacity?: number;
   dashArray?: number[];
+  lineStyle?: LapMapLineStyle;
 }
 
 export interface MapHeatSegment {
@@ -420,6 +422,7 @@ export function RouteMap({
           {lapPolylines.map((overlay) => overlay.polyline ? (
             <polyline
               key={overlay.id}
+              data-testid={`lap-overlay-${overlay.id}`}
               points={overlay.polyline}
               fill="none"
               stroke={overlay.color}
@@ -701,6 +704,7 @@ function updateMapRoute(
         width: overlay.width ?? 6,
         opacity: overlay.opacity ?? 0.86,
         dashArray: overlay.dashArray ?? [],
+        lineStyle: overlay.lineStyle ?? (overlay.dashArray?.length ? "dashed" : "solid"),
       },
       geometry: { type: "LineString", coordinates: lineCoordinates(overlay.points) },
     })),
@@ -853,15 +857,28 @@ function updateMapRoute(
       paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": ["get", "opacity"] },
     });
   }
-  if (!map.getLayer("lap-overlays")) {
+  const lapLineStyles = [
+    { id: "solid", dashArray: undefined },
+    { id: "dashed", dashArray: [4, 3] },
+    { id: "dotted", dashArray: [1, 2.2] },
+  ] as const;
+  lapLineStyles.forEach(({ id, dashArray }) => {
+    const layerId = `lap-overlays-${id}`;
+    if (map.getLayer(layerId)) return;
     map.addLayer({
-      id: "lap-overlays",
+      id: layerId,
       type: "line",
       source: "lap-overlay-source",
+      filter: ["==", ["get", "lineStyle"], id],
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": ["get", "opacity"] },
+      paint: {
+        "line-color": ["get", "color"],
+        "line-width": ["get", "width"],
+        "line-opacity": ["get", "opacity"],
+        ...(dashArray ? { "line-dasharray": [...dashArray] } : {}),
+      },
     });
-  }
+  });
   if (!map.getLayer("loss-rate-segments")) {
     map.addLayer({
       id: "loss-rate-segments",

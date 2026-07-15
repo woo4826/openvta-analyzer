@@ -2,7 +2,14 @@ import { render } from "@testing-library/react";
 import type { EChartsOption } from "echarts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const chartDouble = vi.hoisted(() => ({
+const doubles = vi.hoisted(() => {
+  const zr = {
+    add: vi.fn(),
+    refresh: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
+  const chart = {
   setOption: vi.fn(),
   dispatchAction: vi.fn(),
   on: vi.fn(),
@@ -10,9 +17,15 @@ const chartDouble = vi.hoisted(() => ({
   resize: vi.fn(),
   dispose: vi.fn(),
   convertToPixel: vi.fn(() => 0),
+  convertFromPixel: vi.fn(() => 125),
+  containPixel: vi.fn(() => true),
   getHeight: vi.fn(() => 200),
-  getZr: vi.fn(() => ({ add: vi.fn(), refresh: vi.fn() })),
-}));
+    getZr: vi.fn(() => zr),
+  };
+  return { chart, zr };
+});
+const chartDouble = doubles.chart;
+const zrDouble = doubles.zr;
 
 vi.mock("echarts", () => ({
   init: vi.fn(() => chartDouble),
@@ -26,6 +39,12 @@ describe("ChartPanel controlled reset", () => {
     Object.values(chartDouble).forEach((value) => {
       if (typeof value === "function" && "mockClear" in value) value.mockClear();
     });
+    Object.values(zrDouble).forEach((value) => value.mockClear());
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
   });
 
   it("restores every data zoom and clears the active brush when resetToken advances", () => {
@@ -48,5 +67,40 @@ describe("ChartPanel controlled reset", () => {
       ],
     });
     expect(chartDouble.dispatchAction).toHaveBeenCalledWith({ type: "brush", areas: [] });
+  });
+
+  it("tracks ordinary plot movement through ZRender without requiring a series hit", () => {
+    const onHoverDomain = vi.fn();
+    const option: EChartsOption = {
+      grid: [{ top: 20, height: 120 }],
+      xAxis: [{ type: "value" }],
+      yAxis: [{ type: "value" }],
+      series: [{ type: "line", data: [[0, 1], [250, 2]] }],
+    };
+    const view = render(<ChartPanel title="Telemetry" option={option} onHoverDomain={onHoverDomain} />);
+    const pointerHandler = zrDouble.on.mock.calls.find(([event]) => event === "mousemove")?.[1] as ((event: { offsetX: number; offsetY: number }) => void) | undefined;
+
+    expect(pointerHandler).toBeTypeOf("function");
+    pointerHandler?.({ offsetX: 240, offsetY: 80 });
+
+    expect(chartDouble.containPixel).toHaveBeenCalledWith({ gridIndex: "all" }, [240, 80]);
+    expect(chartDouble.convertFromPixel).toHaveBeenCalledWith({ xAxisIndex: 0 }, 240);
+    expect(onHoverDomain).toHaveBeenCalledWith(125);
+    expect(chartDouble.convertToPixel).toHaveBeenCalledWith({ xAxisIndex: 0 }, 125);
+
+    view.unmount();
+    expect(zrDouble.off).toHaveBeenCalledWith("mousemove", pointerHandler);
+  });
+
+  it("ignores pointer movement outside every plot grid", () => {
+    chartDouble.containPixel.mockReturnValueOnce(false);
+    const onHoverDomain = vi.fn();
+    render(<ChartPanel title="Telemetry" option={{}} onHoverDomain={onHoverDomain} />);
+    const pointerHandler = zrDouble.on.mock.calls.find(([event]) => event === "mousemove")?.[1] as ((event: { offsetX: number; offsetY: number }) => void) | undefined;
+
+    pointerHandler?.({ offsetX: 10, offsetY: 10 });
+
+    expect(chartDouble.convertFromPixel).not.toHaveBeenCalled();
+    expect(onHoverDomain).not.toHaveBeenCalled();
   });
 });

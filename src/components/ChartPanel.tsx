@@ -15,18 +15,18 @@ export interface ChartPanelProps {
   cursorX?: number;
   resetToken?: number;
   onPoint?: (index: number, domainValue?: number) => void;
+  onHoverDomain?: (domainValue: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
   onBrushRange?: (start: number, end: number) => void;
 }
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, onPoint, onHoverDomain, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const cursorLineRef = useRef<echarts.graphic.Line | null>(null);
   const cursorXRef = useRef(cursorX);
   const hoverFrameRef = useRef<number | undefined>(undefined);
-  const lastPointRef = useRef<{ index: number; domainValue?: number }>();
-  const pendingHoverRef = useRef<{ index: number; domainValue?: number }>();
+  const pendingHoverDomainRef = useRef<number>();
   const previousResetTokenRef = useRef(resetToken);
   const mergedClass = className ? `panel ${className}` : "panel";
   cursorXRef.current = cursorX;
@@ -61,15 +61,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         window.cancelAnimationFrame(hoverFrameRef.current);
         hoverFrameRef.current = undefined;
       }
-      pendingHoverRef.current = undefined;
-    };
-    const emitPoint = (index: number, domainValue: number | undefined, force = false) => {
-      const last = lastPointRef.current;
-      if (!force && last?.index === index && last.domainValue === domainValue) {
-        return;
-      }
-      lastPointRef.current = { index, domainValue };
-      onPoint?.(index, domainValue);
+      pendingHoverDomainRef.current = undefined;
     };
     const handleClick = (...args: unknown[]) => {
       const index = chartPointIndex(args[0]);
@@ -77,26 +69,26 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         return;
       }
       cancelPendingHover();
-      emitPoint(index, chartPointDomain(args[0]), true);
+      onPoint?.(index, chartPointDomain(args[0]));
     };
-    const handleHover = (...args: unknown[]) => {
-      const index = chartPointIndex(args[0]);
-      const domainValue = chartPointDomain(args[0]);
-      const last = lastPointRef.current;
-      if (index === undefined || last?.index === index && last.domainValue === domainValue) {
-        return;
-      }
-      pendingHoverRef.current = { index, domainValue };
+    const handlePointerMove = (event: { offsetX: number; offsetY: number }) => {
+      const pixel: [number, number] = [event.offsetX, event.offsetY];
+      if (!chart.containPixel({ gridIndex: "all" }, pixel)) return;
+      const converted = chart.convertFromPixel({ xAxisIndex: 0 }, event.offsetX);
+      const domainValue = Array.isArray(converted) ? Number(converted[0]) : Number(converted);
+      if (!Number.isFinite(domainValue)) return;
+      pendingHoverDomainRef.current = domainValue;
       if (hoverFrameRef.current !== undefined) {
         return;
       }
       hoverFrameRef.current = window.requestAnimationFrame(() => {
         hoverFrameRef.current = undefined;
-        const pending = pendingHoverRef.current;
-        pendingHoverRef.current = undefined;
-        if (pending) {
-          emitPoint(pending.index, pending.domainValue);
-        }
+        const pending = pendingHoverDomainRef.current;
+        pendingHoverDomainRef.current = undefined;
+        if (pending === undefined) return;
+        cursorXRef.current = pending;
+        renderCursor(chart, cursorLineRef, pending);
+        onHoverDomain?.(pending);
       });
     };
     const handleBrush = (...args: unknown[]) => {
@@ -117,8 +109,9 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
     window.addEventListener("resize", resize);
     if (onPoint) {
       chart.on("click", handleClick);
-      chart.on("mouseover", handleHover);
     }
+    const zrender = chart.getZr();
+    if (onHoverDomain) zrender.on("mousemove", handlePointerMove);
     if (onBrushSegment || onBrushRange) {
       chart.on("brushSelected", handleBrush);
     }
@@ -130,11 +123,11 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       resizeObserver?.disconnect();
       cancelPendingHover();
       chart.off("click", handleClick);
-      chart.off("mouseover", handleHover);
+      zrender.off("mousemove", handlePointerMove);
       chart.off("brushSelected", handleBrush);
       chart.off("datazoom", handleDataZoom);
     };
-  }, [interactionMode, option, onPoint, onBrushSegment, onBrushRange]);
+  }, [interactionMode, option, onPoint, onHoverDomain, onBrushSegment, onBrushRange]);
 
   useEffect(() => {
     if (chartRef.current) {

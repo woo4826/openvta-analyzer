@@ -387,7 +387,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="workspace" aria-hidden={tourActive ? true : undefined}>
+      <main className={`workspace${activeTab === "laps" ? " is-lap-analysis" : ""}`} aria-hidden={tourActive ? true : undefined}>
         <div className="privacy-note" data-tour="privacy-note">
           {t("app.privacyNote")}
         </div>

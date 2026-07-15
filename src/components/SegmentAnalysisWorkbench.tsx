@@ -24,6 +24,7 @@ import type {
   TrackProfileV1,
   TrackSectionKind,
 } from "../domain/types";
+import type { LapMapLayerOverrides } from "../domain/lapMapLayers";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentLapTable } from "./SegmentLapTable";
 import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
@@ -87,6 +88,7 @@ export function SegmentAnalysisWorkbench({
     lapVisibility: preferences.lapVisibility,
   });
   const [cursorDistanceMeters, setCursorDistanceMeters] = useState<number>();
+  const [lapLayerOverrides, setLapLayerOverrides] = useState<LapMapLayerOverrides>({});
   const telemetrySelectionRef = useRef<{ distanceMeters: number; sourceIndex: number }>();
   const [showRangeEditor, setShowRangeEditor] = useState(false);
   const [rangeName, setRangeName] = useState("");
@@ -97,6 +99,8 @@ export function SegmentAnalysisWorkbench({
     () => focused ? synchronizeAccelerationToTrajectory(points, sensors, focused.trajectory) : undefined,
     [focused, points, sensors],
   );
+  const recordingLayerKey = `${sourceName}|${points.length}|${points[0]?.lineNumber ?? ""}|${points.at(-1)?.lineNumber ?? ""}`;
+  const recordingLayerKeyRef = useRef(recordingLayerKey);
   const totalDistanceMeters = useMemo(() => Math.max(
     1,
     ...profile.sections.flatMap((section) => [section.startDistanceMeters, section.endDistanceMeters]),
@@ -153,6 +157,12 @@ export function SegmentAnalysisWorkbench({
   useEffect(() => {
     saveSegmentWorkbenchPreferences(preferences);
   }, [preferences]);
+
+  useEffect(() => {
+    if (recordingLayerKeyRef.current === recordingLayerKey) return;
+    recordingLayerKeyRef.current = recordingLayerKey;
+    setLapLayerOverrides({});
+  }, [recordingLayerKey]);
 
   useEffect(() => {
     const telemetrySelection = telemetrySelectionRef.current;
@@ -323,6 +333,8 @@ export function SegmentAnalysisWorkbench({
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
                 cursorDistanceMeters={cursorDistanceMeters}
+                lapLayerOverrides={lapLayerOverrides}
+                onLapLayerOverrides={setLapLayerOverrides}
                 segment={workbench.scope.kind === "whole-lap" ? undefined : workbench.activeSegment}
                 onSelectedIndex={selectMapPoint}
                 onSectionSelect={workbench.selectSection}
@@ -375,8 +387,6 @@ export function SegmentAnalysisWorkbench({
                 axis={workbench.axis}
                 synchronizedAcceleration={synchronizedAcceleration}
                 cursorDistanceMeters={cursorDistanceMeters}
-                onRange={(start, end) => workbench.selectRange(start, end, "chart")}
-                onReset={workbench.resetScope}
                 onCursor={selectTelemetryCursor}
               />
             </DashboardWidget>

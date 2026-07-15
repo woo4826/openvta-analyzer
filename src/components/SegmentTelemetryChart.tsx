@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import type {
   SegmentAnalysisResult,
@@ -17,8 +17,6 @@ interface SegmentTelemetryChartProps {
   axis: SegmentAxis;
   synchronizedAcceleration?: SynchronizedAccelerationSeries;
   cursorDistanceMeters?: number;
-  onRange: (startDistanceMeters: number, endDistanceMeters: number) => void;
-  onReset: () => void;
   onCursor: (distanceMeters: number, sourceIndex: number) => void;
 }
 
@@ -30,20 +28,10 @@ export function SegmentTelemetryChart({
   axis,
   synchronizedAcceleration,
   cursorDistanceMeters: controlledCursorDistanceMeters,
-  onRange,
-  onReset,
   onCursor,
 }: SegmentTelemetryChartProps) {
   const { t } = useI18n();
   const scopeLength = analysis.range.endDistanceMeters - analysis.range.startDistanceMeters;
-  const keyboardRangeLimit = Math.max(0, Math.floor(scopeLength));
-  const [interaction, setInteraction] = useState<"range" | "zoom">("range");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [resetToken, setResetToken] = useState(0);
-  const [rangeDraft, setRangeDraft] = useState({ start: 0, end: keyboardRangeLimit });
-  const visibleMetrics = useMemo(() => showAdvanced
-    ? (["speed", "imu-acceleration", "acceleration", "elapsed", "delta", "loss"] as const)
-    : (["speed", "imu-acceleration", "delta"] as const), [showAdvanced]);
   const cursorDistanceMeters = controlledCursorDistanceMeters ?? Math.max(0, scopeLength / 2);
   const option = useMemo(() => buildSegmentTelemetryOption(
     analysis,
@@ -68,29 +56,15 @@ export function SegmentTelemetryChart({
       referenceLap: t("lap.workbench.referenceLap"),
       maximumDelta: t("lap.workbench.maximumDelta"),
     },
-    [...visibleMetrics],
+    ["speed", "imu-acceleration", "delta"],
     synchronizedAcceleration,
-  ), [analysis, axis, focusedLapId, referenceLapId, synchronizedAcceleration, t, visibleLapIds, visibleMetrics]);
+  ), [analysis, axis, focusedLapId, referenceLapId, synchronizedAcceleration, t, visibleLapIds]);
   const focused = analysis.records.find((record) => record.lapId === focusedLapId)
     ?? analysis.records.find((record) => record.lapId === referenceLapId);
   const reference = analysis.records.find((record) => record.lapId === referenceLapId);
   const cursorX = axis === "distance"
     ? cursorDistanceMeters
     : nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters)?.elapsedSeconds;
-
-  useEffect(() => {
-    setRangeDraft({ start: 0, end: keyboardRangeLimit });
-  }, [analysis.scope, keyboardRangeLimit]);
-
-  const selectRange = useCallback((start: number, end: number) => {
-    const distances = axis === "distance"
-      ? [start, end]
-      : [timeToDistance(focused?.trajectory ?? [], start), timeToDistance(focused?.trajectory ?? [], end)];
-    onRange(
-      analysis.range.startDistanceMeters + Math.min(...distances),
-      analysis.range.startDistanceMeters + Math.max(...distances),
-    );
-  }, [analysis.range.startDistanceMeters, axis, focused?.trajectory, onRange]);
 
   const selectPoint = useCallback((sourceIndex: number, domainValue?: number) => {
     const trajectory = focused?.trajectory ?? [];
@@ -104,10 +78,9 @@ export function SegmentTelemetryChart({
       onCursor(exactDistance ?? sample.distanceMeters, sample.sourceIndex);
     }
   }, [axis, focused?.trajectory, onCursor]);
-  const resetView = useCallback(() => {
-    onReset();
-    setResetToken((current) => current + 1);
-  }, [onReset]);
+  const selectDomain = useCallback((domainValue: number) => {
+    selectPoint(0, domainValue);
+  }, [selectPoint]);
   const focusedSample = nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters);
   const referenceSample = nearestDistanceSample(reference?.trajectory ?? [], cursorDistanceMeters);
 
@@ -115,50 +88,18 @@ export function SegmentTelemetryChart({
     <ChartPanel
       title={t("lap.workbench.chartTitle")}
       ariaLabel={axis === "distance" ? t("lap.workbench.chartAriaDistance") : t("lap.workbench.chartAriaTime")}
-      className={`segment-telemetry-panel ${showAdvanced ? "is-advanced" : "is-compact"}`}
+      className="segment-telemetry-panel"
       option={option}
       cursorX={cursorX}
-      resetToken={resetToken}
-      interactionMode={interaction}
       onPoint={selectPoint}
-      onBrushRange={interaction === "range" ? selectRange : undefined}
-      actions={(
-        <div className="segmented-control" role="group" aria-label={t("lap.workbench.graphDragBehavior")}>
-          <button type="button" aria-pressed={interaction === "range"} onClick={() => setInteraction("range")}>{t("lap.workbench.selectRange")}</button>
-          <button type="button" aria-pressed={interaction === "zoom"} onClick={() => setInteraction("zoom")}>{t("lap.workbench.zoom")}</button>
-          <button type="button" aria-pressed={showAdvanced} onClick={() => setShowAdvanced((value) => !value)}>{t("lap.workbench.advancedChannels")}</button>
-          <button type="button" onClick={resetView}>{t("lap.workbench.reset")}</button>
-        </div>
-      )}
+      onHoverDomain={selectDomain}
       caption={(
-        <div className="segment-telemetry-caption">
-          <dl className="segment-telemetry-readout" aria-live="polite">
-            <div><dt>{t("lap.workbench.cursorDistance")}</dt><dd>{Math.round(cursorDistanceMeters)} m</dd></div>
-            <div><dt>{t("lap.workbench.focusedLap")}</dt><dd>{formatSample(focusedSample)}</dd></div>
-            <div><dt>{t("lap.workbench.referenceLap")}</dt><dd>{formatSample(referenceSample)}</dd></div>
-            <div><dt>{t("lap.workbench.imuSync")}</dt><dd>{synchronizationLabel(synchronizedAcceleration, t)}</dd></div>
-          </dl>
-          <form
-            className="segment-keyboard-range"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onRange(
-                analysis.range.startDistanceMeters + Math.min(rangeDraft.start, rangeDraft.end),
-                analysis.range.startDistanceMeters + Math.max(rangeDraft.start, rangeDraft.end),
-              );
-            }}
-          >
-            <span>{t("lap.workbench.keyboardRange")}</span>
-            <small>{t("lap.workbench.rangeBasis", {
-              scopeStart: Math.round(analysis.range.startDistanceMeters),
-              scopeEnd: Math.round(analysis.range.endDistanceMeters),
-              length: Math.round(scopeLength),
-            })}</small>
-            <label><span>{t("lap.workbench.rangeStart")}</span><input type="number" min={0} max={keyboardRangeLimit} step={1} value={rangeDraft.start} onChange={(event) => setRangeDraft((current) => ({ ...current, start: Number(event.target.value) }))} /></label>
-            <label><span>{t("lap.workbench.rangeEnd")}</span><input type="number" min={0} max={keyboardRangeLimit} step={1} value={rangeDraft.end} onChange={(event) => setRangeDraft((current) => ({ ...current, end: Number(event.target.value) }))} /></label>
-            <button type="submit" className="button">{t("lap.workbench.applyRange")}</button>
-          </form>
-        </div>
+        <dl className="segment-telemetry-readout" aria-live="polite">
+          <div><dt>{t("lap.workbench.cursorDistance")}</dt><dd>{Math.round(cursorDistanceMeters)} m</dd></div>
+          <div><dt>{t("lap.workbench.focusedLap")}</dt><dd>{formatSample(focusedSample)}</dd></div>
+          <div><dt>{t("lap.workbench.referenceLap")}</dt><dd>{formatSample(referenceSample)}</dd></div>
+          <div><dt>{t("lap.workbench.imuSync")}</dt><dd>{synchronizationLabel(synchronizedAcceleration, t)}</dd></div>
+        </dl>
       )}
     />
   );

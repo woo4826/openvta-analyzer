@@ -10,13 +10,19 @@ import type {
   TrackSection,
 } from "../domain/types";
 import {
+  buildLapMapLayers,
+  type LapMapLayerOverride,
+  type LapMapLayerOverrides,
+} from "../domain/lapMapLayers";
+import {
   RouteMap,
   type LapMapOverlay,
   type MapGhostMarker,
-  type MapHeatSegment,
 } from "./RouteMap";
 import { useI18n } from "../i18n/useI18n";
-import { FOCUSED_LAP_COLOR, REFERENCE_LAP_COLOR } from "./segmentTelemetryOptions";
+import { SegmentLapLayerControls } from "./SegmentLapLayerControls";
+
+const EMPTY_LAYER_OVERRIDES: LapMapLayerOverrides = {};
 
 interface SegmentTrajectoryMapProps {
   analysis: SegmentAnalysisResult;
@@ -35,6 +41,8 @@ interface SegmentTrajectoryMapProps {
   onSegmentChange?: (segment?: ActiveSegment) => void;
   onRegionChange?: (region?: AxisAlignedRegion) => void;
   onSettingsChange?: (settings: MapSettings) => void;
+  lapLayerOverrides?: LapMapLayerOverrides;
+  onLapLayerOverrides?: (overrides: LapMapLayerOverrides) => void;
 }
 
 export function SegmentTrajectoryMap({
@@ -54,57 +62,48 @@ export function SegmentTrajectoryMap({
   onSegmentChange,
   onRegionChange,
   onSettingsChange = () => undefined,
+  lapLayerOverrides = EMPTY_LAYER_OVERRIDES,
+  onLapLayerOverrides = () => undefined,
 }: SegmentTrajectoryMapProps) {
   const { t } = useI18n();
   const roleLapIds = useMemo(() => new Set(
     [focusedLapId, referenceLapId].filter((lapId): lapId is string => Boolean(lapId)),
   ), [focusedLapId, referenceLapId]);
-  const colorByLap = useMemo(() => new Map(
-    analysis.records.filter((record) => roleLapIds.has(record.lapId)).map((record) => [
-      record.lapId,
-      record.lapId === focusedLapId
-        ? FOCUSED_LAP_COLOR
-        : REFERENCE_LAP_COLOR,
-    ]),
-  ), [analysis.records, focusedLapId, roleLapIds]);
-  const lapOverlays = useMemo((): LapMapOverlay[] => analysis.records
-    .filter((record) => roleLapIds.has(record.lapId) && record.trajectory.length >= 2)
-    .sort((left, right) => pathLayerRank(left.lapId, focusedLapId, referenceLapId) - pathLayerRank(right.lapId, focusedLapId, referenceLapId))
-    .map((record) => {
-      const focused = record.lapId === focusedLapId;
-      const reference = record.lapId === referenceLapId;
-      return {
+  const layers = useMemo(() => buildLapMapLayers(
+    analysis.records,
+    focusedLapId,
+    referenceLapId,
+    lapLayerOverrides,
+  ), [analysis.records, focusedLapId, lapLayerOverrides, referenceLapId]);
+  const colorByLap = useMemo(() => new Map(layers.map((layer) => [layer.id, layer.color])), [layers]);
+  const recordsById = useMemo(() => new Map(analysis.records.map((record) => [record.lapId, record])), [analysis.records]);
+  const lapOverlays = useMemo((): LapMapOverlay[] => layers
+    .filter((layer) => layer.visible)
+    .sort((left, right) => roleLayerRank(left.role) - roleLayerRank(right.role))
+    .flatMap((layer) => {
+      const record = recordsById.get(layer.id);
+      if (!record) return [];
+      return [{
         id: record.lapId,
-        color: colorByLap.get(record.lapId) ?? "#64748b",
+        color: layer.color,
         points: record.trajectory.map((sample) => toGpsPoint(sample, points[sample.sourceIndex])),
-        width: focused ? 8 : reference ? 6 : 4,
-        opacity: focused ? 0.96 : reference ? 0.9 : 0.58,
-        dashArray: reference && !focused ? [3, 2] : undefined,
-      };
-    }), [analysis.records, colorByLap, focusedLapId, points, referenceLapId, roleLapIds]);
-  const focusedInteractionPoints = useMemo(
-    () => lapOverlays.find((overlay) => overlay.id === focusedLapId)?.points ?? [],
-    [focusedLapId, lapOverlays],
-  );
+        width: layer.width,
+        opacity: layer.opacity,
+        lineStyle: layer.lineStyle,
+        dashArray: lineStyleDashArray(layer.lineStyle),
+      }];
+    }), [layers, points, recordsById]);
 
   const focusedRecord = analysis.records.find((record) => record.lapId === focusedLapId && roleLapIds.has(record.lapId));
-  const heatSegments = useMemo((): MapHeatSegment[] => {
-    if (!focusedRecord || focusedRecord.coverage !== "complete" || focusedRecord.gpsConfidence === "low") return [];
-    return focusedRecord.trajectory.slice(1).flatMap((sample, index) => {
-      const previous = focusedRecord.trajectory[index];
-      if (sample.lossRateSecondsPer100m === undefined) return [];
-      return [{
-        id: `${focusedRecord.lapId}-${index}`,
-        coordinates: [
-          [previous.longitude, previous.latitude],
-          [sample.longitude, sample.latitude],
-        ],
-        color: lossRateColor(sample.lossRateSecondsPer100m),
-        width: 10,
-        opacity: 0.88,
-      } satisfies MapHeatSegment];
-    });
-  }, [focusedRecord]);
+  const focusedInteractionPoints = useMemo(
+    () => focusedRecord?.trajectory.map((sample) => toGpsPoint(sample, points[sample.sourceIndex])) ?? [],
+    [focusedRecord, points],
+  );
+  const invisibleSectionVisuals = useMemo(() => Object.fromEntries(sections.map((section) => [section.id, {
+    color: "#000000",
+    width: 18,
+    opacity: 0,
+  }])), [sections]);
 
   const ghostMarkers = useMemo((): MapGhostMarker[] => {
     const scopeLength = analysis.range.endDistanceMeters - analysis.range.startDistanceMeters;
@@ -127,22 +126,31 @@ export function SegmentTrajectoryMap({
 
   const fastest = analysis.records.find((record) => record.lapId === analysis.fastestLapId && roleLapIds.has(record.lapId));
   const shortest = analysis.records.find((record) => record.lapId === analysis.shortestLapId && roleLapIds.has(record.lapId));
-  const referenceRecord = analysis.records.find((record) => record.lapId === referenceLapId && roleLapIds.has(record.lapId));
+  const updateLayer = (lapId: string, update: LapMapLayerOverride) => {
+    onLapLayerOverrides({
+      ...lapLayerOverrides,
+      [lapId]: { ...lapLayerOverrides[lapId], ...update },
+    });
+  };
+  const setLayerVisibility = (predicate: (role: (typeof layers)[number]["role"]) => boolean) => {
+    onLapLayerOverrides(Object.fromEntries(layers.map((layer) => [layer.id, {
+      ...lapLayerOverrides[layer.id],
+      visible: predicate(layer.role),
+    }])));
+  };
 
   return (
     <section className="segment-trajectory-map" aria-label={t("lap.workbench.trajectoryComparison")}>
-      <div className="segment-map-legend" aria-label={t("lap.workbench.trajectoryComparison")}>
-        {focusedRecord ? (
-          <span><i style={{ background: colorByLap.get(focusedRecord.lapId) }} />{t("lap.workbench.focusedLap")} · {t("lap.lap")} {focusedRecord.ordinal}</span>
-        ) : null}
-        {referenceRecord && referenceRecord.lapId !== focusedRecord?.lapId ? (
-          <span><i className="is-reference" style={{ borderColor: colorByLap.get(referenceRecord.lapId) }} />{t("lap.workbench.referenceLap")} · {t("lap.lap")} {referenceRecord.ordinal}</span>
-        ) : null}
-      </div>
+      <SegmentLapLayerControls
+        layers={layers}
+        onLayer={updateLayer}
+        onShowComparison={() => setLayerVisibility((role) => role !== "other")}
+        onShowAll={() => setLayerVisibility(() => true)}
+        onReset={() => onLapLayerOverrides({})}
+      />
       <div className="segment-map-badges" aria-label={t("lap.workbench.pathRecords")}>
         {fastest ? <span className="status-chip fastest">{t("lap.workbench.fastestPath")} · {t("lap.lap")} {fastest.ordinal}</span> : null}
         {shortest ? <span className="status-chip shortest">{t("lap.workbench.shortestPath")} · {t("lap.lap")} {shortest.ordinal}</span> : null}
-        {focusedRecord?.gpsConfidence === "low" ? <span className="status-chip warning">{t("lap.workbench.lowGpsHeatHidden")}</span> : null}
       </div>
       <RouteMap
         points={points}
@@ -151,11 +159,10 @@ export function SegmentTrajectoryMap({
         settings={settings}
         segment={segment}
         region={region}
-        trackCenterline={centerline}
         sectionCenterline={centerline}
         trackSections={sections}
+        sectionVisuals={invisibleSectionVisuals}
         lapOverlays={lapOverlays}
-        heatSegments={heatSegments}
         ghostMarkers={ghostMarkers}
         showRouteLine={false}
         showRoutePoints={false}
@@ -210,15 +217,14 @@ function uniqueRecords(records: Array<SegmentLapRecord | undefined>): SegmentLap
   });
 }
 
-function pathLayerRank(lapId: string, focusedLapId?: string, referenceLapId?: string): number {
-  if (lapId === focusedLapId) return 3;
-  if (lapId === referenceLapId) return 2;
+function roleLayerRank(role: "focused" | "reference" | "other"): number {
+  if (role === "focused") return 3;
+  if (role === "reference") return 2;
   return 1;
 }
 
-function lossRateColor(value: number): string {
-  if (value >= 0.12) return "#b91c1c";
-  if (value >= 0.04) return "#f97316";
-  if (value > -0.04) return "#facc15";
-  return "#0f9f8f";
+function lineStyleDashArray(style: "solid" | "dashed" | "dotted"): number[] | undefined {
+  if (style === "dashed") return [4, 3];
+  if (style === "dotted") return [1, 2.2];
+  return undefined;
 }

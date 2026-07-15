@@ -58,7 +58,7 @@ export function buildSegmentTelemetryOption(
   focusedLapId?: string,
   referenceLapId?: string,
   labels: SegmentTelemetryLabels = DEFAULT_LABELS,
-  visibleMetrics: SegmentTelemetryMetric[] = ["speed", "imu-acceleration", "acceleration", "elapsed", "delta", "loss"],
+  visibleMetrics: SegmentTelemetryMetric[] = ["speed", "imu-acceleration", "delta"],
   synchronizedAcceleration?: SynchronizedAccelerationSeries,
 ): EChartsOption {
   const allMetrics: Array<{ key: SegmentTelemetryMetric; label: string; unit: string }> = [
@@ -242,13 +242,6 @@ export function buildSegmentTelemetryOption(
       { type: "inside", xAxisIndex: xAxisIndexes, filterMode: "none" },
       { type: "slider", xAxisIndex: xAxisIndexes, bottom: 0, height: 18, filterMode: "none" },
     ],
-    brush: {
-      toolbox: ["lineX", "clear"],
-      xAxisIndex: "all",
-      brushMode: "single",
-      throttleType: "debounce",
-      throttleDelay: 120,
-    },
   };
 }
 

@@ -6,15 +6,19 @@ import type { SegmentAnalysisResult, SynchronizedAccelerationSeries } from "../.
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { buildSegmentTelemetryOption, downsampleAcceleration, MAX_RENDERED_IMU_SAMPLES } from "../segmentTelemetryOptions";
 
-const chartPanelSpy = vi.hoisted(() => ({ onPointReferences: [] as Array<((index: number) => void) | undefined> }));
+const chartPanelSpy = vi.hoisted(() => ({
+  onPointReferences: [] as Array<((index: number, domainValue?: number) => void) | undefined>,
+  onHoverReferences: [] as Array<((domainValue: number) => void) | undefined>,
+}));
 vi.mock("../ChartPanel", () => ({
-  ChartPanel: ({ option, cursorX, resetToken, onPoint, onBrushRange, actions, caption }: { option: EChartsOption; cursorX?: number; resetToken?: number; onPoint?: (index: number, domainValue?: number) => void; onBrushRange?: (start: number, end: number) => void; actions?: unknown; caption?: unknown }) => {
+  ChartPanel: ({ title, option, cursorX, onPoint, onHoverDomain, actions, caption }: { title: string; option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; actions?: unknown; caption?: unknown }) => {
     chartPanelSpy.onPointReferences.push(onPoint);
-    return <div data-testid="segment-chart" data-option={JSON.stringify(option)} data-cursor-x={cursorX} data-reset-token={resetToken}>
+    chartPanelSpy.onHoverReferences.push(onHoverDomain);
+    return <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX}>
         {actions as ReactNode}
         {caption as ReactNode}
         <button type="button" onClick={() => onPoint?.(21, 2)}>Emit point</button>
-        <button type="button" onClick={() => onBrushRange?.(80, 20)}>Emit range</button>
+        <button type="button" onClick={() => onHoverDomain?.(2)}>Emit hover</button>
       </div>;
   },
 }));
@@ -22,7 +26,7 @@ vi.mock("../ChartPanel", () => ({
 import { SegmentTelemetryChart } from "../SegmentTelemetryChart";
 
 describe("segment telemetry chart", () => {
-  it("builds six linked grids including synchronized measured device acceleration", () => {
+  it("builds three linked core grids including synchronized measured device acceleration", () => {
     const option = buildSegmentTelemetryOption(
       analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1", undefined, undefined, acceleration(),
     ) as {
@@ -33,16 +37,16 @@ describe("segment telemetry chart", () => {
       axisPointer: { link: Array<Record<string, unknown>> };
     };
 
-    expect(option.grid).toHaveLength(6);
-    expect(option.series.filter((series) => series.name === "Focused · Lap 2")).toHaveLength(5);
+    expect(option.grid).toHaveLength(3);
+    expect(option.series.filter((series) => series.name === "Focused · Lap 2")).toHaveLength(2);
     expect(option.series.map((series) => series.id)).toEqual(expect.arrayContaining([
-      "lap-2-speed", "lap-2-acceleration", "lap-2-elapsed", "lap-2-delta", "lap-2-loss",
+      "lap-2-speed", "lap-2-delta",
       "imu-acceleration-x", "imu-acceleration-y", "imu-acceleration-z",
     ]));
     expect(option.legend.data).toEqual(["Focused · Lap 2", "Reference · Lap 1", "Device X", "Device Y", "Device Z"]);
     expect(option.series.every((series) => series.data.every((point) => point.length === 3))).toBe(true);
     expect(option.dataZoom).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "inside", xAxisIndex: [0, 1, 2, 3, 4, 5] }),
+      expect.objectContaining({ type: "inside", xAxisIndex: [0, 1, 2] }),
     ]));
     expect(option.axisPointer).toEqual(expect.objectContaining({ link: [{ xAxisIndex: "all" }] }));
     const grids = option.grid as Array<{ top: string; height: string }>;
@@ -52,10 +56,8 @@ describe("segment telemetry chart", () => {
     }
   });
 
-  it("switches to elapsed time on x and emits an ordered distance range", () => {
-    const onRange = vi.fn();
+  it("switches to elapsed time and resolves continuous hover domain to the focused source sample", () => {
     const onCursor = vi.fn();
-    const onReset = vi.fn();
     render(
       <I18nProvider>
         <SegmentTelemetryChart
@@ -66,8 +68,6 @@ describe("segment telemetry chart", () => {
           axis="time"
           synchronizedAcceleration={acceleration("sensor-clock")}
           cursorDistanceMeters={50}
-          onRange={onRange}
-          onReset={onReset}
           onCursor={onCursor}
         />
       </I18nProvider>,
@@ -83,21 +83,19 @@ describe("segment telemetry chart", () => {
     const speed = option.series.find((series: { id: string }) => series.id === "lap-2-speed");
     expect(speed.data[1][0]).toBe(2);
     expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-cursor-x", "2");
+    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-title", "Lap telemetry");
     expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
-    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-reset-token", "0");
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
-    expect(onReset).toHaveBeenCalledOnce();
-    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-reset-token", "1");
-    fireEvent.click(screen.getByRole("button", { name: "Emit range" }));
-    expect(onRange).toHaveBeenCalledWith(1100, 1100);
-
-    fireEvent.click(screen.getByRole("button", { name: "Detailed channels" }));
-    expect(JSON.parse(screen.getByTestId("segment-chart").getAttribute("data-option")!).grid).toHaveLength(6);
+    expect(screen.queryByRole("button", { name: "Select range" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Zoom" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Detailed channels" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
     expect(screen.getByText(/Focused/)).toBeInTheDocument();
 
-    const beforeHover = chartPanelSpy.onPointReferences.at(-1);
+    const beforeHover = chartPanelSpy.onHoverReferences.at(-1);
+    fireEvent.click(screen.getByRole("button", { name: "Emit hover" }));
+    expect(chartPanelSpy.onHoverReferences.at(-1)).toBe(beforeHover);
+    expect(onCursor).toHaveBeenCalledWith(50, 21);
     fireEvent.click(screen.getByRole("button", { name: "Emit point" }));
-    expect(chartPanelSpy.onPointReferences.at(-1)).toBe(beforeHover);
     expect(onCursor).toHaveBeenCalledWith(50, 21);
   });
 
@@ -108,7 +106,7 @@ describe("segment telemetry chart", () => {
     };
 
     expect(option.series.map((series) => series.id)).toEqual([
-      "lap-2-speed", "lap-2-acceleration", "lap-2-elapsed", "lap-2-delta", "lap-2-loss",
+      "lap-2-speed", "lap-2-delta",
     ]);
     expect(option.legend.data).toEqual(["Focused · Lap 2"]);
   });
@@ -157,8 +155,7 @@ describe("segment telemetry chart", () => {
     expect(rendered).toContain(samples[7_654]);
   });
 
-  it("keeps the keyboard range default inside a fractional scope maximum", () => {
-    const onRange = vi.fn();
+  it("removes the duplicate keyboard range editor from the telemetry widget", () => {
     const fractional = analysis();
     fractional.range = { startDistanceMeters: 1000, endDistanceMeters: 1100.6 };
     render(<I18nProvider><SegmentTelemetryChart
@@ -167,17 +164,11 @@ describe("segment telemetry chart", () => {
       focusedLapId="lap-2"
       referenceLapId="lap-1"
       axis="distance"
-      onRange={onRange}
-      onReset={vi.fn()}
       onCursor={vi.fn()}
     /></I18nProvider>);
-    const end = screen.getByRole("spinbutton", { name: "End (m)" }) as HTMLInputElement;
 
-    expect(end).toHaveValue(100);
-    expect(end).toHaveAttribute("max", "100");
-    expect(end.validity.rangeOverflow).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Analyze range" }));
-    expect(onRange).toHaveBeenCalledWith(1000, 1100);
+    expect(screen.queryByRole("spinbutton", { name: "End (m)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Analyze range" })).not.toBeInTheDocument();
   });
 });
 

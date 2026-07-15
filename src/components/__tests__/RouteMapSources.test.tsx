@@ -16,6 +16,7 @@ const mapMock = vi.hoisted(() => {
     static shouldThrow = false;
     sources = new Map<string, SourceDouble>();
     layers = new Set<string>();
+    layerDefinitions = new Map<string, { id: string; filter?: unknown; paint?: Record<string, unknown> }>();
     jumpTo = vi.fn();
     easeTo = vi.fn();
     fitBounds = vi.fn();
@@ -53,8 +54,9 @@ const mapMock = vi.hoisted(() => {
       return this.layers.has(id) ? { id } : undefined;
     }
 
-    addLayer(layer: { id: string }) {
+    addLayer(layer: { id: string; filter?: unknown; paint?: Record<string, unknown> }) {
       this.layers.add(layer.id);
+      this.layerDefinitions.set(layer.id, layer);
     }
 
     getCanvas() {
@@ -244,9 +246,13 @@ describe("RouteMap source updates", () => {
     expect(onSectionSelect).toHaveBeenCalledWith("section-1");
   });
 
-  it("publishes styled lap paths, loss-rate segments, and Ghost markers", async () => {
+  it("publishes styled lap paths through separate solid, dashed, and dotted MapLibre layers", async () => {
     render(wrappedRoute(0, false, {
-      lapOverlays: [{ id: "lap-7", color: "#ef4444", points, width: 2, opacity: 0.18, dashArray: [3, 2] }],
+      lapOverlays: [
+        { id: "lap-7", color: "#ef4444", points, width: 2, opacity: 0.18, lineStyle: "dashed", dashArray: [4, 3] },
+        { id: "lap-8", color: "#059669", points, width: 3, opacity: 0.4, lineStyle: "dotted", dashArray: [1, 2.2] },
+        { id: "lap-9", color: "#2563eb", points, width: 4, opacity: 1, lineStyle: "solid" },
+      ],
       heatSegments: [{ id: "loss-1", coordinates: [[128, 38], [128.001, 38.001]], color: "#be3b3b", width: 9, opacity: 0.8 }],
       ghostMarkers: [{ id: "focus", label: "Lap 4 focused Ghost", coordinate: [128, 38], color: "#ef4444" }],
     }));
@@ -254,7 +260,19 @@ describe("RouteMap source updates", () => {
     const map = mapMock.MapDouble.instances[0];
 
     const laps = map.sources.get("lap-overlay-source")!.setData.mock.calls.at(-1)?.[0] as { features: Array<{ properties: Record<string, unknown> }> };
-    expect(laps.features[0].properties).toMatchObject({ id: "lap-7", width: 2, opacity: 0.18 });
+    expect(laps.features[0].properties).toMatchObject({ id: "lap-7", width: 2, opacity: 0.18, lineStyle: "dashed" });
+    expect(map.layers.has("lap-overlays")).toBe(false);
+    expect(map.layers.has("lap-overlays-solid")).toBe(true);
+    expect(map.layers.has("lap-overlays-dashed")).toBe(true);
+    expect(map.layers.has("lap-overlays-dotted")).toBe(true);
+    expect(map.layerDefinitions.get("lap-overlays-dashed")).toMatchObject({
+      filter: ["==", ["get", "lineStyle"], "dashed"],
+      paint: { "line-dasharray": [4, 3] },
+    });
+    expect(map.layerDefinitions.get("lap-overlays-dotted")).toMatchObject({
+      filter: ["==", ["get", "lineStyle"], "dotted"],
+      paint: { "line-dasharray": [1, 2.2] },
+    });
     expect(map.sources.get("loss-rate-segment-source")?.setData).toHaveBeenCalled();
     expect(map.sources.get("ghost-marker-source")?.setData).toHaveBeenCalled();
     expect(map.layers.has("loss-rate-segments")).toBe(true);
@@ -274,6 +292,15 @@ describe("RouteMap source updates", () => {
     expect(await view.findByTestId("loss-rate-loss-1")).toBeVisible();
     expect(view.getByLabelText("Lap 4 focused Ghost")).toBeVisible();
     expect(view.getByLabelText("Lap 2 reference Ghost")).toBeVisible();
+  });
+
+  it("renders lap dash styles in the coordinate fallback", async () => {
+    mapMock.MapDouble.shouldThrow = true;
+    const view = render(wrappedRoute(0, false, {
+      lapOverlays: [{ id: "lap-7", color: "#ef4444", points, width: 2, opacity: 0.18, lineStyle: "dashed", dashArray: [4, 3] }],
+    }));
+
+    expect(await view.findByTestId("lap-overlay-lap-7")).toHaveAttribute("stroke-dasharray", "4 3");
   });
 });
 

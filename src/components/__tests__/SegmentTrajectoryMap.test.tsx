@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import type { RouteMap } from "../RouteMap";
 import type { SegmentAnalysisResult } from "../../domain/types";
+import type { LapMapLayerOverrides } from "../../domain/lapMapLayers";
 import { I18nProvider } from "../../i18n/I18nProvider";
 
 vi.mock("../RouteMap", () => ({
@@ -14,6 +16,8 @@ vi.mock("../RouteMap", () => ({
       data-ghosts={JSON.stringify(props.ghostMarkers)}
       data-interaction-indexes={JSON.stringify(props.interactionPoints?.map((point) => point.index))}
       data-show-route-line={String(props.showRouteLine)}
+      data-track-centerline={String(Boolean(props.trackCenterline))}
+      data-track-sections={String(props.trackSections?.length ?? 0)}
     >
       {props.ghostMarkers?.map((ghost) => <span key={ghost.id}>{ghost.label}</span>)}
     </div>
@@ -23,37 +27,32 @@ vi.mock("../RouteMap", () => ({
 import { SegmentTrajectoryMap } from "../SegmentTrajectoryMap";
 
 describe("SegmentTrajectoryMap", () => {
-  it("renders only focused and reference laps even when analysis contains more records", () => {
-    render(
-      <I18nProvider>
-        <SegmentTrajectoryMap
-          analysis={analysis()}
-          points={points()}
-          centerline={{ type: "LineString", coordinates: [[128, 38], [128.002, 38]] }}
-          sections={[]}
-          settings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
-          selectedIndex={0}
-          focusedLapId="lap-2"
-          referenceLapId="lap-1"
-          cursorDistanceMeters={50}
-          onSelectedIndex={vi.fn()}
-          onSectionSelect={vi.fn()}
-        />
-      </I18nProvider>,
-    );
+  it("uses clean role defaults and lets the operator reveal other lap layers", async () => {
+    const user = userEvent.setup();
+    render(<MapHarness />);
 
     const map = screen.getByTestId("trajectory-route-map");
-    const overlays = JSON.parse(map.getAttribute("data-overlays")!);
+    let overlays = JSON.parse(map.getAttribute("data-overlays")!);
     expect(overlays).toHaveLength(2);
-    expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-2")).toMatchObject({ width: 8, opacity: 0.96 });
+    expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-2")).toMatchObject({ width: 4, opacity: 1, lineStyle: "solid" });
+    expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-1")).toMatchObject({ width: 3.5, opacity: 0.9, lineStyle: "dashed" });
     expect(overlays.some((overlay: { id: string }) => overlay.id === "lap-3")).toBe(false);
     expect(map).toHaveAttribute("data-show-route-line", "false");
+    expect(map).toHaveAttribute("data-track-centerline", "false");
     expect(JSON.parse(map.getAttribute("data-interaction-indexes")!)).toEqual([0, 1, 2]);
-    expect(JSON.parse(map.getAttribute("data-heat")!)).not.toHaveLength(0);
+    expect(map).not.toHaveAttribute("data-heat");
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
     expect(screen.getByText("Lap 1 reference Ghost")).toBeVisible();
-    expect(screen.getByText("Focused lap · Lap 2")).toBeVisible();
-    expect(screen.getByText("Reference lap · Lap 1")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Lap layers" }));
+    await user.click(screen.getByRole("button", { name: "Show all" }));
+    overlays = JSON.parse(screen.getByTestId("trajectory-route-map").getAttribute("data-overlays")!);
+    expect(overlays).toHaveLength(3);
+    expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-3")).toMatchObject({
+      lineStyle: "dashed",
+      opacity: 0.5,
+      width: 2.5,
+    });
   });
 
   it("always renders both role paths, Ghosts, legend entries, and role-limited badges", () => {
@@ -80,7 +79,6 @@ describe("SegmentTrajectoryMap", () => {
     expect(JSON.parse(map.getAttribute("data-ghosts")!)).toHaveLength(2);
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
     expect(screen.getByText("Lap 1 reference Ghost")).toBeVisible();
-    expect(screen.getByText("Reference lap · Lap 1")).toBeVisible();
     expect(screen.getByText("Shortest recorded path · Lap 1")).toBeVisible();
   });
 
@@ -152,7 +150,7 @@ describe("SegmentTrajectoryMap", () => {
       </I18nProvider>,
     );
 
-    expect(JSON.parse(screen.getByTestId("trajectory-route-map").getAttribute("data-heat")!)).toEqual([]);
+    expect(screen.getByTestId("trajectory-route-map")).not.toHaveAttribute("data-heat");
   });
 });
 
@@ -208,4 +206,27 @@ function points() {
     source: "RawGps" as const,
     confidence: 1,
   }));
+}
+
+function MapHarness() {
+  const [overrides, setOverrides] = useState<LapMapLayerOverrides>({});
+  return (
+    <I18nProvider>
+      <SegmentTrajectoryMap
+        analysis={analysis()}
+        points={points()}
+        centerline={{ type: "LineString", coordinates: [[128, 38], [128.002, 38]] }}
+        sections={[]}
+        settings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+        selectedIndex={0}
+        focusedLapId="lap-2"
+        referenceLapId="lap-1"
+        cursorDistanceMeters={50}
+        lapLayerOverrides={overrides}
+        onLapLayerOverrides={setOverrides}
+        onSelectedIndex={vi.fn()}
+        onSectionSelect={vi.fn()}
+      />
+    </I18nProvider>
+  );
 }

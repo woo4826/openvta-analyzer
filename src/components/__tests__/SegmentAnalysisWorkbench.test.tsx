@@ -11,8 +11,8 @@ vi.mock("../SegmentTrajectoryMap", () => ({
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAcceleration, onRange, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; onRange: (start: number, end: number) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
-    <div data-testid="chart-state">roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}<button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button><button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAcceleration, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; onCursor: (distance: number, sourceIndex: number) => void }) => (
+    <div data-testid="chart-state">roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}<button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button></div>
   ),
 }));
 vi.mock("../SegmentVariationChart", () => ({
@@ -133,7 +133,7 @@ describe("SegmentAnalysisWorkbench", () => {
     });
   });
 
-  it("saves a graph-selected range as a named track section", async () => {
+  it("saves a map-selected range as a named track section", async () => {
     const user = userEvent.setup();
     const fixture = data();
     const onSaveRange = vi.fn();
@@ -155,13 +155,16 @@ describe("SegmentAnalysisWorkbench", () => {
       onOpenSetup={vi.fn()}
     /></I18nProvider>);
 
-    await user.click(screen.getByRole("button", { name: "Select graph range" }));
+    await user.click(screen.getByRole("button", { name: "Select map range" }));
     await user.click(screen.getByRole("button", { name: "Save range as segment" }));
     await user.type(screen.getByRole("textbox", { name: "Segment name" }), "Late apex");
     await user.selectOptions(screen.getByRole("combobox", { name: "Kind" }), "corner-left");
     await user.click(screen.getByRole("button", { name: "Save segment" }));
 
-    expect(onSaveRange).toHaveBeenCalledWith(20, 60, "Late apex", "corner-left");
+    const [start, end, name, kind] = onSaveRange.mock.calls[0];
+    expect(start).toBe(0);
+    expect(end).toBeCloseTo(55.6, 1);
+    expect([name, kind]).toEqual(["Late apex", "corner-left"]);
   });
 });
 
