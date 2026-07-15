@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineString } from "geojson";
 import { Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
 import { projectCoordinateToLineProgress } from "../domain/geometry";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
+import { synchronizeAccelerationToTrajectory } from "../domain/sensorSynchronization";
 import {
   canHideWidget,
   defaultSegmentWorkbenchPreferences,
@@ -19,6 +20,7 @@ import type {
   SegmentLapRecord,
   SegmentWidgetLayout,
   SegmentWorkbenchPreferences,
+  SensorPoint,
   TrackProfileV1,
   TrackSectionKind,
 } from "../domain/types";
@@ -36,6 +38,7 @@ interface SegmentAnalysisWorkbenchProps {
   active?: boolean;
   sourceName: string;
   points: GpsPoint[];
+  sensors: SensorPoint[];
   laps: LapResult[];
   profile: TrackProfileV1;
   analysisLine: LineString;
@@ -57,6 +60,7 @@ export function SegmentAnalysisWorkbench({
   active = true,
   sourceName,
   points,
+  sensors,
   laps,
   profile,
   analysisLine,
@@ -84,11 +88,16 @@ export function SegmentAnalysisWorkbench({
     lapVisibility: preferences.lapVisibility,
   });
   const [cursorDistanceMeters, setCursorDistanceMeters] = useState<number>();
+  const telemetrySelectionRef = useRef<{ distanceMeters: number; sourceIndex: number }>();
   const [showRangeEditor, setShowRangeEditor] = useState(false);
   const [rangeName, setRangeName] = useState("");
   const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
   const reference = workbench.analysis.records.find((record) => record.lapId === workbench.referenceLapId);
+  const synchronizedAcceleration = useMemo(
+    () => focused ? synchronizeAccelerationToTrajectory(points, sensors, focused.trajectory) : undefined,
+    [focused, points, sensors],
+  );
   const visibleSectionIds = useMemo(() => new Set(workbench.navigationSections.map((section) => section.id)), [workbench.navigationSections]);
   const visibleOpportunities = useMemo(() => workbench.opportunities.filter((opportunity) =>
     visibleSectionIds.has(opportunity.section.id)), [visibleSectionIds, workbench.opportunities]);
@@ -149,8 +158,32 @@ export function SegmentAnalysisWorkbench({
     saveSegmentWorkbenchPreferences(preferences);
   }, [preferences]);
 
+  useEffect(() => {
+    const telemetrySelection = telemetrySelectionRef.current;
+    if (telemetrySelection?.sourceIndex === selectedPointIndex) {
+      telemetrySelectionRef.current = undefined;
+      return;
+    }
+    telemetrySelectionRef.current = undefined;
+    const sample = nearestSourceSample(focused?.trajectory ?? [], selectedPointIndex);
+    if (sample) setCursorDistanceMeters(sample.distanceMeters);
+  }, [focused?.trajectory, selectedPointIndex]);
+
+  const selectMapPoint = useCallback((sourceIndex: number) => {
+    telemetrySelectionRef.current = undefined;
+    const sample = nearestSourceSample(focused?.trajectory ?? [], sourceIndex);
+    if (sample) setCursorDistanceMeters(sample.distanceMeters);
+    onSelectedPointIndex(sourceIndex);
+  }, [focused?.trajectory, onSelectedPointIndex]);
+
+  const selectTelemetryCursor = useCallback((distanceMeters: number, sourceIndex: number) => {
+    telemetrySelectionRef.current = { distanceMeters, sourceIndex };
+    setCursorDistanceMeters(distanceMeters);
+    onSelectedPointIndex(sourceIndex);
+  }, [onSelectedPointIndex]);
+
   return (
-    <section className="segment-workbench lap-wide-panel" aria-label={t("lap.workbench.title")}>
+    <section className={`segment-workbench lap-wide-panel${preferences.drawerOpen ? " is-controls-open" : ""}`} aria-label={t("lap.workbench.title")}>
       <header className="segment-workbench-header">
         <div>
           <span className="panel-eyebrow">{t("lap.workbench.title")}</span>
@@ -305,7 +338,7 @@ export function SegmentAnalysisWorkbench({
                 overlayLapIds={workbench.overlayLapIds}
                 cursorDistanceMeters={cursorDistanceMeters}
                 segment={workbench.activeSegment}
-                onSelectedIndex={onSelectedPointIndex}
+                onSelectedIndex={selectMapPoint}
                 onSectionSelect={workbench.selectSection}
                 onSegmentChange={selectMapSegment}
                 onSettingsChange={onMapSettingsChange}
@@ -354,9 +387,11 @@ export function SegmentAnalysisWorkbench({
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
                 axis={workbench.axis}
+                synchronizedAcceleration={synchronizedAcceleration}
+                cursorDistanceMeters={cursorDistanceMeters}
                 onRange={(start, end) => workbench.selectRange(start, end, "chart")}
                 onReset={workbench.resetScope}
-                onCursorDistance={setCursorDistanceMeters}
+                onCursor={selectTelemetryCursor}
               />
             </DashboardWidget>
           ),
@@ -382,6 +417,17 @@ export function SegmentAnalysisWorkbench({
       </> : null}
     </section>
   );
+}
+
+function nearestSourceSample(
+  samples: SegmentLapRecord["trajectory"],
+  sourceIndex: number,
+) {
+  return samples.reduce<(typeof samples)[number] | undefined>((nearest, sample) =>
+    !nearest || Math.abs(sample.sourceIndex - sourceIndex) < Math.abs(nearest.sourceIndex - sourceIndex)
+      ? sample
+      : nearest,
+  undefined);
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

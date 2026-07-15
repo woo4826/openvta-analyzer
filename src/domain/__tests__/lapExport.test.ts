@@ -49,6 +49,19 @@ describe("lap analysis exports", () => {
 
   it("exports the current segment scope and per-lap evidence", () => {
     const analysis = segmentAnalysis();
+    analysis.records[0].trajectory = [{
+      distanceMeters: 0,
+      elapsedSeconds: 0,
+      speedKmh: 90,
+      latitude: 38,
+      longitude: 128,
+      sourceIndex: 10,
+      sourcePosition: 10.25,
+      referenceElapsedSeconds: 0,
+      deltaSeconds: 0,
+      pathDistanceMeters: 0,
+      signedOffsetMeters: 0,
+    }];
     const csv = segmentAnalysisCsv(analysis);
     const json = JSON.parse(segmentAnalysisJson({
       sourceName: "session.Vta",
@@ -66,6 +79,8 @@ describe("lap analysis exports", () => {
       includePartialLapSections: true,
       analysis: { scope: { kind: "section", sectionId: "corner-1" }, fastestLapId: "lap-1" },
     });
+    expect(json.analysis.records[0].trajectory[0]).toMatchObject({ sourceIndex: 10 });
+    expect(json.analysis.records[0].trajectory[0]).not.toHaveProperty("sourcePosition");
   });
 });
 

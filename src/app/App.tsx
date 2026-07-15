@@ -457,6 +457,7 @@ export function App() {
                     <LapAnalysis
                       fileName={activeFile.sourceName}
                       points={lapGpsSource?.points ?? []}
+                      sensors={chartSensors}
                       selectedPointIndex={selectedPointIndex}
                       onSelectedPointIndex={setSelectedPointIndex}
                       sourceVisibility={lapGpsSource?.visibility ?? effectiveSourceVisibility}

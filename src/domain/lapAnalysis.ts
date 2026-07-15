@@ -28,6 +28,7 @@ export function lapDistanceSamples(points: GpsPoint[], lap: LapResult): LapDista
       latitude: point.latitude,
       longitude: point.longitude,
       sourceIndex: lap.startIndex + offset,
+      sourcePosition: lap.startIndex + offset,
     };
   });
 }
@@ -299,7 +300,14 @@ function interpolateSample(left: LapDistanceSample, right: LapDistanceSample, di
     latitude: left.latitude + (right.latitude - left.latitude) * ratio,
     longitude: left.longitude + (right.longitude - left.longitude) * ratio,
     sourceIndex: ratio < 0.5 ? left.sourceIndex : right.sourceIndex,
+    sourcePosition: interpolateSourcePosition(left, right, ratio),
   };
+}
+
+function interpolateSourcePosition(left: LapDistanceSample, right: LapDistanceSample, ratio: number): number {
+  const leftPosition = left.sourcePosition ?? left.sourceIndex;
+  const rightPosition = right.sourcePosition ?? right.sourceIndex;
+  return leftPosition + (rightPosition - leftPosition) * ratio;
 }
 
 function sampleAtDistance(samples: LapDistanceSample[], distance: number): LapDistanceSample {

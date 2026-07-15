@@ -30,6 +30,12 @@ export function chartPointIndex(value: unknown): number | undefined {
     : undefined;
 }
 
+export function chartPointDomain(value: unknown): number | undefined {
+  const params = isObject(value) ? value as PointEventPayload : undefined;
+  if (!params) return undefined;
+  return domainCoordinate(params.value) ?? domainCoordinate(params.data);
+}
+
 export function brushSegmentFromOption(
   params: BrushSelectedPayload,
   option: EChartsOption,
@@ -85,6 +91,13 @@ function sourceIndexCoordinate(value: unknown): number | undefined {
   if (!Array.isArray(coordinates)) return undefined;
   const sourceIndex = coordinates.length >= 3 ? coordinates[2] : coordinates[0];
   return typeof sourceIndex === "number" && Number.isFinite(sourceIndex) ? sourceIndex : undefined;
+}
+
+function domainCoordinate(value: unknown): number | undefined {
+  const coordinates = isObject(value) && "value" in value ? value.value : value;
+  if (!Array.isArray(coordinates)) return undefined;
+  const domain = coordinates[0];
+  return typeof domain === "number" && Number.isFinite(domain) ? domain : undefined;
 }
 
 function optionDataSourceIndex(option: EChartsOption, seriesIndex: number, dataIndex: number): number | undefined {

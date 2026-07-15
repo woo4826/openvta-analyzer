@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption } from "echarts";
-import { brushDomainRange, brushSegmentFromOption, chartPointIndex, toBrushSelectedPayload } from "./chartInteraction";
+import { brushDomainRange, brushSegmentFromOption, chartPointDomain, chartPointIndex, toBrushSelectedPayload } from "./chartInteraction";
 
 export interface ChartPanelProps {
   title: string;
@@ -12,24 +12,29 @@ export interface ChartPanelProps {
   actions?: ReactNode;
   caption?: ReactNode;
   interactionMode?: "range" | "zoom";
-  onPoint?: (index: number) => void;
+  cursorX?: number;
+  onPoint?: (index: number, domainValue?: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
   onBrushRange?: (start: number, end: number) => void;
 }
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const cursorLineRef = useRef<echarts.graphic.Line | null>(null);
+  const cursorXRef = useRef(cursorX);
   const hoverFrameRef = useRef<number | undefined>(undefined);
-  const lastPointIndexRef = useRef<number | undefined>(undefined);
-  const pendingHoverIndexRef = useRef<number | undefined>(undefined);
+  const lastPointRef = useRef<{ index: number; domainValue?: number }>();
+  const pendingHoverRef = useRef<{ index: number; domainValue?: number }>();
   const mergedClass = className ? `panel ${className}` : "panel";
+  cursorXRef.current = cursorX;
 
   useEffect(() => {
     if (!ref.current) return;
     const chart = chartRef.current ?? echarts.init(ref.current);
     chartRef.current = chart;
     chart.setOption(option, true);
+    renderCursor(chart, cursorLineRef, cursorXRef.current);
     if (interactionMode) {
       chart.dispatchAction({
         type: "takeGlobalCursor",
@@ -44,6 +49,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
     const resize = () => {
       if (ref.current && ref.current.clientWidth > 0 && ref.current.clientHeight > 0) {
         chart.resize();
+        renderCursor(chart, cursorLineRef, cursorXRef.current);
       }
     };
     const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : undefined;
@@ -53,14 +59,15 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         window.cancelAnimationFrame(hoverFrameRef.current);
         hoverFrameRef.current = undefined;
       }
-      pendingHoverIndexRef.current = undefined;
+      pendingHoverRef.current = undefined;
     };
-    const emitPoint = (index: number, force = false) => {
-      if (!force && lastPointIndexRef.current === index) {
+    const emitPoint = (index: number, domainValue: number | undefined, force = false) => {
+      const last = lastPointRef.current;
+      if (!force && last?.index === index && last.domainValue === domainValue) {
         return;
       }
-      lastPointIndexRef.current = index;
-      onPoint?.(index);
+      lastPointRef.current = { index, domainValue };
+      onPoint?.(index, domainValue);
     };
     const handleClick = (...args: unknown[]) => {
       const index = chartPointIndex(args[0]);
@@ -68,23 +75,25 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         return;
       }
       cancelPendingHover();
-      emitPoint(index, true);
+      emitPoint(index, chartPointDomain(args[0]), true);
     };
     const handleHover = (...args: unknown[]) => {
       const index = chartPointIndex(args[0]);
-      if (index === undefined || lastPointIndexRef.current === index) {
+      const domainValue = chartPointDomain(args[0]);
+      const last = lastPointRef.current;
+      if (index === undefined || last?.index === index && last.domainValue === domainValue) {
         return;
       }
-      pendingHoverIndexRef.current = index;
+      pendingHoverRef.current = { index, domainValue };
       if (hoverFrameRef.current !== undefined) {
         return;
       }
       hoverFrameRef.current = window.requestAnimationFrame(() => {
         hoverFrameRef.current = undefined;
-        const pendingIndex = pendingHoverIndexRef.current;
-        pendingHoverIndexRef.current = undefined;
-        if (pendingIndex !== undefined) {
-          emitPoint(pendingIndex);
+        const pending = pendingHoverRef.current;
+        pendingHoverRef.current = undefined;
+        if (pending) {
+          emitPoint(pending.index, pending.domainValue);
         }
       });
     };
@@ -111,6 +120,8 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
     if (onBrushSegment || onBrushRange) {
       chart.on("brushSelected", handleBrush);
     }
+    const handleDataZoom = () => renderCursor(chart, cursorLineRef, cursorXRef.current);
+    chart.on("datazoom", handleDataZoom);
 
     return () => {
       window.removeEventListener("resize", resize);
@@ -119,13 +130,21 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       chart.off("click", handleClick);
       chart.off("mouseover", handleHover);
       chart.off("brushSelected", handleBrush);
+      chart.off("datazoom", handleDataZoom);
     };
   }, [interactionMode, option, onPoint, onBrushSegment, onBrushRange]);
+
+  useEffect(() => {
+    if (chartRef.current) {
+      renderCursor(chartRef.current, cursorLineRef, cursorX);
+    }
+  }, [cursorX]);
 
   useEffect(() => {
     return () => {
       chartRef.current?.dispose();
       chartRef.current = null;
+      cursorLineRef.current = null;
     };
   }, []);
 
@@ -144,4 +163,43 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       </div>
     </section>
   );
+}
+
+function renderCursor(
+  chart: echarts.ECharts,
+  lineRef: { current: echarts.graphic.Line | null },
+  cursorX: number | undefined,
+): void {
+  if (cursorX === undefined || !Number.isFinite(cursorX)) {
+    lineRef.current?.hide();
+    chart.getZr().refresh();
+    return;
+  }
+
+  const pixelX = chart.convertToPixel({ xAxisIndex: 0 }, cursorX);
+  if (typeof pixelX !== "number" || !Number.isFinite(pixelX)) return;
+  const shape = {
+    x1: pixelX,
+    y1: 28,
+    x2: pixelX,
+    y2: Math.max(28, chart.getHeight() - 38),
+  };
+  if (!lineRef.current) {
+    lineRef.current = new echarts.graphic.Line({
+      silent: true,
+      z: 100,
+      shape,
+      style: {
+        stroke: "#0f172a",
+        lineWidth: 1.25,
+        lineDash: [5, 4],
+        opacity: 0.9,
+      },
+    });
+    chart.getZr().add(lineRef.current);
+  } else {
+    lineRef.current.show();
+    lineRef.current.attr({ shape });
+  }
+  chart.getZr().refresh();
 }

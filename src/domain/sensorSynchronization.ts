@@ -10,6 +10,7 @@ import {
 
 interface TrajectoryAnchor {
   sourceIndex: number;
+  sourcePosition: number;
   distanceMeters: number;
   elapsedSeconds: number;
   timestampNanos?: number;
@@ -40,21 +41,31 @@ export function synchronizeAccelerationToTrajectory(
 function trajectoryAnchors(points: GpsPoint[], trajectory: SegmentTrajectorySample[]): TrajectoryAnchor[] {
   const grouped = new Map<number, SegmentTrajectorySample[]>();
   for (const sample of trajectory) {
-    if (!points[sample.sourceIndex]) continue;
-    const current = grouped.get(sample.sourceIndex) ?? [];
+    const sourcePosition = finiteNumber(sample.sourcePosition) ?? sample.sourceIndex;
+    if (sourcePosition < 0 || sourcePosition > points.length - 1) continue;
+    const current = grouped.get(sourcePosition) ?? [];
     current.push(sample);
-    grouped.set(sample.sourceIndex, current);
+    grouped.set(sourcePosition, current);
   }
   return [...grouped.entries()]
     .sort(([left], [right]) => left - right)
-    .map(([sourceIndex, samples]) => {
-      const point = points[sourceIndex];
+    .map(([sourcePosition, samples]) => {
+      const leftIndex = Math.floor(sourcePosition);
+      const rightIndex = Math.ceil(sourcePosition);
+      const leftPoint = points[leftIndex];
+      const rightPoint = points[rightIndex];
+      const ratio = sourcePosition - leftIndex;
       return {
-        sourceIndex,
+        sourceIndex: Math.round(sourcePosition),
+        sourcePosition,
         distanceMeters: average(samples.map((sample) => sample.distanceMeters)),
         elapsedSeconds: average(samples.map((sample) => sample.elapsedSeconds)),
-        timestampNanos: finiteNumber(point.elapsedRealtimeNanos),
-        lineNumber: point.lineNumber,
+        timestampNanos: interpolateOptional(
+          finiteNumber(leftPoint.elapsedRealtimeNanos),
+          finiteNumber(rightPoint.elapsedRealtimeNanos),
+          ratio,
+        ),
+        lineNumber: interpolate(leftPoint.lineNumber, rightPoint.lineNumber, ratio),
       };
     });
 }
@@ -113,7 +124,7 @@ function mapSensors(
     const ratio = (key - leftKey) / (rightKey - leftKey);
     result.push({
       sensorIndex: sensor.index,
-      sourceIndex: Math.round(interpolate(left.sourceIndex, right.sourceIndex, ratio)),
+      sourceIndex: Math.round(interpolate(left.sourcePosition, right.sourcePosition, ratio)),
       distanceMeters: interpolate(left.distanceMeters, right.distanceMeters, ratio),
       elapsedSeconds: interpolate(left.elapsedSeconds, right.elapsedSeconds, ratio),
       accelXG: toG(sensor.accelX, sensor.accelUnit),
@@ -171,6 +182,11 @@ function finiteNumber(value: number | undefined): number | undefined {
 
 function interpolate(left: number, right: number, ratio: number): number {
   return left + (right - left) * ratio;
+}
+
+function interpolateOptional(left: number | undefined, right: number | undefined, ratio: number): number | undefined {
+  if (left === undefined || right === undefined) return undefined;
+  return interpolate(left, right, ratio);
 }
 
 function toG(value: number, unit: SensorPoint["accelUnit"]): number {

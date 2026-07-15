@@ -16,6 +16,7 @@ import type {
   GpsPoint,
   LapResult,
   MapSettings,
+  SensorPoint,
   SourceVisibility,
   TrackGate,
   TrackSection,
@@ -31,6 +32,7 @@ import { FilePickerButton, Panel, StatusBadge, Tabs } from "./ui";
 interface LapAnalysisProps {
   fileName: string;
   points: GpsPoint[];
+  sensors: SensorPoint[];
   selectedPointIndex: number;
   onSelectedPointIndex: (index: number) => void;
   sourceVisibility: SourceVisibility;
@@ -48,6 +50,7 @@ type LapAnalysisView = "insights" | "setup";
 export function LapAnalysis({
   fileName,
   points,
+  sensors,
   selectedPointIndex,
   onSelectedPointIndex,
   sourceVisibility,
@@ -201,6 +204,7 @@ export function LapAnalysis({
             active={activeView === "insights"}
             sourceName={fileName}
             points={points}
+            sensors={sensors}
             laps={laps}
             profile={workspace.profile}
             analysisLine={workspace.analysisLine}

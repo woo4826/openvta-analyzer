@@ -161,7 +161,18 @@ export function segmentAnalysisJson(input: {
   includePartialLapSections: boolean;
   analysis: SegmentAnalysisResult;
 }): string {
-  return `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), ...input }, null, 2)}\n`;
+  const analysis = {
+    ...input.analysis,
+    records: input.analysis.records.map((record) => ({
+      ...record,
+      trajectory: record.trajectory.map((sample) => {
+        const exportedSample = { ...sample };
+        delete exportedSample.sourcePosition;
+        return exportedSample;
+      }),
+    })),
+  };
+  return `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), ...input, analysis }, null, 2)}\n`;
 }
 
 export function lapAnalysisJson(input: {

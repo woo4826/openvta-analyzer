@@ -55,6 +55,21 @@ describe("sensor synchronization", () => {
     expect(result?.samples[0].accelXG).toBeCloseTo(0.25);
   });
 
+  it("keeps a narrow resampled scope when every display sample rounds to one source index", () => {
+    const narrowTrajectory = [
+      trajectorySample({ sourceIndex: 1, sourcePosition: 1.1, distanceMeters: 0, elapsedSeconds: 0 }),
+      trajectorySample({ sourceIndex: 1, sourcePosition: 1.4, distanceMeters: 30, elapsedSeconds: 1.5 }),
+    ];
+    const result = synchronizeAccelerationToTrajectory(
+      pointsWithNanos(),
+      [sensor({ timestampNanos: 6_250_000_000, elapsedSeconds: 6.25 })],
+      narrowTrajectory,
+    );
+
+    expect(result?.method).toBe("timestamp");
+    expect(result?.samples[0]).toMatchObject({ sourceIndex: 1, distanceMeters: 15, elapsedSeconds: 0.75 });
+  });
+
   it("returns undefined without enough usable anchors or synchronized samples", () => {
     expect(synchronizeAccelerationToTrajectory([], [sensor()], [])).toBeUndefined();
     expect(synchronizeAccelerationToTrajectory(pointsByLine(), [], trajectory())).toBeUndefined();

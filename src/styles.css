@@ -836,9 +836,24 @@ footer.privacy-note {
 
 /* Segment Analysis Workbench */
 .segment-workbench {
+  --segment-controls-reserved-space: 0px;
   min-width: 0;
+  padding-left: var(--segment-controls-reserved-space);
   display: grid;
   gap: var(--space-6);
+  transition: padding-left 180ms ease;
+}
+
+@media (min-width: 1181px) {
+  .segment-workbench.is-controls-open {
+    --segment-controls-reserved-space: min(426px, calc(100vw - 720px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment-workbench {
+    transition: none;
+  }
 }
 
 .segment-workbench-header {
@@ -1712,7 +1727,7 @@ footer.privacy-note {
 .segment-telemetry-readout {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
 }
 

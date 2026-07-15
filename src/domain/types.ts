@@ -312,6 +312,7 @@ export interface LapDistanceSample {
   latitude: number;
   longitude: number;
   sourceIndex: number;
+  sourcePosition?: number;
 }
 
 export interface LapComparisonSample extends LapDistanceSample {

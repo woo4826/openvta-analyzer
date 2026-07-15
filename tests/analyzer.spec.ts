@@ -45,8 +45,24 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(analysisMain.getByRole("region", { name: "Time-loss ranking" })).toBeVisible();
   await expect(analysisMain.getByRole("region", { name: "Trajectory map" })).toBeVisible();
 
+  const workbenchHeader = analysisMain.locator(".segment-workbench-header");
+  const headerBeforeControls = await workbenchHeader.boundingBox();
+  expect(headerBeforeControls).not.toBeNull();
   await analysisMain.getByRole("button", { name: "Analysis controls" }).click();
   let controls = analysisMain.getByRole("dialog", { name: "Analysis controls" });
+  const viewportWidth = page.viewportSize()?.width ?? 0;
+  if (viewportWidth > 1180) {
+    await expect.poll(async () => (await workbenchHeader.boundingBox())!.x - headerBeforeControls!.x).toBeGreaterThan(400);
+    await expect.poll(async () => {
+      const current = await workbenchHeader.boundingBox();
+      return Math.abs((current!.x + current!.width) - (headerBeforeControls!.x + headerBeforeControls!.width));
+    }).toBeLessThan(2);
+  } else {
+    await expect.poll(async () => Math.abs((await workbenchHeader.boundingBox())!.x - headerBeforeControls!.x)).toBeLessThan(2);
+    if (viewportWidth <= 680) {
+      await expect(analysisMain.locator(".segment-controls-scrim")).toBeVisible();
+    }
+  }
   await expect(controls.getByRole("button", { name: "Whole lap" })).toHaveAttribute("aria-pressed", "true");
   const corner = controls.getByRole("button", { name: /Corner 1, \d+–\d+ m/ });
   await expect(corner).toBeVisible();
@@ -63,7 +79,11 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   )).toBe(true);
   await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" })).toBeVisible();
+  await expect(analysisMain.locator(".segment-telemetry-readout")).toContainText(/Timestamp · [1-9]\d* samples/);
   await analysisMain.locator(".dashboard-widget-telemetry").scrollIntoViewIfNeeded();
+  await analysisMain.getByRole("button", { name: "Detailed channels" }).click();
+  await expect.poll(async () => (await analysisMain.locator(".segment-telemetry-panel canvas").boundingBox())!.height).toBeGreaterThan(600);
+  await analysisMain.getByRole("button", { name: "Detailed channels" }).click();
   await analysisMain.getByRole("button", { name: "Select range", exact: true }).click();
   const telemetryCanvas = analysisMain.locator(".segment-telemetry-panel canvas");
   const telemetryBox = await telemetryCanvas.boundingBox();
@@ -668,8 +688,14 @@ function loopVta(): string {
   return [
     "%% VTALogger Kotlin Version: 0.0.3",
     "%% FormatVersion: 3",
-    ...coordinates.map(([longitude, latitude], index) =>
-      `$15072026,1011${String(index).padStart(2, "0")},${latitude.toFixed(9)},${longitude.toFixed(9)},0,${70 + index % 4 * 8},90,10,2.5,gps,${500_000_000_000 + index * 1_000_000_000}`),
+    ...coordinates.flatMap(([longitude, latitude], index) => [
+      `$15072026,1011${String(index).padStart(2, "0")},${latitude.toFixed(9)},${longitude.toFixed(9)},0,${70 + index % 4 * 8},90,10,2.5,gps,${500_000_000_000 + index * 1_000_000_000}`,
+      ...Array.from({ length: 4 }, (_, tick) => {
+        const sensorIndex = index * 4 + tick;
+        const elapsedSeconds = index + (tick + 1) / 5;
+        return `#${sensorIndex},${elapsedSeconds.toFixed(3)},0,0,0,0,${(Math.sin(elapsedSeconds) * 1.2).toFixed(3)},${(Math.cos(elapsedSeconds) * 1.4).toFixed(3)},9.807,${500_000_000_000 + index * 1_000_000_000 + (tick + 1) * 200_000_000},2`;
+      }),
+    ]),
     "%% End",
   ].join("\n");
 }

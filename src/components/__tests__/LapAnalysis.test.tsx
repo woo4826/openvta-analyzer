@@ -39,6 +39,7 @@ describe("LapAnalysis", () => {
         <LapAnalysis
           fileName="session.Vta"
           points={[gps(0), gps(1)]}
+          sensors={[]}
           selectedPointIndex={0}
           onSelectedPointIndex={vi.fn()}
           sourceVisibility={{ rawGps: true, enhancedGps: false }}
@@ -281,6 +282,7 @@ function renderLapAnalysis(workspace: LapWorkspace) {
       <LapAnalysis
         fileName="session.Vta"
         points={[gps(0), gps(1)]}
+        sensors={[]}
         selectedPointIndex={0}
         onSelectedPointIndex={vi.fn()}
         sourceVisibility={{ rawGps: true, enhancedGps: false }}

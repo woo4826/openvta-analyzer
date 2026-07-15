@@ -235,6 +235,7 @@ function boundarySample(
     longitude: coordinate[0],
     latitude: coordinate[1],
     sourceIndex,
+    sourcePosition: sourceIndex,
   };
 }
 
@@ -270,6 +271,11 @@ function interpolateSample(
     longitude: interpolate(left.longitude, right.longitude, ratio),
     latitude: interpolate(left.latitude, right.latitude, ratio),
     sourceIndex: ratio < 0.5 ? left.sourceIndex : right.sourceIndex,
+    sourcePosition: interpolate(
+      left.sourcePosition ?? left.sourceIndex,
+      right.sourcePosition ?? right.sourceIndex,
+      ratio,
+    ),
   };
 }
 

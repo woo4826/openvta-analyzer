@@ -1,18 +1,18 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GpsPoint, LapResult, TrackProfileV1 } from "../../domain/types";
+import type { GpsPoint, LapResult, SensorPoint, TrackProfileV1 } from "../../domain/types";
 import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPreferences";
 import { I18nProvider } from "../../i18n/I18nProvider";
 
 vi.mock("../SegmentTrajectoryMap", () => ({
-  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, overlayLapIds, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; overlayLapIds: string[]; onSegmentChange: (segment: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
-    <div data-testid="map-state">{focusedLapId}:{referenceLapId}:visible={overlayLapIds.join(",")}<button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
+  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, overlayLapIds, cursorDistanceMeters, onSelectedIndex, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; overlayLapIds: string[]; cursorDistanceMeters?: number; onSelectedIndex: (index: number) => void; onSegmentChange: (segment: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
+    <div data-testid="map-state">{focusedLapId}:{referenceLapId}:visible={overlayLapIds.join(",")}:cursor={cursorDistanceMeters}<button type="button" onClick={() => onSelectedIndex(4)}>Select map point</button><button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, onRange }: { focusedLapId?: string; referenceLapId?: string; onRange: (start: number, end: number) => void }) => (
-    <div data-testid="chart-state">{focusedLapId}:{referenceLapId}<button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, cursorDistanceMeters, synchronizedAcceleration, onRange, onCursor }: { focusedLapId?: string; referenceLapId?: string; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; onRange: (start: number, end: number) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
+    <div data-testid="chart-state">{focusedLapId}:{referenceLapId}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}<button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button><button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
   ),
 }));
 vi.mock("../SegmentVariationChart", () => ({
@@ -32,6 +32,7 @@ describe("SegmentAnalysisWorkbench", () => {
       active={false}
       sourceName="session.Vta"
       points={fixture.points}
+      sensors={fixture.sensors}
       laps={fixture.laps}
       profile={fixture.profile}
       analysisLine={fixture.profile.centerline}
@@ -54,9 +55,11 @@ describe("SegmentAnalysisWorkbench", () => {
   it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {
     const user = userEvent.setup();
     const fixture = data();
+    const onSelectedPointIndex = vi.fn();
     render(<I18nProvider><SegmentAnalysisWorkbench
       sourceName="session.Vta"
       points={fixture.points}
+      sensors={fixture.sensors}
       laps={fixture.laps}
       profile={fixture.profile}
       analysisLine={fixture.profile.centerline}
@@ -64,7 +67,7 @@ describe("SegmentAnalysisWorkbench", () => {
       onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
       selectedPointIndex={0}
-      onSelectedPointIndex={vi.fn()}
+      onSelectedPointIndex={onSelectedPointIndex}
       onMapSettingsChange={vi.fn()}
       onActiveSegment={vi.fn()}
       onSaveRange={vi.fn()}
@@ -72,6 +75,7 @@ describe("SegmentAnalysisWorkbench", () => {
     /></I18nProvider>);
 
     await user.click(screen.getByRole("button", { name: "Analysis controls" }));
+    expect(screen.getByRole("region", { name: "Segment Analysis Workbench" })).toHaveClass("is-controls-open");
     const controls = screen.getByRole("dialog", { name: "Analysis controls" });
     await user.click(within(controls).getByRole("button", { name: "Corner 1, 10–90 m" }));
     expect(screen.getByText(/Corner 1 · 10–90 m/)).toBeVisible();
@@ -80,6 +84,10 @@ describe("SegmentAnalysisWorkbench", () => {
     await user.selectOptions(within(controls).getByRole("combobox", { name: "Focused lap" }), "lap-2");
     expect(screen.getByTestId("map-state")).toHaveTextContent("lap-2");
     expect(screen.getByTestId("chart-state")).toHaveTextContent("lap-2");
+    expect(screen.getByTestId("chart-state")).toHaveTextContent("sync=timestamp:1");
+    await user.click(screen.getByRole("button", { name: "Select graph point" }));
+    expect(onSelectedPointIndex).toHaveBeenCalledWith(4);
+    expect(screen.getByTestId("map-state")).toHaveTextContent("cursor=56");
     expect(screen.getByRole("heading", { name: "Test Circuit" })).toBeVisible();
     expect(screen.queryByText("Where am I losing time?")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Select map range" }));
@@ -90,7 +98,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data();
     render(<I18nProvider><SegmentAnalysisWorkbench
-      sourceName="session.Vta" points={fixture.points} laps={fixture.laps} profile={fixture.profile}
+      sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false}
       onIncludePartialLapSections={vi.fn()} mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
       selectedPointIndex={0} onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()}
@@ -120,6 +128,7 @@ describe("SegmentAnalysisWorkbench", () => {
     render(<I18nProvider><SegmentAnalysisWorkbench
       sourceName="session.Vta"
       points={fixture.points}
+      sensors={fixture.sensors}
       laps={fixture.laps}
       profile={fixture.profile}
       analysisLine={fixture.profile.centerline}
@@ -144,7 +153,7 @@ describe("SegmentAnalysisWorkbench", () => {
   });
 });
 
-function data(): { points: GpsPoint[]; laps: LapResult[]; profile: TrackProfileV1 } {
+function data(): { points: GpsPoint[]; sensors: SensorPoint[]; laps: LapResult[]; profile: TrackProfileV1 } {
   const points: GpsPoint[] = [];
   const laps: LapResult[] = [];
   for (let lapIndex = 0; lapIndex < 2; lapIndex += 1) {
@@ -169,6 +178,7 @@ function data(): { points: GpsPoint[]; laps: LapResult[]; profile: TrackProfileV
   }
   return {
     points,
+    sensors: [sensor(0, 26)],
     laps,
     profile: {
       schemaVersion: 1,
@@ -181,6 +191,21 @@ function data(): { points: GpsPoint[]; laps: LapResult[]; profile: TrackProfileV
       source: { kind: "user" },
       updatedAt: "2026-07-15T00:00:00.000Z",
     },
+  };
+}
+
+function sensor(index: number, seconds: number): SensorPoint {
+  return {
+    index,
+    lineNumber: index + 1,
+    rawLine: "",
+    elapsedSeconds: seconds,
+    eventCode: 0,
+    accelX: 1,
+    accelY: 2,
+    accelZ: 9.8,
+    accelUnit: "mps2",
+    timestampNanos: seconds * 1_000_000_000,
   };
 }
 
