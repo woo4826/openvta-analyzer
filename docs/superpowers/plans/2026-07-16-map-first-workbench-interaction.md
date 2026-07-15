@@ -112,7 +112,16 @@ Vitest, Testing Library, Vite, Aside, GitHub Pages.
 - [x] Run `pnpm test:e2e` without installing or launching a separate browser.
 - [x] Start the existing Vite server only if needed and use Aside with the
       supplied local VTA for visual and interaction QA.
-- [ ] Commit intentionally on `main`, push `origin/main`, and monitor GitHub
+- [x] Commit intentionally on `main`, push `origin/main`, and monitor GitHub
       Pages deployment to success.
-- [ ] Reload the deployed URL in Aside and repeat map layer and cursor smoke
+- [x] Reload the deployed URL in Aside and repeat map layer and cursor smoke
       checks.
+
+### Deployment evidence
+
+- Production code commit: `5cf3282`
+- GitHub Actions: Deploy Pages `29436541490` and CI `29436542751` succeeded.
+- Aside production QA used `VTA24082025_101142_CC00.Vta`: Inje Speedium
+  matched, 2/8 comparison laps were initially visible, all eight layer controls
+  edited and reset correctly, map width was 97.7% of the dashboard, and the
+  synchronized cursor moved from 643 m to 2960 m without recentering the map.
