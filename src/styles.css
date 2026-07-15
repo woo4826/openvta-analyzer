@@ -759,6 +759,24 @@ footer.privacy-note {
   justify-content: flex-end;
 }
 
+.segment-range-editor {
+  border: 1px solid #9ccfc8;
+  border-radius: var(--radius-3);
+  padding: var(--space-6);
+  background: var(--color-teal-soft);
+  display: grid;
+  grid-template-columns: minmax(150px, 0.6fr) minmax(220px, 1fr) minmax(160px, 0.6fr) auto;
+  align-items: end;
+  gap: var(--space-5);
+}
+
+.segment-range-editor > div:first-child {
+  align-self: center;
+  display: grid;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
 .segmented-control {
   min-height: 38px;
   border: 1px solid var(--color-border);
@@ -2013,6 +2031,10 @@ tbody tr:hover {
     justify-content: flex-start;
   }
 
+  .segment-range-editor {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .segment-scope-ribbon {
     top: 0;
     align-items: stretch;
@@ -2095,6 +2117,10 @@ tbody tr:hover {
 
   .segment-filter {
     width: 100%;
+  }
+
+  .segment-range-editor {
+    grid-template-columns: 1fr;
   }
 
   .segment-filter button {

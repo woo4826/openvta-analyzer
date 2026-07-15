@@ -69,6 +69,63 @@ describe("useLapWorkspace", () => {
     expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
   });
 
+  it("turns a built-in preset edit into a persisted local override", async () => {
+    const points = multiLapPoints();
+    const builtIn = {
+      ...osmCandidate().profile,
+      id: "kr-inje-speedium-full",
+      startFinish: createGateFromRoutePoint(points, 0),
+      analysisLine: { type: "LineString" as const, coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [{
+        id: "corner-1",
+        name: "Corner 1",
+        kind: "corner-right" as const,
+        startDistanceMeters: 0,
+        endDistanceMeters: 20,
+      }],
+    };
+    mocks.loadHostedTrackPresets.mockResolvedValue([builtIn]);
+    mocks.scoreTrackProfile.mockImplementation((profile: TrackProfileV1) => ({
+      profile,
+      medianDistanceMeters: 4,
+      lengthRatio: 1,
+      score: 4,
+    }));
+    const { result } = renderHook(() => useLapWorkspace("file-built-in-edit", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.profileOrigin).toBe("built-in"));
+    act(() => result.current.updateSection("corner-1", { name: "Driver line" }));
+
+    await waitFor(() => expect(result.current.profileOrigin).toBe("local-override"));
+    await waitFor(() => expect(mocks.saveTrackProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ id: builtIn.id, sections: [expect.objectContaining({ name: "Driver line" })] }),
+      "local-override",
+    ));
+  });
+
+  it("saves a graph-selected range as a reusable user section", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = multiLapPoints();
+    const { result } = renderHook(() => useLapWorkspace("file-range", "session.Vta", points));
+    act(() => result.current.useSelectedPointAsStartFinish(0));
+    await waitFor(() => expect(result.current.analysisLine).toBeDefined());
+
+    let sectionId: string | undefined;
+    act(() => {
+      sectionId = result.current.saveRangeAsSection(5, 25, "Turn-in to apex", "corner-right")?.id;
+    });
+
+    expect(sectionId).toBeDefined();
+    await waitFor(() => expect(result.current.profile?.sections).toContainEqual(expect.objectContaining({
+      id: sectionId,
+      name: "Turn-in to apex",
+      kind: "corner-right",
+      startDistanceMeters: 5,
+      endDistanceMeters: 25,
+      source: "user",
+    })));
+  });
+
   it("does not propose sections from an OSM centerline when no valid complete lap exists", async () => {
     const candidate = osmCandidate();
     mocks.lookupOsmTracks.mockResolvedValue({ status: "ambiguous", candidates: [candidate] });

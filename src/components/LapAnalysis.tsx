@@ -175,6 +175,7 @@ export function LapAnalysis({
       {activeView === "insights" ? (
         insightsReady && workspace.profile && workspace.analysisLine ? (
           <SegmentAnalysisWorkbench
+            sourceName={fileName}
             points={points}
             laps={laps}
             profile={workspace.profile}
@@ -186,6 +187,9 @@ export function LapAnalysis({
             onSelectedPointIndex={onSelectedPointIndex}
             onMapSettingsChange={onMapSettingsChange}
             onActiveSegment={onActiveSegment}
+            onSaveRange={(start, end, name, kind) => {
+              workspace.saveRangeAsSection(start, end, name, kind);
+            }}
             onOpenSetup={() => setActiveView("setup")}
           />
         ) : (

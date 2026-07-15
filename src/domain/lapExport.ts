@@ -3,6 +3,7 @@ import type {
   CornerAnalysisResult,
   LapAnalysisSettings,
   LapResult,
+  SegmentAnalysisResult,
   LapSectionResult,
   TimingSectorResult,
   TrackProfileV1,
@@ -102,6 +103,65 @@ export function sectionResultsCsv(results: LapSectionResult[], lineEnding: LineE
     ]),
     lineEnding,
   );
+}
+
+export function segmentAnalysisCsv(analysis: SegmentAnalysisResult, lineEnding: LineEnding = "lf"): string {
+  return genericCsv(
+    [
+      "lapId",
+      "ordinal",
+      "completion",
+      "validity",
+      "coverage",
+      "durationSeconds",
+      "deltaBestSeconds",
+      "drivenDistanceMeters",
+      "deltaShortestMeters",
+      "entrySpeedKmh",
+      "minimumSpeedKmh",
+      "averageSpeedKmh",
+      "maximumSpeedKmh",
+      "exitSpeedKmh",
+      "peakLossRateSecondsPer100m",
+      "gpsConfidence",
+      "eligibleForBest",
+      "fastestPath",
+      "shortestPath",
+      "flags",
+    ],
+    analysis.records.map((record) => [
+      record.lapId,
+      record.ordinal,
+      record.completion,
+      record.validity,
+      record.coverage,
+      record.durationSeconds ?? "",
+      record.deltaBestSeconds ?? "",
+      record.drivenDistanceMeters ?? "",
+      record.deltaShortestMeters ?? "",
+      record.entrySpeedKmh ?? "",
+      record.minimumSpeedKmh ?? "",
+      record.averageSpeedKmh ?? "",
+      record.maximumSpeedKmh ?? "",
+      record.exitSpeedKmh ?? "",
+      record.peakLossRateSecondsPer100m ?? "",
+      record.gpsConfidence,
+      record.eligibleForBest ? "true" : "false",
+      record.lapId === analysis.fastestLapId ? "true" : "false",
+      record.lapId === analysis.shortestLapId ? "true" : "false",
+      record.flags.join("|"),
+    ]),
+    lineEnding,
+  );
+}
+
+export function segmentAnalysisJson(input: {
+  sourceName: string;
+  track?: { id: string; name: string };
+  includePartialLapSections: boolean;
+  analysis: SegmentAnalysisResult;
+}): string {
+  return `${JSON.stringify({ schemaVersion: 1, exportedAt: new Date().toISOString(), ...input }, null, 2)}\n`;
 }
 
 export function lapAnalysisJson(input: {

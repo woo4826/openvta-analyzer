@@ -10,8 +10,8 @@ vi.mock("../SegmentTrajectoryMap", () => ({
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId }: { focusedLapId?: string; referenceLapId?: string }) => (
-    <div data-testid="chart-state">{focusedLapId}:{referenceLapId}</div>
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, onRange }: { focusedLapId?: string; referenceLapId?: string; onRange: (start: number, end: number) => void }) => (
+    <div data-testid="chart-state">{focusedLapId}:{referenceLapId}<button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
   ),
 }));
 
@@ -22,6 +22,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data();
     render(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="session.Vta"
       points={fixture.points}
       laps={fixture.laps}
       profile={fixture.profile}
@@ -33,6 +34,7 @@ describe("SegmentAnalysisWorkbench", () => {
       onSelectedPointIndex={vi.fn()}
       onMapSettingsChange={vi.fn()}
       onActiveSegment={vi.fn()}
+      onSaveRange={vi.fn()}
       onOpenSetup={vi.fn()}
     /></I18nProvider>);
 
@@ -42,6 +44,36 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.getByTestId("map-state")).toHaveTextContent("lap-2");
     expect(screen.getByTestId("chart-state")).toHaveTextContent("lap-2");
     expect(screen.getByText("Where am I losing time?")).toBeVisible();
+  });
+
+  it("saves a graph-selected range as a named track section", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    const onSaveRange = vi.fn();
+    render(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="session.Vta"
+      points={fixture.points}
+      laps={fixture.laps}
+      profile={fixture.profile}
+      analysisLine={fixture.profile.centerline}
+      includePartialLapSections={false}
+      onIncludePartialLapSections={vi.fn()}
+      mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+      selectedPointIndex={0}
+      onSelectedPointIndex={vi.fn()}
+      onMapSettingsChange={vi.fn()}
+      onActiveSegment={vi.fn()}
+      onSaveRange={onSaveRange}
+      onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+
+    await user.click(screen.getByRole("button", { name: "Select graph range" }));
+    await user.click(screen.getByRole("button", { name: "Save range as segment" }));
+    await user.type(screen.getByRole("textbox", { name: "Segment name" }), "Late apex");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Kind" }), "corner-left");
+    await user.click(screen.getByRole("button", { name: "Save segment" }));
+
+    expect(onSaveRange).toHaveBeenCalledWith(20, 60, "Late apex", "corner-left");
   });
 });
 

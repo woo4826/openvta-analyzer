@@ -31,6 +31,7 @@ import type {
   TrackGate,
   TrackProfileV1,
   TrackSection,
+  TrackSectionKind,
 } from "../domain/types";
 
 export type TrackLookupState = "idle" | "cache" | "searching" | OsmLookupStatus | "imported" | "manual" | "generated";
@@ -83,6 +84,7 @@ export interface LapWorkspace {
   recalculateAutomaticSections: (replaceAll: boolean) => void;
   updateSection: (sectionId: string, patch: Partial<TrackSection>) => void;
   removeSection: (sectionId: string) => void;
+  saveRangeAsSection: (startDistanceMeters: number, endDistanceMeters: number, name: string, kind: TrackSectionKind) => TrackSection | undefined;
   addBoundary: (pointIndex: number) => void;
   removeBoundary: (boundaryId: string) => void;
   setLapValidity: (lapId: string, validity: LapValidity) => void;
@@ -106,6 +108,7 @@ export function useLapWorkspace(
   const trackPresets = useTrackPresets(points);
   const lookupStarted = useRef(new Set<string>());
   const persistedAutomaticProfiles = useRef(new Set<string>());
+  const persistedLocalOverrides = useRef(new Set<string>());
   const current = fileId ? files[fileId] ?? emptyWorkspace() : emptyWorkspace();
   const gate = current.profile?.startFinish ?? current.manualGate;
 
@@ -300,12 +303,11 @@ export function useLapWorkspace(
       return {
         ...previous,
         [fileId]: {
-          ...workspace,
-          profile: touchProfile({
+          ...withEditedProfile(workspace, touchProfile({
             ...profile,
             analysisLine: representativeCenterline,
             sections: generatedSections,
-          }),
+          })),
           manualGate: undefined,
         },
       };
@@ -315,6 +317,7 @@ export function useLapWorkspace(
   useEffect(() => {
     const profile = current.profile;
     if (
+      current.profileOrigin === "local-override" ||
       !profile?.startFinish ||
       !profile.analysisLine ||
       !profile.sections.some((section) => section.source === "automatic")
@@ -325,7 +328,18 @@ export function useLapWorkspace(
     void saveTrackProfile(profile).catch(() => {
       persistedAutomaticProfiles.current.delete(revision);
     });
-  }, [current.profile]);
+  }, [current.profile, current.profileOrigin]);
+
+  useEffect(() => {
+    const profile = current.profile;
+    if (!profile || current.profileOrigin !== "local-override") return;
+    const revision = `${profile.id}:${profile.updatedAt}`;
+    if (persistedLocalOverrides.current.has(revision)) return;
+    persistedLocalOverrides.current.add(revision);
+    void saveTrackProfile(profile, "local-override").catch(() => {
+      persistedLocalOverrides.current.delete(revision);
+    });
+  }, [current.profile, current.profileOrigin]);
 
   useEffect(() => {
     if (!fileId) return;
@@ -409,8 +423,7 @@ export function useLapWorkspace(
     if (!nextGate) return;
     update((workspace) => workspace.profile
       ? {
-          ...workspace,
-          profile: touchProfile({ ...workspace.profile, startFinish: nextGate }),
+          ...withEditedProfile(workspace, touchProfile({ ...workspace.profile, startFinish: nextGate })),
           manualGate: undefined,
           boundaryOverrides: [],
           validityOverrides: [],
@@ -439,8 +452,7 @@ export function useLapWorkspace(
       };
       return workspace.profile
         ? {
-            ...workspace,
-            profile: touchProfile({ ...workspace.profile, startFinish: nextGate }),
+            ...withEditedProfile(workspace, touchProfile({ ...workspace.profile, startFinish: nextGate })),
             boundaryOverrides: [],
             validityOverrides: [],
           }
@@ -463,8 +475,7 @@ export function useLapWorkspace(
       const number = profile.sectorGates.length + 1;
       const sectorGate: TrackGate = { ...generated, id: `sector-${Date.now()}-${number}`, name: `Sector ${number}`, kind: "sector" };
       return {
-        ...workspace,
-        profile: touchProfile({ ...profile, sectorGates: [...profile.sectorGates, sectorGate] }),
+        ...withEditedProfile(workspace, touchProfile({ ...profile, sectorGates: [...profile.sectorGates, sectorGate] })),
         manualGate: undefined,
       };
     });
@@ -474,9 +485,7 @@ export function useLapWorkspace(
     gateId: string,
     patch: Partial<Pick<TrackGate, "name" | "widthMeters" | "forwardBearingDegrees">>,
   ) => {
-    update((workspace) => workspace.profile ? {
-      ...workspace,
-      profile: touchProfile({
+    update((workspace) => workspace.profile ? withEditedProfile(workspace, touchProfile({
         ...workspace.profile,
         sectorGates: workspace.profile.sectorGates.map((sectorGate) => {
           if (sectorGate.id !== gateId) return sectorGate;
@@ -491,16 +500,13 @@ export function useLapWorkspace(
             line: gateLine(gateCenter(sectorGate), forwardBearingDegrees, widthMeters),
           };
         }),
-      }),
-    } : workspace);
+      })) : workspace);
   }, [update]);
 
   const moveSectorGateToPoint = useCallback((gateId: string, pointIndex: number) => {
     const generated = createGateFromRoutePoint(points, pointIndex);
     if (!generated) return;
-    update((workspace) => workspace.profile ? {
-      ...workspace,
-      profile: touchProfile({
+    update((workspace) => workspace.profile ? withEditedProfile(workspace, touchProfile({
         ...workspace.profile,
         sectorGates: workspace.profile.sectorGates.map((sectorGate) => sectorGate.id === gateId
           ? {
@@ -509,8 +515,7 @@ export function useLapWorkspace(
               line: gateLine(gateCenter(generated), generated.forwardBearingDegrees, sectorGate.widthMeters),
             }
           : sectorGate),
-      }),
-    } : workspace);
+      })) : workspace);
   }, [points, update]);
 
   const reorderSectorGate = useCallback((gateId: string, targetIndex: number) => {
@@ -523,15 +528,14 @@ export function useLapWorkspace(
       const sectorGates = [...workspace.profile.sectorGates];
       const [moved] = sectorGates.splice(currentIndex, 1);
       sectorGates.splice(nextIndex, 0, moved);
-      return { ...workspace, profile: touchProfile({ ...workspace.profile, sectorGates }) };
+      return withEditedProfile(workspace, touchProfile({ ...workspace.profile, sectorGates }));
     });
   }, [update]);
 
   const removeSectorGate = useCallback((gateId: string) => {
-    update((workspace) => workspace.profile ? {
-      ...workspace,
-      profile: touchProfile({ ...workspace.profile, sectorGates: workspace.profile.sectorGates.filter((item) => item.id !== gateId) }),
-    } : workspace);
+    update((workspace) => workspace.profile
+      ? withEditedProfile(workspace, touchProfile({ ...workspace.profile, sectorGates: workspace.profile.sectorGates.filter((item) => item.id !== gateId) }))
+      : workspace);
   }, [update]);
 
   const proposeSections = useCallback(() => {
@@ -546,12 +550,11 @@ export function useLapWorkspace(
       );
       if (!profile?.startFinish) return workspace;
       return {
-        ...workspace,
-        profile: touchProfile({
+        ...withEditedProfile(workspace, touchProfile({
           ...profile,
           analysisLine: representativeCenterline,
           sections: proposeTrackSections(representativeCenterline),
-        }),
+        })),
         manualGate: undefined,
       };
     });
@@ -569,21 +572,18 @@ export function useLapWorkspace(
       );
       if (!profile?.startFinish || (profile.sections.length && !replaceAll)) return workspace;
       return {
-        ...workspace,
-        profile: touchProfile({
+        ...withEditedProfile(workspace, touchProfile({
           ...profile,
           analysisLine: representativeCenterline,
           sections: generatedSections,
-        }),
+        })),
         manualGate: undefined,
       };
     });
   }, [fileId, fileName, generatedSections, points, representativeCenterline, update]);
 
   const updateSection = useCallback((sectionId: string, patch: Partial<TrackSection>) => {
-    update((workspace) => workspace.profile ? {
-      ...workspace,
-      profile: touchProfile({
+    update((workspace) => workspace.profile ? withEditedProfile(workspace, touchProfile({
         ...workspace.profile,
         sections: workspace.profile.sections.map((section) => {
           if (section.id !== sectionId) return section;
@@ -603,16 +603,42 @@ export function useLapWorkspace(
             confidence: undefined,
           };
         }),
-      }),
-    } : workspace);
+      })) : workspace);
   }, [analysisLine, update]);
 
   const removeSection = useCallback((sectionId: string) => {
-    update((workspace) => workspace.profile ? {
-      ...workspace,
-      profile: touchProfile({ ...workspace.profile, sections: workspace.profile.sections.filter((section) => section.id !== sectionId) }),
-    } : workspace);
+    update((workspace) => workspace.profile
+      ? withEditedProfile(workspace, touchProfile({ ...workspace.profile, sections: workspace.profile.sections.filter((section) => section.id !== sectionId) }))
+      : workspace);
   }, [update]);
+
+  const saveRangeAsSection = useCallback((
+    startDistanceMeters: number,
+    endDistanceMeters: number,
+    name: string,
+    kind: TrackSectionKind,
+  ): TrackSection | undefined => {
+    if (!current.profile || !analysisLine) return undefined;
+    const lineLength = routeDistanceMeters(analysisLine.coordinates);
+    const start = Math.max(0, Math.min(lineLength, Math.min(startDistanceMeters, endDistanceMeters)));
+    const end = Math.max(0, Math.min(lineLength, Math.max(startDistanceMeters, endDistanceMeters)));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < 1) return undefined;
+    const section: TrackSection = {
+      id: `user-section-${cryptoId()}`,
+      name: name.trim() || `Custom segment ${current.profile.sections.length + 1}`,
+      kind,
+      startDistanceMeters: start,
+      endDistanceMeters: end,
+      source: "user",
+    };
+    update((workspace) => {
+      if (!workspace.profile || workspace.profile.id !== current.profile?.id) return workspace;
+      const sections = [...workspace.profile.sections, section]
+        .sort((left, right) => left.startDistanceMeters - right.startDistanceMeters);
+      return withEditedProfile(workspace, touchProfile({ ...workspace.profile, sections }));
+    });
+    return section;
+  }, [analysisLine, current.profile, update]);
 
   const addBoundary = useCallback((pointIndex: number) => {
     update((workspace) => ({
@@ -725,6 +751,7 @@ export function useLapWorkspace(
     recalculateAutomaticSections,
     updateSection,
     removeSection,
+    saveRangeAsSection,
     addBoundary,
     removeBoundary,
     setLapValidity,
@@ -755,6 +782,14 @@ function fastestCompleteLap(laps: LapResult[]): LapResult | undefined {
 
 function touchProfile(profile: TrackProfileV1): TrackProfileV1 {
   return { ...profile, updatedAt: new Date().toISOString() };
+}
+
+function withEditedProfile(workspace: FileLapWorkspace, profile: TrackProfileV1): FileLapWorkspace {
+  return {
+    ...workspace,
+    profile,
+    profileOrigin: workspace.profileOrigin === "built-in" ? "local-override" : workspace.profileOrigin,
+  };
 }
 
 function isFreshProfile(profile: TrackProfileV1): boolean {

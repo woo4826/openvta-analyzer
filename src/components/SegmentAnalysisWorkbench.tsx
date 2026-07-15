@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LineString } from "geojson";
-import { Settings2 } from "lucide-react";
+import { Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
-import type { ActiveSegment, GpsPoint, LapResult, MapSettings, TrackProfileV1 } from "../domain/types";
+import { downloadText } from "../domain/export";
+import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
+import type { ActiveSegment, GpsPoint, LapResult, MapSettings, TrackProfileV1, TrackSectionKind } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentLapTable } from "./SegmentLapTable";
 import { SegmentScopeRibbon } from "./SegmentScopeRibbon";
@@ -10,6 +12,7 @@ import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
 import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
 
 interface SegmentAnalysisWorkbenchProps {
+  sourceName: string;
   points: GpsPoint[];
   laps: LapResult[];
   profile: TrackProfileV1;
@@ -21,10 +24,12 @@ interface SegmentAnalysisWorkbenchProps {
   onSelectedPointIndex: (index: number) => void;
   onMapSettingsChange: (settings: MapSettings) => void;
   onActiveSegment: (segment?: ActiveSegment) => void;
+  onSaveRange: (startDistanceMeters: number, endDistanceMeters: number, name: string, kind: TrackSectionKind) => void;
   onOpenSetup: () => void;
 }
 
 export function SegmentAnalysisWorkbench({
+  sourceName,
   points,
   laps,
   profile,
@@ -36,6 +41,7 @@ export function SegmentAnalysisWorkbench({
   onSelectedPointIndex,
   onMapSettingsChange,
   onActiveSegment,
+  onSaveRange,
   onOpenSetup,
 }: SegmentAnalysisWorkbenchProps) {
   const { t } = useI18n();
@@ -48,6 +54,9 @@ export function SegmentAnalysisWorkbench({
   });
   const [cursorDistanceMeters, setCursorDistanceMeters] = useState<number>();
   const [mobileView, setMobileView] = useState<"map" | "graphs" | "laps">("map");
+  const [showRangeEditor, setShowRangeEditor] = useState(false);
+  const [rangeName, setRangeName] = useState("");
+  const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
   const scopeName = useMemo(() => {
     if (workbench.scope.kind === "whole-lap") return t("lap.workbench.wholeLap");
@@ -55,7 +64,7 @@ export function SegmentAnalysisWorkbench({
       const sectionId = workbench.scope.sectionId;
       return profile.sections.find((section) => section.id === sectionId)?.name ?? "Section";
     }
-    return "Custom range";
+    return t("lap.workbench.customRange");
   }, [profile.sections, t, workbench.scope]);
 
   useEffect(() => {
@@ -75,9 +84,69 @@ export function SegmentAnalysisWorkbench({
             <button type="button" aria-pressed={workbench.axis === "distance"} onClick={() => workbench.setAxis("distance")}>{t("lap.workbench.distanceAxis")}</button>
             <button type="button" aria-pressed={workbench.axis === "time"} onClick={() => workbench.setAxis("time")}>{t("lap.workbench.timeAxis")}</button>
           </div>
+          {workbench.scope.kind === "range" ? (
+            <button type="button" className="button" onClick={() => setShowRangeEditor((visible) => !visible)}><Save size={16} aria-hidden />{t("lap.workbench.saveRange")}</button>
+          ) : null}
+          <button
+            type="button"
+            className="button"
+            onClick={() => downloadText(`${safeBaseName(sourceName)}.segment-analysis.csv`, segmentAnalysisCsv(workbench.analysis), "text/csv")}
+          >
+            <Download size={16} aria-hidden />{t("lap.workbench.exportCsv")}
+          </button>
+          <button
+            type="button"
+            className="button"
+            onClick={() => downloadText(`${safeBaseName(sourceName)}.segment-analysis.json`, segmentAnalysisJson({
+              sourceName,
+              track: { id: profile.id, name: profile.name },
+              includePartialLapSections,
+              analysis: workbench.analysis,
+            }), "application/json")}
+          >
+            <Download size={16} aria-hidden />{t("lap.workbench.exportJson")}
+          </button>
           <button type="button" className="button" onClick={onOpenSetup}><Settings2 size={16} aria-hidden />{t("lap.workbench.setup")}</button>
         </div>
       </header>
+
+      {workbench.scope.kind === "range" && showRangeEditor ? (
+        <form
+          className="segment-range-editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSaveRange(
+              workbench.analysis.range.startDistanceMeters,
+              workbench.analysis.range.endDistanceMeters,
+              rangeName,
+              rangeKind,
+            );
+            setShowRangeEditor(false);
+            setRangeName("");
+          }}
+        >
+          <div>
+            <span className="panel-eyebrow">{t("lap.workbench.customRange")}</span>
+            <strong>{Math.round(workbench.analysis.range.startDistanceMeters)}–{Math.round(workbench.analysis.range.endDistanceMeters)} m</strong>
+          </div>
+          <label className="field">
+            <span>{t("lap.workbench.segmentName")}</span>
+            <input autoFocus value={rangeName} onChange={(event) => setRangeName(event.target.value)} placeholder={t("lap.workbench.segmentNamePlaceholder")} />
+          </label>
+          <label className="field">
+            <span>{t("lap.kind")}</span>
+            <select value={rangeKind} onChange={(event) => setRangeKind(event.target.value as TrackSectionKind)}>
+              <option value="corner-left">{t("lap.cornerLeft")}</option>
+              <option value="corner-right">{t("lap.cornerRight")}</option>
+              <option value="straight">{t("lap.straight")}</option>
+            </select>
+          </label>
+          <div className="row-actions">
+            <button type="submit" className="button primary">{t("lap.workbench.saveSegment")}</button>
+            <button type="button" className="button ghost" onClick={() => setShowRangeEditor(false)}>{t("lap.workbench.cancel")}</button>
+          </div>
+        </form>
+      ) : null}
 
       <SegmentScopeRibbon
         scope={workbench.scope}
@@ -182,4 +251,8 @@ function formatDelta(seconds: number | undefined): string {
 
 function formatSpeed(speed: number | undefined): string {
   return speed === undefined ? "—" : `${speed.toFixed(1)} km/h`;
+}
+
+function safeBaseName(name: string): string {
+  return name.replace(/\.vta$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "-") || "openvta";
 }

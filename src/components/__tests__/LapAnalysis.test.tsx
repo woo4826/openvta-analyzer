@@ -268,6 +268,7 @@ function emptyWorkspace(): LapWorkspace {
     setPrimaryLap: vi.fn(),
     setReferenceLap: vi.fn(),
     setIncludePartialLapSectors: vi.fn(),
+    saveRangeAsSection: vi.fn(),
     saveCurrentProfile: vi.fn().mockResolvedValue(undefined),
     resetProfileOverride: vi.fn().mockResolvedValue(undefined),
   };

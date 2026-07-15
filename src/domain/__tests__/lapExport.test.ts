@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { lapAnalysisJson, lapResultsCsv, sectionResultsCsv } from "../lapExport";
-import type { LapResult, LapSectionResult } from "../types";
+import { lapAnalysisJson, lapResultsCsv, sectionResultsCsv, segmentAnalysisCsv, segmentAnalysisJson } from "../lapExport";
+import type { LapResult, LapSectionResult, SegmentAnalysisResult } from "../types";
 
 describe("lap analysis exports", () => {
   it("exports lap rows independently from existing VTA exports", () => {
@@ -46,7 +46,62 @@ describe("lap analysis exports", () => {
       sectionResults: [{ sectionId: "corner-1" }],
     });
   });
+
+  it("exports the current segment scope and per-lap evidence", () => {
+    const analysis = segmentAnalysis();
+    const csv = segmentAnalysisCsv(analysis);
+    const json = JSON.parse(segmentAnalysisJson({
+      sourceName: "session.Vta",
+      track: { id: "inje", name: "Inje Speedium" },
+      includePartialLapSections: true,
+      analysis,
+    }));
+
+    expect(csv.split("\n")[0]).toContain("coverage,durationSeconds,deltaBestSeconds,drivenDistanceMeters");
+    expect(csv).toContain("lap-1,1,complete,valid,complete,8.1,0,104.2");
+    expect(json).toMatchObject({
+      schemaVersion: 1,
+      sourceName: "session.Vta",
+      track: { id: "inje" },
+      includePartialLapSections: true,
+      analysis: { scope: { kind: "section", sectionId: "corner-1" }, fastestLapId: "lap-1" },
+    });
+  });
 });
+
+function segmentAnalysis(): SegmentAnalysisResult {
+  return {
+    scope: { kind: "section", sectionId: "corner-1" },
+    range: { startDistanceMeters: 100, endDistanceMeters: 300 },
+    referenceLapId: "lap-1",
+    fastestLapId: "lap-1",
+    shortestLapId: "lap-1",
+    records: [{
+      lapId: "lap-1",
+      ordinal: 1,
+      completion: "complete",
+      validity: "valid",
+      flags: [],
+      coverage: "complete",
+      fromPartialLap: false,
+      eligibleForBest: true,
+      durationSeconds: 8.1,
+      deltaBestSeconds: 0,
+      drivenDistanceMeters: 104.2,
+      deltaShortestMeters: 0,
+      entrySpeedKmh: 120,
+      minimumSpeedKmh: 72,
+      averageSpeedKmh: 88,
+      maximumSpeedKmh: 121,
+      exitSpeedKmh: 104,
+      maxLateralG: 1.2,
+      maxDecelerationG: 0.9,
+      peakLossRateSecondsPer100m: 0,
+      gpsConfidence: "high",
+      trajectory: [],
+    }],
+  };
+}
 
 function sectionResult(): LapSectionResult {
   return {
