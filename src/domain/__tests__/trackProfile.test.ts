@@ -81,6 +81,42 @@ describe("track profile schema", () => {
       sectorGates: [{ ...profile.startFinish!, kind: "sector" }],
     }).error).toMatch(/unique/);
   });
+
+  it("round trips an analysis line and automatic section metadata", () => {
+    const profile = {
+      ...validProfile(),
+      analysisLine: {
+        type: "LineString" as const,
+        coordinates: [[0, 0], [0.001, 0], [0.001, 0.001]],
+      },
+      sections: [{
+        id: "auto-straight-0-100",
+        name: "Straight 1",
+        kind: "straight" as const,
+        startDistanceMeters: 0,
+        endDistanceMeters: 100,
+        source: "automatic" as const,
+        confidence: 0.82,
+      }],
+    };
+
+    expect(parseTrackProfile(exportTrackProfile(profile)).profile).toEqual(profile);
+  });
+
+  it("rejects automatic-section confidence outside zero through one", () => {
+    expect(validateTrackProfile({
+      ...validProfile(),
+      sections: [{
+        id: "invalid-confidence",
+        name: "Invalid confidence",
+        kind: "straight",
+        startDistanceMeters: 0,
+        endDistanceMeters: 50,
+        source: "automatic",
+        confidence: 1.1,
+      }],
+    }).error).toMatch(/section/);
+  });
 });
 
 function validOsmProfile(): TrackProfileV1 {

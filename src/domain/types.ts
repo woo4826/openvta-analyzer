@@ -222,6 +222,8 @@ export interface TrackSection {
   kind: TrackSectionKind;
   startDistanceMeters: number;
   endDistanceMeters: number;
+  source?: "automatic" | "user";
+  confidence?: number;
 }
 
 export interface TrackProfileSource {
@@ -238,6 +240,7 @@ export interface TrackProfileV1 {
   name: string;
   layoutName?: string;
   centerline: LineString;
+  analysisLine?: LineString;
   direction: TrackDirection;
   startFinish?: TrackGate;
   sectorGates: TrackGate[];

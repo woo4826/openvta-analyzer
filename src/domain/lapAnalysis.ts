@@ -1,4 +1,5 @@
 import type { LineString, Position } from "geojson";
+import { generateAutomaticSections } from "./automaticSections";
 import { bearingDegrees, coordinateOf, haversineMeters, normalizeDegrees, routeDistanceMeters } from "./geometry";
 import { detectGateCrossings, elapsedSecondsAt } from "./lapDetection";
 import type {
@@ -205,77 +206,18 @@ export function theoreticalBestSeconds(results: TimingSectorResult[], sectorCoun
 
 export function proposeTrackSections(centerline: LineString): TrackSection[] {
   const coordinates = centerline.coordinates;
-  if (coordinates.length < 5) {
+  if (coordinates.length < 2) {
     return [];
   }
   const distances = cumulativeDistances(coordinates);
-  const totalDistance = distances.at(-1) ?? 0;
-  const curved = coordinates.map((_, index) => {
-    if (index === 0 || index === coordinates.length - 1) {
-      return 0;
-    }
-    const incoming = bearingDegrees(coordinates[index - 1], coordinates[index]);
-    const outgoing = bearingDegrees(coordinates[index], coordinates[index + 1]);
-    const turn = signedHeadingDelta(incoming, outgoing);
-    const span = Math.max(1, haversineMeters(coordinates[index - 1], coordinates[index + 1]));
-    return turn / span;
-  });
-  const smoothed = curved.map((_, index) => averageWindow(curved, index, 2));
-  const minimumCurvature = 0.08;
-  const groups: Array<{ start: number; end: number; sign: -1 | 1 }> = [];
-  let active: { start: number; end: number; sign: -1 | 1 } | undefined;
-  for (let index = 1; index < smoothed.length - 1; index += 1) {
-    const value = smoothed[index];
-    const sign: -1 | 1 = value < 0 ? -1 : 1;
-    if (Math.abs(value) < minimumCurvature) {
-      if (active) groups.push(active);
-      active = undefined;
-      continue;
-    }
-    if (!active || active.sign !== sign) {
-      if (active) groups.push(active);
-      active = { start: index, end: index, sign };
-    } else {
-      active.end = index;
-    }
-  }
-  if (active) groups.push(active);
-
-  const corners = groups
-    .map((group, index): TrackSection => ({
-      id: `corner-${index + 1}`,
-      name: `Corner ${index + 1}`,
-      kind: group.sign > 0 ? "corner-right" : "corner-left",
-      startDistanceMeters: distances[Math.max(0, group.start - 1)],
-      endDistanceMeters: distances[Math.min(distances.length - 1, group.end + 1)],
-    }))
-    .filter((section) => section.endDistanceMeters - section.startDistanceMeters >= 15);
-
-  const result: TrackSection[] = [];
-  let cursor = 0;
-  for (const corner of corners) {
-    if (corner.startDistanceMeters - cursor >= 30) {
-      result.push({
-        id: `straight-${result.length + 1}`,
-        name: `Straight ${result.filter((section) => section.kind === "straight").length + 1}`,
-        kind: "straight",
-        startDistanceMeters: cursor,
-        endDistanceMeters: corner.startDistanceMeters,
-      });
-    }
-    result.push(corner);
-    cursor = corner.endDistanceMeters;
-  }
-  if (totalDistance - cursor >= 30) {
-    result.push({
-      id: `straight-${result.length + 1}`,
-      name: `Straight ${result.filter((section) => section.kind === "straight").length + 1}`,
-      kind: "straight",
-      startDistanceMeters: cursor,
-      endDistanceMeters: totalDistance,
-    });
-  }
-  return result;
+  return generateAutomaticSections(coordinates.map((coordinate, index) => ({
+    distanceMeters: distances[index],
+    elapsedSeconds: 0,
+    speedKmh: 0,
+    longitude: coordinate[0],
+    latitude: coordinate[1],
+    sourceIndex: index,
+  })));
 }
 
 export function analyzeCorners(
@@ -428,9 +370,4 @@ function appendCoordinate(coordinates: Position[], coordinate: Position): void {
 function signedHeadingDelta(from: number, to: number): number {
   const normalized = normalizeDegrees(to - from);
   return normalized > 180 ? normalized - 360 : normalized;
-}
-
-function averageWindow(values: number[], center: number, radius: number): number {
-  const selected = values.slice(Math.max(0, center - radius), Math.min(values.length, center + radius + 1));
-  return selected.reduce((sum, value) => sum + value, 0) / Math.max(1, selected.length);
 }
