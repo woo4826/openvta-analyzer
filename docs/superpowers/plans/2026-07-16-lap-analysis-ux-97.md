@@ -514,14 +514,34 @@ Aside QA, then repeat Step 2.
   clears stale export feedback and lap-layer overrides using stable
   `activeFile.id` identity.
 
-- [ ] **Step 4: Merge and deploy only after the score gate passes**
+- [x] **Step 4: Merge and deploy only after the score gate passes**
 
 Fast-forward the completed feature branch to `main`, push `origin/main`, monitor
 CI and Deploy Pages to success, then load the production URL with the supplied
 VTA and repeat the critical smoke tests.
 
-- [ ] **Step 5: Record final evidence**
+- [x] **Step 5: Record final evidence**
 
 Record final reviewer scores, verification command results, production commit,
 workflow run URLs, and Aside measurements in this plan. Commit and push the
 evidence update, then verify the final Pages run.
+
+### Production evidence — 2026-07-16
+
+- Production application commit: `415d94701a3d0b4bbf49a90c91cb6cd25eaec6d2`.
+- GitHub Actions [CI run 29444492289](https://github.com/woo4826/openvta-analyzer/actions/runs/29444492289):
+  **success**, including typecheck, lint, unit tests, build, and browser tests.
+- GitHub Actions [Deploy Pages run 29444492279](https://github.com/woo4826/openvta-analyzer/actions/runs/29444492279):
+  **success** for both build and deploy jobs.
+- Aside opened the cache-busted [production analyzer](https://woo4826.github.io/openvta-analyzer/?lapux=415d947)
+  and loaded `VTA24082025_101142_CC00.Vta`: **1,589 GPS points** and
+  **158,289 sensor rows** parsed; Inje Speedium matched automatically.
+- Production whole-lap proof: track definition and comparable coverage
+  **0–3915 m**, Lap 7 versus Lap 4 **+8.191 s**.
+- Production Corner 6 proof: comparable coverage **1703–2043 m**, pairwise
+  delta **-2.686 s focused ahead**, synchronized sensor clock **825 samples**.
+- Production Setup proof: **30** low-GPS reliability labels and **0** numeric G
+  values across the two GPS-derived G columns.
+- Production lifecycle proof: opening Analysis controls set the document shift
+  state and one dialog; moving to Charts removed the dialog, scrim, and document
+  class immediately.
