@@ -50,7 +50,10 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   if ((page.viewportSize()?.width ?? 0) <= 680) {
     await analysisMain.getByRole("button", { name: "Graphs", exact: true }).click();
     await expect.poll(async () => analysisMain.locator(".segment-graphs-stack canvas").evaluateAll((canvases) =>
-      canvases.length === 2 && canvases.every((canvas) => canvas.width > 0 && canvas.height > 0)
+      canvases.length === 2 && canvases.every((canvas) => {
+        const surface = canvas as HTMLCanvasElement;
+        return surface.width > 0 && surface.height > 0;
+      })
     )).toBe(true);
   }
   await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
