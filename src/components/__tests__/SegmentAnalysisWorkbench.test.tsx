@@ -116,7 +116,7 @@ describe("SegmentAnalysisWorkbench", () => {
   it("announces the exact exported analysis filename", async () => {
     const user = userEvent.setup();
     const fixture = data();
-    render(<I18nProvider><SegmentAnalysisWorkbench
+    const view = render(<I18nProvider><SegmentAnalysisWorkbench
       sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
@@ -127,6 +127,33 @@ describe("SegmentAnalysisWorkbench", () => {
 
     expect(downloadText).toHaveBeenCalledWith("session.segment-analysis.csv", expect.any(String), "text/csv");
     expect(screen.getByText("Exported session.segment-analysis.csv", { selector: ".segment-export-status" })).toHaveAttribute("role", "status");
+
+    view.rerender(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="next-session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
+      analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
+      mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
+      onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()} onActiveSegment={vi.fn()} onSaveRange={vi.fn()} onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+    expect(document.querySelector(".segment-export-status")).toBeEmptyDOMElement();
+  });
+
+  it("reports analysis-line length and the actual incomplete pair overlap", () => {
+    const fixture = data();
+    fixture.profile.centerline = { type: "LineString", coordinates: [[0, 0], [0.002, 0]] };
+    fixture.laps[1] = {
+      ...fixture.laps[1],
+      completion: "partial-end",
+      flags: ["in-lap"],
+      end: { ...fixture.laps[1].end, source: "session-end" },
+    };
+    render(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
+      analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
+      mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
+      onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()} onActiveSegment={vi.fn()} onSaveRange={vi.fn()} onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+
+    expect(screen.getByText(/Track definition: 222 m · Comparable coverage: 0–111 m · incomplete/)).toBeVisible();
   });
 
   it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {

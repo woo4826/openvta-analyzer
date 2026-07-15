@@ -3,6 +3,7 @@ import { Download, Flag, MapPinned, Scissors, Upload } from "lucide-react";
 import type { LapWorkspace } from "../app/useLapWorkspace";
 import { analyzeCorners } from "../domain/lapAnalysis";
 import { downloadText } from "../domain/export";
+import { gpsEvidenceConfidence } from "../domain/gpsEvidence";
 import {
   cornerResultsCsv,
   lapAnalysisJson,
@@ -80,6 +81,14 @@ export function LapAnalysis({
     () => primaryLap && workspace.profile ? analyzeCorners(points, primaryLap, workspace.profile.sections) : [],
     [points, primaryLap, workspace.profile],
   );
+  const primaryGpsConfidence = useMemo(
+    () => primaryLap ? gpsEvidenceConfidence(points.slice(primaryLap.startIndex, primaryLap.endIndex + 1)) : "unknown",
+    [points, primaryLap],
+  );
+  const primaryGpsMetricsReliable = Boolean(primaryLap
+    && !primaryLap.flags.includes("gps-gap")
+    && primaryGpsConfidence !== "low"
+    && primaryGpsConfidence !== "unknown");
   const completeLapCount = laps.filter((lap) => lap.completion === "complete").length;
   const insightsReady = Boolean(workspace.analysisLine && workspace.profile?.sections.length && laps.length);
   const bestSectorSeconds = useMemo(() => {
@@ -440,7 +449,7 @@ export function LapAnalysis({
         {corners.length ? (
           <div className="table-wrap">
             <table><thead><tr><th>{t("lap.section")}</th><th>{t("lap.duration")}</th><th>{t("lap.entrySpeed")}</th><th>{t("lap.minimumSpeed")}</th><th>{t("lap.exitSpeed")}</th><th>{t("lap.maxLateralG")}</th><th>{t("lap.maxDecelerationG")}</th></tr></thead>
-              <tbody>{corners.map((corner) => <tr key={corner.sectionId}><td>{corner.name}</td><td>{formatLapTime(corner.durationSeconds)}</td><td>{corner.entrySpeedKmh.toFixed(1)} km/h</td><td>{corner.minimumSpeedKmh.toFixed(1)} km/h</td><td>{corner.exitSpeedKmh.toFixed(1)} km/h</td><td>{corner.maxLateralG === undefined ? "—" : `${corner.maxLateralG.toFixed(2)} g`}</td><td>{corner.maxDecelerationG === undefined ? "—" : `${corner.maxDecelerationG.toFixed(2)} g`}</td></tr>)}</tbody>
+              <tbody>{corners.map((corner) => <tr key={corner.sectionId}><td>{corner.name}</td><td>{formatLapTime(corner.durationSeconds)}</td><td>{corner.entrySpeedKmh.toFixed(1)} km/h</td><td>{corner.minimumSpeedKmh.toFixed(1)} km/h</td><td>{corner.exitSpeedKmh.toFixed(1)} km/h</td><td>{formatGpsDerivedG(corner.maxLateralG, primaryGpsMetricsReliable, t)}</td><td>{formatGpsDerivedG(corner.maxDecelerationG, primaryGpsMetricsReliable, t)}</td></tr>)}</tbody>
             </table>
           </div>
         ) : <div className="empty-state">{t("lap.noCornerMetrics")}</div>}
@@ -459,6 +468,11 @@ export function LapAnalysis({
       ) : null}
     </section>
   );
+}
+
+function formatGpsDerivedG(value: number | undefined, reliable: boolean, t: Translate): string {
+  if (!reliable) return t("lap.workbench.unreliableGpsMetric");
+  return value === undefined ? "—" : `${value.toFixed(2)} g`;
 }
 
 function SectorGateEditor({

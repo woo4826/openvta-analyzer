@@ -273,14 +273,39 @@ describe("LapAnalysis", () => {
     expect(screen.getByText(/0 of 1 completed partial-lap sectors.*not available/i)).toBeInTheDocument();
     expect(screen.queryByText(/0:42\.000/)).not.toBeInTheDocument();
   });
+
+  it("qualifies GPS-derived corner G metrics when the primary lap GPS is unreliable", async () => {
+    const user = userEvent.setup();
+    const workspace = emptyWorkspace();
+    const primary = {
+      ...lapWithFlags(),
+      flags: ["gps-gap" as const],
+      endIndex: 2,
+      end: { ...lapWithFlags().end, pointIndex: 2, elapsedSeconds: 2, coordinate: [128.002, 38.002] as [number, number] },
+      durationSeconds: 2,
+    };
+    workspace.gate = gate();
+    workspace.profile = {
+      ...trackProfile(),
+      sections: [{ id: "corner-1", name: "Corner 1", kind: "corner-right", startDistanceMeters: 0, endDistanceMeters: 400 }],
+    };
+    workspace.detection = { gate: workspace.gate, boundaries: [], laps: [primary], warnings: [] };
+    workspace.primaryLapId = primary.id;
+    renderLapAnalysis(workspace, [gps(0), gps(1), gps(2)]);
+
+    await user.click(screen.getByRole("tab", { name: "Setup" }));
+
+    expect(screen.getAllByText("Unreliable · low GPS confidence")).toHaveLength(2);
+    expect(screen.queryByText(/0\.00 g/)).not.toBeInTheDocument();
+  });
 });
 
-function renderLapAnalysis(workspace: LapWorkspace) {
+function renderLapAnalysis(workspace: LapWorkspace, points = [gps(0), gps(1)]) {
   return render(
     <I18nProvider>
       <LapAnalysis
         fileName="session.Vta"
-        points={[gps(0), gps(1)]}
+        points={points}
         sensors={[]}
         selectedPointIndex={0}
         onSelectedPointIndex={vi.fn()}

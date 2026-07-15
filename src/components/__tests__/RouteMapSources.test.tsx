@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -159,6 +159,27 @@ describe("RouteMap source updates", () => {
     await userEvent.setup().click(view.getByRole("button", { name: "Fit route" }));
     const manuallyFitted = map.fitBounds.mock.calls.at(-1)?.[0] as { coordinates: number[][] };
     expect(manuallyFitted.coordinates).toEqual(scopePoints.map((point) => [point.longitude, point.latitude]));
+  });
+
+  it("does not let the delayed initial fit restore stale scope points", async () => {
+    vi.useFakeTimers();
+    try {
+      const initialFitPoints = points.slice(0, 2);
+      const nextFitPoints = points.slice(1);
+      const view = render(wrappedRoute(0, false, { fitPoints: initialFitPoints, followSelectedPoint: false }));
+      await act(async () => Promise.resolve());
+      const map = mapMock.MapDouble.instances[0];
+
+      view.rerender(wrappedRoute(0, false, { fitPoints: nextFitPoints, followSelectedPoint: false }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350);
+      });
+
+      const fitted = map.fitBounds.mock.calls.at(-1)?.[0] as { coordinates: number[][] };
+      expect(fitted.coordinates).toEqual(nextFitPoints.map((point) => [point.longitude, point.latitude]));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("publishes section overlays to the MapLibre source", async () => {

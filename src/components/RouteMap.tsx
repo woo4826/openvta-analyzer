@@ -112,6 +112,8 @@ export function RouteMap({
   const onSectionSelectRef = useRef(onSectionSelect);
   onSectionSelectRef.current = onSectionSelect;
   const routeFitPoints = fitPoints?.length ? fitPoints : interactionPoints?.length ? interactionPoints : points;
+  const routeFitPointsRef = useRef(routeFitPoints);
+  routeFitPointsRef.current = routeFitPoints;
   const bounds = useMemo(() => coordinateBounds(routeFitPoints), [routeFitPoints]);
   const segmentPoints = useMemo(() => selectedSegmentPoints(points, segment), [points, segment]);
   const routePolyline = useMemo(
@@ -314,23 +316,23 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) return;
     fitRoute();
     // Fit only when the active analysis scope changes; cursor movement is handled above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeFitPoints, styleLoaded]);
 
   function fitRoute() {
-    if (!mapRef.current || !routeFitPoints.length) {
+    const currentFitPoints = routeFitPointsRef.current;
+    if (!mapRef.current || !currentFitPoints.length) {
       return;
     }
-    if (routeFitPoints.length === 1) {
+    if (currentFitPoints.length === 1) {
       mapRef.current.easeTo({
-        center: [routeFitPoints[0].longitude, routeFitPoints[0].latitude],
+        center: [currentFitPoints[0].longitude, currentFitPoints[0].latitude],
         zoom: Math.max(mapRef.current.getZoom(), 16),
         duration: 250,
       });
       return;
     }
     const routeBounds = new maplibregl.LngLatBounds();
-    routeFitPoints.forEach((point) => routeBounds.extend([point.longitude, point.latitude]));
+    currentFitPoints.forEach((point) => routeBounds.extend([point.longitude, point.latitude]));
     mapRef.current.fitBounds(routeBounds, { padding: 70, maxZoom: 16, duration: 250 });
   }
 

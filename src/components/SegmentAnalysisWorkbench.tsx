@@ -3,7 +3,7 @@ import type { LineString } from "geojson";
 import { ChevronLeft, ChevronRight, Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
-import { projectCoordinateToLineProgress } from "../domain/geometry";
+import { projectCoordinateToLineProgress, routeDistanceMeters } from "../domain/geometry";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
 import { buildSegmentPairwiseEvidence } from "../domain/segmentPairwiseEvidence";
 import { synchronizeAccelerationToTrajectory } from "../domain/sensorSynchronization";
@@ -105,10 +105,14 @@ export function SegmentAnalysisWorkbench({
   );
   const recordingLayerKey = `${sourceName}|${points.length}|${points[0]?.lineNumber ?? ""}|${points.at(-1)?.lineNumber ?? ""}`;
   const recordingLayerKeyRef = useRef(recordingLayerKey);
-  const totalDistanceMeters = useMemo(() => Math.max(
-    1,
-    ...profile.sections.flatMap((section) => [section.startDistanceMeters, section.endDistanceMeters]),
-  ), [profile.sections]);
+  const totalDistanceMeters = useMemo(
+    () => Math.max(1, routeDistanceMeters(analysisLine.coordinates)),
+    [analysisLine],
+  );
+  const comparableCoverage = useMemo(
+    () => comparableCoverageRange(focused, reference, workbench.analysis.range, analysisLine),
+    [analysisLine, focused, reference, workbench.analysis.range],
+  );
   const selectMapSegment = useCallback((segment?: ActiveSegment) => {
     if (!segment) {
       workbench.resetScope();
@@ -205,6 +209,7 @@ export function SegmentAnalysisWorkbench({
     if (recordingLayerKeyRef.current === recordingLayerKey) return;
     recordingLayerKeyRef.current = recordingLayerKey;
     setLapLayerOverrides({});
+    setExportStatus("");
   }, [recordingLayerKey]);
 
   useEffect(() => {
@@ -322,7 +327,9 @@ export function SegmentAnalysisWorkbench({
         <div className="comparison-scope">
           <small>{t("lap.workbench.selectedScope")}</small>
           <strong>{scopeName}</strong>
-          <span>{t("lap.workbench.trackDefinition")}: {Math.round(totalDistanceMeters)} m · {t("lap.workbench.comparableCoverage")}: {Math.round(workbench.analysis.range.startDistanceMeters)}–{Math.round(workbench.analysis.range.endDistanceMeters)} m</span>
+          <span>{t("lap.workbench.trackDefinition")}: {Math.round(totalDistanceMeters)} m · {t("lap.workbench.comparableCoverage")}: {comparableCoverage
+            ? `${Math.round(comparableCoverage.startDistanceMeters)}–${Math.round(comparableCoverage.endDistanceMeters)} m${comparableCoverage.incomplete ? ` · ${t("lap.workbench.comparableCoverageIncomplete")}` : ""}`
+            : t("lap.workbench.noCoverage")}</span>
         </div>
         <div className="comparison-delta" aria-label={t("lap.workbench.pairwiseDelta")}>
           <small>{t("lap.workbench.pairwiseDelta")}</small>
@@ -498,6 +505,36 @@ function nearestSourceSample(
       ? sample
       : nearest,
   undefined);
+}
+
+function comparableCoverageRange(
+  focused: SegmentLapRecord | undefined,
+  reference: SegmentLapRecord | undefined,
+  requested: { startDistanceMeters: number; endDistanceMeters: number },
+  analysisLine: LineString,
+): { startDistanceMeters: number; endDistanceMeters: number; incomplete: boolean } | undefined {
+  const records = [focused, reference].filter((record): record is SegmentLapRecord => Boolean(record?.trajectory.length));
+  if (!records.length) return undefined;
+  const starts = records.map((record) => {
+    if (record.coverage === "complete") return requested.startDistanceMeters;
+    const first = record.trajectory[0];
+    return projectCoordinateToLineProgress([first.longitude, first.latitude], analysisLine).distanceMeters;
+  });
+  const spans = records.map((record) => {
+    const first = record.trajectory[0];
+    const last = record.trajectory.at(-1)!;
+    return Math.max(0, last.distanceMeters - first.distanceMeters);
+  });
+  const startDistanceMeters = Math.max(requested.startDistanceMeters, ...starts);
+  const endDistanceMeters = Math.min(requested.endDistanceMeters, startDistanceMeters + Math.min(...spans));
+  if (endDistanceMeters <= startDistanceMeters) return undefined;
+  return {
+    startDistanceMeters,
+    endDistanceMeters,
+    incomplete: records.some((record) => record.coverage !== "complete")
+      || startDistanceMeters > requested.startDistanceMeters + 2
+      || endDistanceMeters < requested.endDistanceMeters - 2,
+  };
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
