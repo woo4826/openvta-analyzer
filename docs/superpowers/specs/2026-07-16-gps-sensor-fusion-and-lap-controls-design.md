@@ -176,3 +176,25 @@ into the repository:
 - a 500–1,000 m custom range enables Clear, and telemetry Reset returns to
   Whole lap and disables Clear again;
 - no browser console or page errors occurred during those interactions.
+
+## Deployment result
+
+The implementation was deployed to
+`https://woo4826.github.io/openvta-analyzer/` from commit `7fb3113`. GitHub CI
+run `29433066406` passed its unit, type, lint, build, and 16 browser-test gates;
+Pages run `29433066502` completed successfully.
+
+The first CI pass exposed one additional scope-role edge case: a session with a
+single complete reference lap and non-covering partial records could force an
+empty partial record into the focused role merely to keep IDs different. The
+final model therefore defines a usable lap per active scope as a record with at
+least two trajectory samples. Roles stay distinct only when two such records
+exist, and the focused-lap selector omits records without trajectory evidence in
+the current scope. This preserves partial-lap analysis without manufacturing an
+empty comparison or hiding synchronized IMU samples.
+
+The final deployed Aside smoke test used the supplied local VTA and confirmed
+the same 1,589/158,289 source counts, Inje Speedium match, focused Lap 7 versus
+reference Lap 4, `sensor-clock` status with 9,922 samples, nine presentation
+rows under All visibility, and exactly two comparison-map legend entries. No
+browser console or page errors were recorded.

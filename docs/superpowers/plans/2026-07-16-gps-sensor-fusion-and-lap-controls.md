@@ -105,8 +105,24 @@ Library, Aside, Vite, GitHub Pages.
 - [x] Perform a main-thread requirement-by-requirement review, per the user's
       instruction not to use subagents.
 - [x] Address all confirmed correctness or regression findings.
-- [ ] Re-run the completion verification suite.
-- [ ] Commit the implementation intentionally and push `main`.
-- [ ] Confirm the GitHub Pages workflow succeeds.
-- [ ] Smoke-test the deployed URL through Aside using the supplied VTA.
-- [ ] Update this plan and the design/handoff documentation with final evidence.
+- [x] Re-run the completion verification suite.
+- [x] Commit the implementation intentionally and push `main`.
+- [x] Confirm the GitHub Pages workflow succeeds.
+- [x] Smoke-test the deployed URL through Aside using the supplied VTA.
+- [x] Update this plan and the design/handoff documentation with final evidence.
+
+## Final verification and deployment evidence
+
+- Local verification after the final scope-eligibility fix: 54 Vitest files and
+  286 tests passed; TypeScript, ESLint, and the production Vite build passed.
+- GitHub CI run `29433066406` passed, including all 16 browser tests.
+- GitHub Pages run `29433066502` deployed commit `7fb3113` successfully.
+- The deployed URL loaded the supplied VTA as 1,589 GPS fixes and 158,289
+  sensor rows, matched Inje Speedium, selected focused Lap 7/reference Lap 4,
+  and reported `sensor-clock` synchronization with 9,922 samples.
+- With presentation visibility set to All, the lap table showed nine
+  lap/partial records while the comparison-map legend remained exactly two
+  entries. Restoring focused/reference visibility returned the table to two
+  rows.
+- No browser console or page errors were observed during the deployed smoke
+  test.
