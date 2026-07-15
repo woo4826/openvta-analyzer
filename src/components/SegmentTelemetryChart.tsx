@@ -1,11 +1,12 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useId, useMemo } from "react";
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import type {
   SegmentAnalysisResult,
   SegmentTrajectorySample,
   SynchronizedAccelerationSeries,
 } from "../domain/types";
-import { ChartPanel } from "./ChartPanel";
+import { ChartPanel, type CursorKeyAction } from "./ChartPanel";
+import { SegmentTelemetryTrackInset } from "./SegmentTelemetryTrackInset";
 import { buildSegmentTelemetryOption } from "./segmentTelemetryOptions";
 import { useI18n } from "../i18n/useI18n";
 
@@ -31,6 +32,7 @@ export function SegmentTelemetryChart({
   onCursor,
 }: SegmentTelemetryChartProps) {
   const { t } = useI18n();
+  const interpretationId = useId();
   const scopeLength = analysis.range.endDistanceMeters - analysis.range.startDistanceMeters;
   const cursorDistanceMeters = controlledCursorDistanceMeters ?? Math.max(0, scopeLength / 2);
   const option = useMemo(() => buildSegmentTelemetryOption(
@@ -83,6 +85,25 @@ export function SegmentTelemetryChart({
   }, [selectPoint]);
   const focusedSample = nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters);
   const referenceSample = nearestDistanceSample(reference?.trajectory ?? [], cursorDistanceMeters);
+  const selectCursorKey = useCallback((action: CursorKeyAction) => {
+    const trajectory = focused?.trajectory ?? [];
+    if (!trajectory.length) return;
+    const current = nearestDistanceSample(trajectory, cursorDistanceMeters) ?? trajectory[0];
+    const currentIndex = Math.max(0, trajectory.indexOf(current));
+    const pageStep = Math.max(1, Math.floor(trajectory.length / 20));
+    const nextIndex = action === "start"
+      ? 0
+      : action === "end"
+        ? trajectory.length - 1
+        : Math.max(0, Math.min(trajectory.length - 1, currentIndex + (
+            action === "previous" ? -1
+              : action === "next" ? 1
+                : action === "page-previous" ? -pageStep
+                  : pageStep
+          )));
+    const next = trajectory[nextIndex];
+    onCursor(next.distanceMeters, next.sourceIndex);
+  }, [cursorDistanceMeters, focused?.trajectory, onCursor]);
 
   return (
     <ChartPanel
@@ -91,15 +112,25 @@ export function SegmentTelemetryChart({
       className="segment-telemetry-panel"
       option={option}
       cursorX={cursorX}
+      describedBy={interpretationId}
+      onCursorKey={selectCursorKey}
       onPoint={selectPoint}
       onHoverDomain={selectDomain}
       caption={(
-        <dl className="segment-telemetry-readout" aria-live="polite">
-          <div><dt>{t("lap.workbench.cursorDistance")}</dt><dd>{Math.round(cursorDistanceMeters)} m</dd></div>
-          <div><dt>{t("lap.workbench.focusedLap")}</dt><dd>{formatSample(focusedSample)}</dd></div>
-          <div><dt>{t("lap.workbench.referenceLap")}</dt><dd>{formatSample(referenceSample)}</dd></div>
-          <div><dt>{t("lap.workbench.imuSync")}</dt><dd>{synchronizationLabel(synchronizedAcceleration, t)}</dd></div>
-        </dl>
+        <div className="segment-telemetry-context" id={interpretationId}>
+          <SegmentTelemetryTrackInset focused={focused} reference={reference} cursorDistanceMeters={cursorDistanceMeters} />
+          <div className="segment-telemetry-explanation">
+            <p><strong>{t("lap.workbench.chartDelta")}</strong> · {t("lap.workbench.deltaInterpretation")}</p>
+            <p><strong>{t("lap.workbench.chartImuAcceleration")}</strong> · {t("lap.workbench.deviceAxesInterpretation")}</p>
+            <p className="segment-keyboard-help">{t("lap.workbench.keyboardCursorHelp")}</p>
+            <dl className="segment-telemetry-readout" aria-live="polite">
+              <div><dt>{t("lap.workbench.cursorDistance")}</dt><dd>{Math.round(cursorDistanceMeters)} m</dd></div>
+              <div><dt>{t("lap.workbench.focusedLap")}</dt><dd>{formatSample(focusedSample)}</dd></div>
+              <div><dt>{t("lap.workbench.referenceLap")}</dt><dd>{formatSample(referenceSample)}</dd></div>
+              <div><dt>{t("lap.workbench.imuSync")}</dt><dd>{synchronizationLabel(synchronizedAcceleration, t)}</dd></div>
+            </dl>
+          </div>
+        </div>
       )}
     />
   );

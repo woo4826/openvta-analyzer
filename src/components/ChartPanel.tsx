@@ -14,13 +14,17 @@ export interface ChartPanelProps {
   interactionMode?: "range" | "zoom";
   cursorX?: number;
   resetToken?: number;
+  describedBy?: string;
+  onCursorKey?: (action: CursorKeyAction) => void;
   onPoint?: (index: number, domainValue?: number) => void;
   onHoverDomain?: (domainValue: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
   onBrushRange?: (start: number, end: number) => void;
 }
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, onPoint, onHoverDomain, onBrushSegment, onBrushRange }: ChartPanelProps) {
+export type CursorKeyAction = "previous" | "next" | "page-previous" | "page-next" | "start" | "end";
+
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, describedBy, onCursorKey, onPoint, onHoverDomain, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const cursorLineRef = useRef<echarts.graphic.Line | null>(null);
@@ -173,11 +177,37 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         {actions ? <div className="row-actions">{actions}</div> : null}
       </div>
       <div className="panel-body">
-        <div className="chart" ref={ref} role="img" aria-label={ariaLabel ?? `${title} chart`} />
+        <div
+          className="chart"
+          ref={ref}
+          role="img"
+          aria-label={ariaLabel ?? `${title} chart`}
+          aria-describedby={describedBy}
+          aria-keyshortcuts={onCursorKey ? "ArrowLeft ArrowRight PageUp PageDown Home End" : undefined}
+          tabIndex={onCursorKey ? 0 : undefined}
+          onKeyDown={onCursorKey ? (event) => {
+            const action = cursorAction(event.key);
+            if (!action) return;
+            event.preventDefault();
+            onCursorKey(action);
+          } : undefined}
+        />
         {caption}
       </div>
     </section>
   );
+}
+
+function cursorAction(key: string): CursorKeyAction | undefined {
+  const actions: Record<string, CursorKeyAction> = {
+    ArrowLeft: "previous",
+    ArrowRight: "next",
+    PageUp: "page-previous",
+    PageDown: "page-next",
+    Home: "start",
+    End: "end",
+  };
+  return actions[key];
 }
 
 function renderCursor(

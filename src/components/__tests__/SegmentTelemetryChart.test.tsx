@@ -9,16 +9,19 @@ import { buildSegmentTelemetryOption, downsampleAcceleration, MAX_RENDERED_IMU_S
 const chartPanelSpy = vi.hoisted(() => ({
   onPointReferences: [] as Array<((index: number, domainValue?: number) => void) | undefined>,
   onHoverReferences: [] as Array<((domainValue: number) => void) | undefined>,
+  onCursorKeyReferences: [] as Array<((action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void) | undefined>,
 }));
 vi.mock("../ChartPanel", () => ({
-  ChartPanel: ({ title, option, cursorX, onPoint, onHoverDomain, actions, caption }: { title: string; option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; actions?: unknown; caption?: unknown }) => {
+  ChartPanel: ({ title, option, cursorX, onPoint, onHoverDomain, onCursorKey, describedBy, actions, caption }: { title: string; option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; onCursorKey?: (action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void; describedBy?: string; actions?: unknown; caption?: unknown }) => {
     chartPanelSpy.onPointReferences.push(onPoint);
     chartPanelSpy.onHoverReferences.push(onHoverDomain);
-    return <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX}>
+    chartPanelSpy.onCursorKeyReferences.push(onCursorKey);
+    return <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX} aria-describedby={describedBy}>
         {actions as ReactNode}
         {caption as ReactNode}
         <button type="button" onClick={() => onPoint?.(21, 2)}>Emit point</button>
         <button type="button" onClick={() => onHoverDomain?.(2)}>Emit hover</button>
+        <button type="button" onClick={() => onCursorKey?.("next")}>Next keyboard sample</button>
       </div>;
   },
 }));
@@ -85,11 +88,14 @@ describe("segment telemetry chart", () => {
     expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-cursor-x", "2");
     expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-title", "Lap telemetry");
     expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
+    expect(screen.getByText(/Focused − Reference/)).toBeVisible();
+    expect(screen.getByText(/raw focused-lap device axes/)).toBeVisible();
+    expect(screen.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Select range" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Zoom" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Detailed channels" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
-    expect(screen.getByText(/Focused/)).toBeInTheDocument();
+    expect(screen.getByText("Focused lap", { selector: "dt" })).toBeInTheDocument();
 
     const beforeHover = chartPanelSpy.onHoverReferences.at(-1);
     fireEvent.click(screen.getByRole("button", { name: "Emit hover" }));
@@ -97,6 +103,8 @@ describe("segment telemetry chart", () => {
     expect(onCursor).toHaveBeenCalledWith(50, 21);
     fireEvent.click(screen.getByRole("button", { name: "Emit point" }));
     expect(onCursor).toHaveBeenCalledWith(50, 21);
+    fireEvent.click(screen.getByRole("button", { name: "Next keyboard sample" }));
+    expect(onCursor).toHaveBeenCalledWith(100, 22);
   });
 
   it("keeps the reference calculation but removes its plotted series in focused-only mode", () => {

@@ -1,4 +1,5 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { EChartsOption } from "echarts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -102,5 +103,21 @@ describe("ChartPanel controlled reset", () => {
 
     expect(chartDouble.convertFromPixel).not.toHaveBeenCalled();
     expect(onHoverDomain).not.toHaveBeenCalled();
+  });
+
+  it("supports keyboard cursor traversal without hiding the chart semantics", async () => {
+    const user = userEvent.setup();
+    const onCursorKey = vi.fn();
+    render(<ChartPanel title="Telemetry" ariaLabel="Synchronized telemetry" option={{}} describedBy="chart-help" onCursorKey={onCursorKey} />);
+
+    const chart = screen.getByRole("img", { name: "Synchronized telemetry" });
+    expect(chart).toHaveAttribute("tabindex", "0");
+    expect(chart).toHaveAttribute("aria-describedby", "chart-help");
+    await user.click(chart);
+    await user.keyboard("{ArrowRight}{PageDown}{End}{ArrowLeft}{PageUp}{Home}");
+
+    expect(onCursorKey.mock.calls.map(([action]) => action)).toEqual([
+      "next", "page-next", "end", "previous", "page-previous", "start",
+    ]);
   });
 });
