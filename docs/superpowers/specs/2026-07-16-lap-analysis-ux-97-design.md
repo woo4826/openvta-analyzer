@@ -203,4 +203,3 @@ Three independent reviewers repeat the fixed 100-point rubric:
 If the lowest score is below 97 or any reviewer reports a Critical or Major
 issue, the main thread performs another evidence-driven fix and re-evaluation
 round. Deployment occurs only after the gate passes.
-
