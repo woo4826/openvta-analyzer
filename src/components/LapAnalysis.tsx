@@ -173,6 +173,8 @@ export function LapAnalysis({
     workspace.updateStartFinish(gateWidthDraft, gateBearingDraft);
   }
 
+  if (!active && !insightsReady) return null;
+
   return (
     <section className="lap-analysis-grid">
       <div className="lap-analysis-viewbar lap-wide-panel">
@@ -276,7 +278,7 @@ export function LapAnalysis({
         )}
       </div>
 
-      {activeView === "setup" ? (
+      {active && activeView === "setup" ? (
         <>
           <Panel title={t("lap.title")} eyebrow={t("lap.subtitle")} className="lap-wide-panel">
             <div className="lap-setup-summary">

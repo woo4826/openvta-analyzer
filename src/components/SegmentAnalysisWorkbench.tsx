@@ -95,6 +95,7 @@ export function SegmentAnalysisWorkbench({
   const [showRangeEditor, setShowRangeEditor] = useState(false);
   const [rangeName, setRangeName] = useState("");
   const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
+  const [exportStatus, setExportStatus] = useState("");
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
   const reference = workbench.analysis.records.find((record) => record.lapId === workbench.referenceLapId);
   const pairwiseEvidence = useMemo(() => buildSegmentPairwiseEvidence(focused, reference), [focused, reference]);
@@ -159,6 +160,21 @@ export function SegmentAnalysisWorkbench({
     const nextSection = workbench.navigationSections[nextIndex];
     if (nextSection) workbench.selectSection(nextSection.id);
   };
+  const exportCsv = () => {
+    const fileName = `${safeBaseName(sourceName)}.segment-analysis.csv`;
+    downloadText(fileName, segmentAnalysisCsv(workbench.analysis), "text/csv");
+    setExportStatus(t("lap.workbench.exportComplete", { file: fileName }));
+  };
+  const exportJson = () => {
+    const fileName = `${safeBaseName(sourceName)}.segment-analysis.json`;
+    downloadText(fileName, segmentAnalysisJson({
+      sourceName,
+      track: { id: profile.id, name: profile.name },
+      includePartialLapSections,
+      analysis: workbench.analysis,
+    }), "application/json");
+    setExportStatus(t("lap.workbench.exportComplete", { file: fileName }));
+  };
 
   const updatePreferences = useCallback((update: (current: SegmentWorkbenchPreferences) => SegmentWorkbenchPreferences) => {
     setPreferences((current) => update(current));
@@ -171,8 +187,9 @@ export function SegmentAnalysisWorkbench({
   }, [updatePreferences]);
 
   useEffect(() => {
+    if (!active) return;
     onActiveSegment(workbench.activeSegment);
-  }, [onActiveSegment, workbench.activeSegment]);
+  }, [active, onActiveSegment, workbench.activeSegment]);
 
   useEffect(() => {
     saveSegmentWorkbenchPreferences(preferences);
@@ -185,6 +202,7 @@ export function SegmentAnalysisWorkbench({
   }, [recordingLayerKey]);
 
   useEffect(() => {
+    if (!active) return;
     const telemetrySelection = telemetrySelectionRef.current;
     if (telemetrySelection?.sourceIndex === selectedPointIndex) {
       telemetrySelectionRef.current = undefined;
@@ -196,7 +214,7 @@ export function SegmentAnalysisWorkbench({
     if (!next) return;
     setCursorDistanceMeters(next.distanceMeters);
     if (!selected) onSelectedPointIndex(next.sourceIndex);
-  }, [focused?.trajectory, onSelectedPointIndex, selectedPointIndex]);
+  }, [active, focused?.trajectory, onSelectedPointIndex, selectedPointIndex]);
 
   const selectMapPoint = useCallback((sourceIndex: number) => {
     telemetrySelectionRef.current = undefined;
@@ -226,25 +244,21 @@ export function SegmentAnalysisWorkbench({
           <button
             type="button"
             className="button"
-            onClick={() => downloadText(`${safeBaseName(sourceName)}.segment-analysis.csv`, segmentAnalysisCsv(workbench.analysis), "text/csv")}
+            onClick={exportCsv}
           >
             <Download size={16} aria-hidden />{t("lap.workbench.exportCsv")}
           </button>
           <button
             type="button"
             className="button"
-            onClick={() => downloadText(`${safeBaseName(sourceName)}.segment-analysis.json`, segmentAnalysisJson({
-              sourceName,
-              track: { id: profile.id, name: profile.name },
-              includePartialLapSections,
-              analysis: workbench.analysis,
-            }), "application/json")}
+            onClick={exportJson}
           >
             <Download size={16} aria-hidden />{t("lap.workbench.exportJson")}
           </button>
           <button type="button" className="button" onClick={onOpenSetup}><Settings2 size={16} aria-hidden />{t("lap.workbench.setup")}</button>
         </div>
       </header>
+      <p className="segment-export-status" role="status" aria-live="polite">{exportStatus}</p>
 
       {workbench.scope.kind === "range" && showRangeEditor ? (
         <form

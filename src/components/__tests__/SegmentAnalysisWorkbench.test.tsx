@@ -5,6 +5,12 @@ import type { GpsPoint, LapResult, SensorPoint, TrackProfileV1 } from "../../dom
 import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPreferences";
 import { I18nProvider } from "../../i18n/I18nProvider";
 
+const downloadText = vi.hoisted(() => vi.fn());
+vi.mock("../../domain/export", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../domain/export")>(),
+  downloadText,
+}));
+
 vi.mock("../SegmentTrajectoryMap", () => ({
   SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, cursorDistanceMeters, segment, onSelectedIndex, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; cursorDistanceMeters?: number; segment?: { startIndex: number; endIndex: number; source: "map" }; onSelectedIndex: (index: number) => void; onSegmentChange: (segment?: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
     <div data-testid="map-state">roles={focusedLapId},{referenceLapId}:cursor={cursorDistanceMeters}:segment={segment ? `${segment.startIndex}-${segment.endIndex}` : "none"}<button type="button" onClick={() => onSelectedIndex(4)}>Select map point</button><button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
@@ -24,10 +30,15 @@ vi.mock("../SegmentVariationChart", () => ({
 import { SegmentAnalysisWorkbench } from "../SegmentAnalysisWorkbench";
 
 describe("SegmentAnalysisWorkbench", () => {
-  beforeEach(() => localStorage.removeItem(SEGMENT_WORKBENCH_STORAGE_KEY));
+  beforeEach(() => {
+    localStorage.removeItem(SEGMENT_WORKBENCH_STORAGE_KEY);
+    downloadText.mockReset();
+  });
 
   it("releases map and chart resources while the preserved workbench is inactive", () => {
     const fixture = data();
+    const onSelectedPointIndex = vi.fn();
+    const onActiveSegment = vi.fn();
     render(<I18nProvider><SegmentAnalysisWorkbench
       active={false}
       sourceName="session.Vta"
@@ -40,9 +51,9 @@ describe("SegmentAnalysisWorkbench", () => {
       onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
       selectedPointIndex={0}
-      onSelectedPointIndex={vi.fn()}
+      onSelectedPointIndex={onSelectedPointIndex}
       onMapSettingsChange={vi.fn()}
-      onActiveSegment={vi.fn()}
+      onActiveSegment={onActiveSegment}
       onSaveRange={vi.fn()}
       onOpenSetup={vi.fn()}
     /></I18nProvider>);
@@ -52,6 +63,8 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.getByRole("button", { name: "Analysis controls" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Focused lap" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: "Reference lap" })).toBeVisible();
+    expect(onSelectedPointIndex).not.toHaveBeenCalled();
+    expect(onActiveSegment).not.toHaveBeenCalled();
   });
 
   it("contains advanced-control focus and restores its persistent trigger", async () => {
@@ -73,6 +86,22 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.queryByRole("dialog", { name: "Analysis controls" })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
     expect(document.documentElement).not.toHaveClass("lap-analysis-controls-open");
+  });
+
+  it("announces the exact exported analysis filename", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    render(<I18nProvider><SegmentAnalysisWorkbench
+      sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
+      analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
+      mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
+      onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()} onActiveSegment={vi.fn()} onSaveRange={vi.fn()} onOpenSetup={vi.fn()}
+    /></I18nProvider>);
+
+    await user.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    expect(downloadText).toHaveBeenCalledWith("session.segment-analysis.csv", expect.any(String), "text/csv");
+    expect(screen.getByText("Exported session.segment-analysis.csv", { selector: ".segment-export-status" })).toHaveAttribute("role", "status");
   });
 
   it("synchronizes scope and focused lap across ribbon, map, graph, and lap table", async () => {

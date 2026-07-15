@@ -55,7 +55,13 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
 
   const layerTrigger = analysisMain.getByRole("button", { name: "Lap layers" });
   await layerTrigger.click();
-  const layerDialog = analysisMain.getByRole("dialog", { name: "Lap layers" });
+  let layerDialog = analysisMain.getByRole("dialog", { name: "Lap layers" });
+  await expect(layerDialog.getByRole("button", { name: "Close lap layers" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(layerDialog).toHaveCount(0);
+  await expect(layerTrigger).toBeFocused();
+  await layerTrigger.click();
+  layerDialog = analysisMain.getByRole("dialog", { name: "Lap layers" });
   const layerVisibility = layerDialog.getByRole("checkbox", { name: /Lap \d+ visible/ });
   expect(await layerVisibility.count()).toBeGreaterThan(1);
   await layerDialog.getByRole("button", { name: "Show all" }).click();
@@ -63,6 +69,28 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await layerDialog.getByRole("button", { name: "Auto styles" }).click();
   await expect.poll(() => layerVisibility.evaluateAll((inputs) => inputs.filter((input) => (input as HTMLInputElement).checked).length)).toBeLessThanOrEqual(2);
   await layerDialog.getByRole("button", { name: "Close lap layers" }).click();
+
+  const focusedLapSelect = analysisMain.getByRole("combobox", { name: "Focused lap" });
+  const referenceLapSelect = analysisMain.getByRole("combobox", { name: "Reference lap" });
+  await expect(focusedLapSelect).toBeVisible();
+  await expect(referenceLapSelect).toBeVisible();
+  const corner = analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ });
+  await expect(corner).toBeVisible();
+  expect((await corner.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await corner.click();
+  await expect(corner).toHaveAttribute("aria-pressed", "true");
+  await expect(analysisMain.getByText(/Corner 1 · \d+–\d+ m/)).toBeVisible();
+  await expect(analysisMain.locator('.coordinate-layer[aria-label="Lap trajectory comparison"]')).toBeVisible();
+
+  if ((page.viewportSize()?.width ?? 0) <= 680) {
+    const layerBox = await layerTrigger.boundingBox();
+    const toolbarBox = await analysisMain.locator(".segment-trajectory-map .map-toolbar").boundingBox();
+    expect(layerBox).not.toBeNull();
+    expect(toolbarBox).not.toBeNull();
+    expect(layerBox!.y + layerBox!.height).toBeLessThanOrEqual(toolbarBox!.y);
+    const fitButtonBox = await analysisMain.getByRole("button", { name: "Fit route" }).boundingBox();
+    expect(fitButtonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
 
   const workbenchHeader = analysisMain.locator(".segment-workbench-header");
   const headerBeforeControls = await workbenchHeader.boundingBox();
@@ -82,13 +110,10 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
       await expect(analysisMain.locator(".segment-controls-scrim")).toBeVisible();
     }
   }
-  await expect(controls.getByRole("button", { name: "Whole lap" })).toHaveAttribute("aria-pressed", "true");
-  const corner = controls.getByRole("button", { name: /Corner 1, \d+–\d+ m/ });
-  await expect(corner).toBeVisible();
-  await corner.click();
-  await expect(corner).toHaveAttribute("aria-pressed", "true");
-  await expect(analysisMain.getByText(/Corner 1 · \d+–\d+ m/)).toBeVisible();
-  await controls.getByRole("button", { name: "Close analysis controls" }).click();
+  await expect(controls.getByRole("button", { name: "Close analysis controls" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(controls).toHaveCount(0);
+  await expect(analysisMain.getByRole("button", { name: "Analysis controls" })).toBeFocused();
 
   await expect.poll(async () => analysisMain.locator(".dashboard-widget-variation canvas, .dashboard-widget-telemetry canvas").evaluateAll((canvases) =>
     canvases.length === 2 && canvases.every((canvas) => {
@@ -98,6 +123,9 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   )).toBe(true);
   await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
+  await expect(analysisMain.getByText(/Focused − Reference; a negative value/)).toBeVisible();
+  await expect(analysisMain.getByText(/raw focused-lap device axes/)).toBeVisible();
   await expect(analysisMain.locator(".segment-telemetry-readout")).toContainText(/Timestamp · [1-9]\d* samples/);
   await analysisMain.locator(".dashboard-widget-telemetry").scrollIntoViewIfNeeded();
   await expect(analysisMain.getByRole("button", { name: "Detailed channels" })).toHaveCount(0);
@@ -108,6 +136,11 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const telemetryBox = await telemetryCanvas.boundingBox();
   expect(telemetryBox).not.toBeNull();
   const cursorDistance = analysisMain.locator(".segment-telemetry-readout > div").first().locator("dd");
+  const telemetryChart = analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" });
+  await telemetryChart.focus();
+  const keyboardCursorBefore = await cursorDistance.textContent();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => cursorDistance.textContent()).not.toBe(keyboardCursorBefore);
   await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.22, telemetryBox!.y + telemetryBox!.height * 0.16);
   const earlyCursor = await cursorDistance.textContent();
   await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.76, telemetryBox!.y + telemetryBox!.height * 0.16);
@@ -122,6 +155,12 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(controls.getByRole("checkbox", { name: "Time-loss ranking" })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.lapVisibility)).toBe("focus-only");
   await controls.getByRole("button", { name: "Close analysis controls" }).click();
+
+  const focusedLapBeforeRoundTrip = await focusedLapSelect.inputValue();
+  await analysisMain.getByRole("tab", { name: "Overview" }).click();
+  await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
+  await expect(analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(focusedLapSelect).toHaveValue(focusedLapBeforeRoundTrip);
 
   await expect(analysisMain.getByRole("region", { name: "Time-loss ranking" })).toHaveCount(0);
   const lapRecords = analysisMain.getByRole("region", { name: "Lap evidence table" });
@@ -145,6 +184,11 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     await page.mouse.up();
     await expect.poll(async () => (await savedMapLayout())?.h).not.toBe(mapBeforeResize?.h);
   }
+
+  const exportDownload = page.waitForEvent("download");
+  await analysisMain.getByRole("button", { name: "Export CSV" }).click();
+  expect((await exportDownload).suggestedFilename()).toBe("loop-session.segment-analysis.csv");
+  await expect(analysisMain.locator(".segment-export-status")).toHaveText("Exported loop-session.segment-analysis.csv");
 
   await analysisMain.getByRole("tab", { name: "Setup" }).click();
   await expect(analysisMain.getByRole("button", { name: "Export analysis sectors CSV" })).toBeVisible();
@@ -231,7 +275,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await pointTimeline.fill("0");
   await expect(metricValue(selectedPointPanel, "Index")).toHaveText("0");
   await page.getByRole("button", { name: "Set segment start" }).click();
-  await fallbackPoints.nth(10).click();
+  await page.getByTestId("route-hit-10").click();
   await expect(metricValue(selectedPointPanel, "Index")).toHaveText("10");
   await page.getByRole("button", { name: "Set segment end" }).click();
   const segmentPanel = panelByHeading(analysisMain, "Segment");
@@ -248,7 +292,7 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   await expect(metricValue(workspace, "Segment")).toHaveText(`All ${rawGpsCount + enhancedGpsCount} points`);
 
   await page.getByRole("button", { name: "Set segment start" }).click();
-  await fallbackPoints.nth(15).click();
+  await page.getByTestId("route-hit-15").click();
   await expect(metricValue(selectedPointPanel, "Index")).toHaveText("15");
   await page.getByRole("button", { name: "Set segment end" }).click();
   await expect(panelByHeading(analysisMain, "Segment").locator(".panel-header span")).toHaveText("10-15");

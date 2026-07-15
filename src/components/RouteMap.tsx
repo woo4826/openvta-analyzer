@@ -346,7 +346,10 @@ export function RouteMap({
     if (!points.length || !onSegmentChange) {
       return;
     }
-    const pointIndex = clampIndex(selectedPoint?.index ?? selectedIndex, points.length);
+    const pointIndex = clampIndex(
+      interactionPoints ? selectedPoint?.index ?? selectedIndex : selectedIndex,
+      points.length,
+    );
     const nextSegment = normalizeSegment(
       {
         startIndex: boundary === "startIndex" ? pointIndex : segment?.startIndex ?? pointIndex,
