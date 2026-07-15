@@ -266,7 +266,6 @@ export function LapAnalysis({
                 lapOverlays={overlays}
                 onSelectedIndex={onSelectedPointIndex}
                 onSegmentChange={onActiveSegment}
-                onRegionChange={() => undefined}
                 onSettingsChange={onMapSettingsChange}
               />
               <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
@@ -314,7 +313,7 @@ export function LapAnalysis({
           </Panel>
 
           <Panel title={t("lap.routeAndGate")} className="lap-map-panel lap-wide-panel">
-            <RouteMap points={points} selectedIndex={selectedPointIndex} sourceVisibility={sourceVisibility} settings={mapSettings} segment={activeSegment} trackCenterline={workspace.profile?.centerline} sectionCenterline={workspace.sectionCenterline} trackSections={workspace.profile?.sections} sectionVisuals={selectedSectionVisuals} gates={gates} lapOverlays={overlays} onSectionSelect={setSelectedSectionId} onSelectedIndex={onSelectedPointIndex} onSegmentChange={onActiveSegment} onRegionChange={() => undefined} onSettingsChange={onMapSettingsChange} />
+            <RouteMap points={points} selectedIndex={selectedPointIndex} sourceVisibility={sourceVisibility} settings={mapSettings} segment={activeSegment} trackCenterline={workspace.profile?.centerline} sectionCenterline={workspace.sectionCenterline} trackSections={workspace.profile?.sections} sectionVisuals={selectedSectionVisuals} gates={gates} lapOverlays={overlays} onSectionSelect={setSelectedSectionId} onSelectedIndex={onSelectedPointIndex} onSegmentChange={onActiveSegment} onSettingsChange={onMapSettingsChange} />
             <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
           </Panel>
 

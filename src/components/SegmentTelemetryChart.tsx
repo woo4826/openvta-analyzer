@@ -39,6 +39,7 @@ export function SegmentTelemetryChart({
   const keyboardRangeLimit = Math.max(0, Math.floor(scopeLength));
   const [interaction, setInteraction] = useState<"range" | "zoom">("range");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [resetToken, setResetToken] = useState(0);
   const [rangeDraft, setRangeDraft] = useState({ start: 0, end: keyboardRangeLimit });
   const visibleMetrics = useMemo(() => showAdvanced
     ? (["speed", "imu-acceleration", "acceleration", "elapsed", "delta", "loss"] as const)
@@ -103,6 +104,10 @@ export function SegmentTelemetryChart({
       onCursor(exactDistance ?? sample.distanceMeters, sample.sourceIndex);
     }
   }, [axis, focused?.trajectory, onCursor]);
+  const resetView = useCallback(() => {
+    onReset();
+    setResetToken((current) => current + 1);
+  }, [onReset]);
   const focusedSample = nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters);
   const referenceSample = nearestDistanceSample(reference?.trajectory ?? [], cursorDistanceMeters);
 
@@ -113,6 +118,7 @@ export function SegmentTelemetryChart({
       className={`segment-telemetry-panel ${showAdvanced ? "is-advanced" : "is-compact"}`}
       option={option}
       cursorX={cursorX}
+      resetToken={resetToken}
       interactionMode={interaction}
       onPoint={selectPoint}
       onBrushRange={interaction === "range" ? selectRange : undefined}
@@ -121,7 +127,7 @@ export function SegmentTelemetryChart({
           <button type="button" aria-pressed={interaction === "range"} onClick={() => setInteraction("range")}>{t("lap.workbench.selectRange")}</button>
           <button type="button" aria-pressed={interaction === "zoom"} onClick={() => setInteraction("zoom")}>{t("lap.workbench.zoom")}</button>
           <button type="button" aria-pressed={showAdvanced} onClick={() => setShowAdvanced((value) => !value)}>{t("lap.workbench.advancedChannels")}</button>
-          <button type="button" onClick={onReset}>{t("lap.workbench.reset")}</button>
+          <button type="button" onClick={resetView}>{t("lap.workbench.reset")}</button>
         </div>
       )}
       caption={(

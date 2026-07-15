@@ -51,8 +51,8 @@ export function SegmentTrajectoryMap({
   region,
   onSelectedIndex,
   onSectionSelect,
-  onSegmentChange = () => undefined,
-  onRegionChange = () => undefined,
+  onSegmentChange,
+  onRegionChange,
   onSettingsChange = () => undefined,
 }: SegmentTrajectoryMapProps) {
   const { t } = useI18n();

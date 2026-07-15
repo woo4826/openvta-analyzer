@@ -6,8 +6,8 @@ import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPref
 import { I18nProvider } from "../../i18n/I18nProvider";
 
 vi.mock("../SegmentTrajectoryMap", () => ({
-  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, cursorDistanceMeters, onSelectedIndex, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; cursorDistanceMeters?: number; onSelectedIndex: (index: number) => void; onSegmentChange: (segment: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
-    <div data-testid="map-state">roles={focusedLapId},{referenceLapId}:cursor={cursorDistanceMeters}<button type="button" onClick={() => onSelectedIndex(4)}>Select map point</button><button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
+  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, cursorDistanceMeters, segment, onSelectedIndex, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; cursorDistanceMeters?: number; segment?: { startIndex: number; endIndex: number; source: "map" }; onSelectedIndex: (index: number) => void; onSegmentChange: (segment?: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
+    <div data-testid="map-state">roles={focusedLapId},{referenceLapId}:cursor={cursorDistanceMeters}:segment={segment ? `${segment.startIndex}-${segment.endIndex}` : "none"}<button type="button" onClick={() => onSelectedIndex(4)}>Select map point</button><button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
@@ -73,6 +73,8 @@ describe("SegmentAnalysisWorkbench", () => {
       onSaveRange={vi.fn()}
       onOpenSetup={vi.fn()}
     /></I18nProvider>);
+
+    expect(screen.getByTestId("map-state")).toHaveTextContent("segment=none");
 
     await user.click(screen.getByRole("button", { name: "Analysis controls" }));
     expect(screen.getByRole("region", { name: "Segment Analysis Workbench" })).toHaveClass("is-controls-open");

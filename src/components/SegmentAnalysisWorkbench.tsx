@@ -336,7 +336,7 @@ export function SegmentAnalysisWorkbench({
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
                 cursorDistanceMeters={cursorDistanceMeters}
-                segment={workbench.activeSegment}
+                segment={workbench.scope.kind === "whole-lap" ? undefined : workbench.activeSegment}
                 onSelectedIndex={selectMapPoint}
                 onSectionSelect={workbench.selectSection}
                 onSegmentChange={selectMapSegment}

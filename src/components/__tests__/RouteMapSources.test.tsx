@@ -2,7 +2,7 @@ import { render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GpsPoint, MapSettings } from "../../domain/types";
+import type { ActiveSegment, GpsPoint, MapSettings } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { RouteMap } from "../RouteMap";
 
@@ -192,6 +192,33 @@ describe("RouteMap source updates", () => {
     expect(onSelectedIndex).toHaveBeenCalledWith(401);
   });
 
+  it("renders only supported map actions and enables clear only for an active segment", async () => {
+    const onSegmentChange = vi.fn();
+    const view = render(wrappedRoute(0, false, {
+      onSegmentChange,
+      onRegionChange: null,
+    }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+
+    expect(view.getByRole("button", { name: "Set segment start" })).toBeEnabled();
+    expect(view.getByRole("button", { name: "Clear segment" })).toBeDisabled();
+    expect(view.queryByRole("button", { name: "Create region" })).not.toBeInTheDocument();
+
+    view.rerender(wrappedRoute(0, false, {
+      segment: { startIndex: 0, endIndex: 1, source: "map" },
+      onSegmentChange,
+      onRegionChange: null,
+    }));
+    expect(view.getByRole("button", { name: "Clear segment" })).toBeEnabled();
+
+    view.rerender(wrappedRoute(0, false, {
+      onSegmentChange: null,
+      onRegionChange: null,
+    }));
+    expect(view.queryByRole("button", { name: "Set segment start" })).not.toBeInTheDocument();
+    expect(view.queryByRole("button", { name: "Clear segment" })).not.toBeInTheDocument();
+  });
+
   it("renders section overlays in the coordinate fallback", async () => {
     mapMock.MapDouble.shouldThrow = true;
     const view = render(wrappedRoute(0, true));
@@ -265,6 +292,9 @@ function wrappedRoute(
     showRouteLine?: boolean;
     interactionPoints?: GpsPoint[];
     onSelectedIndex?: (index: number) => void;
+    segment?: ActiveSegment;
+    onSegmentChange?: ((segment?: ActiveSegment) => void) | null;
+    onRegionChange?: (ComponentProps<typeof RouteMap>["onRegionChange"]) | null;
     lapOverlays?: ComponentProps<typeof RouteMap>["lapOverlays"];
     heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
     ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
@@ -277,6 +307,7 @@ function wrappedRoute(
         selectedIndex={selectedIndex}
         sourceVisibility={{ rawGps: true, enhancedGps: true }}
         settings={settings}
+        segment={options.segment}
         trackCenterline={includeSections ? { type: "LineString", coordinates: [[128, 38], [128.001, 38.001]] } : undefined}
         trackSections={includeSections ? [{
           id: "section-1",
@@ -295,8 +326,8 @@ function wrappedRoute(
         interactionPoints={options.interactionPoints}
         onSectionSelect={options.onSectionSelect}
         onSelectedIndex={options.onSelectedIndex ?? vi.fn()}
-        onSegmentChange={vi.fn()}
-        onRegionChange={vi.fn()}
+        onSegmentChange={options.onSegmentChange === null ? undefined : options.onSegmentChange ?? vi.fn()}
+        onRegionChange={options.onRegionChange === null ? undefined : options.onRegionChange ?? vi.fn()}
         onSettingsChange={vi.fn()}
       />
     </I18nProvider>

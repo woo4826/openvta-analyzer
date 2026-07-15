@@ -13,12 +13,13 @@ export interface ChartPanelProps {
   caption?: ReactNode;
   interactionMode?: "range" | "zoom";
   cursorX?: number;
+  resetToken?: number;
   onPoint?: (index: number, domainValue?: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
   onBrushRange?: (start: number, end: number) => void;
 }
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const cursorLineRef = useRef<echarts.graphic.Line | null>(null);
@@ -26,6 +27,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
   const hoverFrameRef = useRef<number | undefined>(undefined);
   const lastPointRef = useRef<{ index: number; domainValue?: number }>();
   const pendingHoverRef = useRef<{ index: number; domainValue?: number }>();
+  const previousResetTokenRef = useRef(resetToken);
   const mergedClass = className ? `panel ${className}` : "panel";
   cursorXRef.current = cursorX;
 
@@ -139,6 +141,26 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       renderCursor(chartRef.current, cursorLineRef, cursorX);
     }
   }, [cursorX]);
+
+  useEffect(() => {
+    if (resetToken === undefined || resetToken === previousResetTokenRef.current) return;
+    previousResetTokenRef.current = resetToken;
+    const chart = chartRef.current;
+    if (!chart) return;
+    const zoomCount = Array.isArray(option.dataZoom) ? option.dataZoom.length : option.dataZoom ? 1 : 0;
+    if (zoomCount > 0) {
+      chart.dispatchAction({
+        type: "dataZoom",
+        batch: Array.from({ length: zoomCount }, (_, dataZoomIndex) => ({
+          dataZoomIndex,
+          start: 0,
+          end: 100,
+        })),
+      });
+    }
+    chart.dispatchAction({ type: "brush", areas: [] });
+    renderCursor(chart, cursorLineRef, cursorXRef.current);
+  }, [option, resetToken]);
 
   useEffect(() => {
     return () => {

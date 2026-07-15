@@ -65,8 +65,8 @@ interface RouteMapProps {
   interactionPoints?: GpsPoint[];
   onSectionSelect?: (sectionId: string) => void;
   onSelectedIndex: (index: number) => void;
-  onSegmentChange: (segment?: ActiveSegment) => void;
-  onRegionChange: (region?: AxisAlignedRegion) => void;
+  onSegmentChange?: (segment?: ActiveSegment) => void;
+  onRegionChange?: (region?: AxisAlignedRegion) => void;
   onSettingsChange: (settings: MapSettings) => void;
 }
 
@@ -321,7 +321,7 @@ export function RouteMap({
   }
 
   function setSegmentBoundary(boundary: "startIndex" | "endIndex") {
-    if (!points.length) {
+    if (!points.length || !onSegmentChange) {
       return;
     }
     const pointIndex = clampIndex(selectedIndex, points.length);
@@ -337,7 +337,7 @@ export function RouteMap({
   }
 
   function createRegion() {
-    if (!bounds) {
+    if (!bounds || !onRegionChange) {
       return;
     }
     onRegionChange({
@@ -503,10 +503,10 @@ export function RouteMap({
         hasPoints={points.length > 0}
         hasSegment={Boolean(segment)}
         onFitRoute={fitRoute}
-        onSetSegmentStart={setSegmentStart}
-        onSetSegmentEnd={setSegmentEnd}
-        onClearSegment={() => onSegmentChange(undefined)}
-        onCreateRegion={createRegion}
+        onSetSegmentStart={onSegmentChange ? setSegmentStart : undefined}
+        onSetSegmentEnd={onSegmentChange ? setSegmentEnd : undefined}
+        onClearSegment={onSegmentChange ? () => onSegmentChange(undefined) : undefined}
+        onCreateRegion={onRegionChange ? createRegion : undefined}
         onSettingsChange={onSettingsChange}
       />
       <div className="map-attribution">© OpenStreetMap contributors</div>

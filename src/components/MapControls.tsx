@@ -8,10 +8,10 @@ interface MapControlsProps {
   hasPoints: boolean;
   hasSegment: boolean;
   onFitRoute: () => void;
-  onSetSegmentStart: () => void;
-  onSetSegmentEnd: () => void;
-  onClearSegment: () => void;
-  onCreateRegion: () => void;
+  onSetSegmentStart?: () => void;
+  onSetSegmentEnd?: () => void;
+  onClearSegment?: () => void;
+  onCreateRegion?: () => void;
   onSettingsChange: (settings: MapSettings) => void;
 }
 
@@ -45,30 +45,30 @@ export function MapControls({
           onClick={onFitRoute}
           disabled={!hasPoints}
         />
-        <IconButton
+        {onSetSegmentStart ? <IconButton
           label={t("map.setSegmentStart")}
           icon={<Flag size={15} aria-hidden />}
           onClick={onSetSegmentStart}
           disabled={!hasPoints}
-        />
-        <IconButton
+        /> : null}
+        {onSetSegmentEnd ? <IconButton
           label={t("map.setSegmentEnd")}
           icon={<FlagTriangleRight size={15} aria-hidden />}
           onClick={onSetSegmentEnd}
           disabled={!hasPoints}
-        />
-        <IconButton
+        /> : null}
+        {onClearSegment ? <IconButton
           label={t("map.clearSegment")}
           icon={<X size={15} aria-hidden />}
           onClick={onClearSegment}
           disabled={!hasSegment}
-        />
-        <IconButton
+        /> : null}
+        {onCreateRegion ? <IconButton
           label={t("map.createRegion")}
           icon={<SquareDashed size={15} aria-hidden />}
           onClick={onCreateRegion}
           disabled={!hasPoints}
-        />
+        /> : null}
       </div>
       <Field label={t("map.pointSize")} htmlFor="map-point-size" className="map-point-size">
         <input

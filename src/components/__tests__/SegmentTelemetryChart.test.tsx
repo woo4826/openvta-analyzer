@@ -8,9 +8,9 @@ import { buildSegmentTelemetryOption, downsampleAcceleration, MAX_RENDERED_IMU_S
 
 const chartPanelSpy = vi.hoisted(() => ({ onPointReferences: [] as Array<((index: number) => void) | undefined> }));
 vi.mock("../ChartPanel", () => ({
-  ChartPanel: ({ option, cursorX, onPoint, onBrushRange, actions, caption }: { option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onBrushRange?: (start: number, end: number) => void; actions?: unknown; caption?: unknown }) => {
+  ChartPanel: ({ option, cursorX, resetToken, onPoint, onBrushRange, actions, caption }: { option: EChartsOption; cursorX?: number; resetToken?: number; onPoint?: (index: number, domainValue?: number) => void; onBrushRange?: (start: number, end: number) => void; actions?: unknown; caption?: unknown }) => {
     chartPanelSpy.onPointReferences.push(onPoint);
-    return <div data-testid="segment-chart" data-option={JSON.stringify(option)} data-cursor-x={cursorX}>
+    return <div data-testid="segment-chart" data-option={JSON.stringify(option)} data-cursor-x={cursorX} data-reset-token={resetToken}>
         {actions as ReactNode}
         {caption as ReactNode}
         <button type="button" onClick={() => onPoint?.(21, 2)}>Emit point</button>
@@ -55,6 +55,7 @@ describe("segment telemetry chart", () => {
   it("switches to elapsed time on x and emits an ordered distance range", () => {
     const onRange = vi.fn();
     const onCursor = vi.fn();
+    const onReset = vi.fn();
     render(
       <I18nProvider>
         <SegmentTelemetryChart
@@ -66,7 +67,7 @@ describe("segment telemetry chart", () => {
           synchronizedAcceleration={acceleration("sensor-clock")}
           cursorDistanceMeters={50}
           onRange={onRange}
-          onReset={vi.fn()}
+          onReset={onReset}
           onCursor={onCursor}
         />
       </I18nProvider>,
@@ -83,6 +84,10 @@ describe("segment telemetry chart", () => {
     expect(speed.data[1][0]).toBe(2);
     expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-cursor-x", "2");
     expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
+    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-reset-token", "0");
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(onReset).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-reset-token", "1");
     fireEvent.click(screen.getByRole("button", { name: "Emit range" }));
     expect(onRange).toHaveBeenCalledWith(1100, 1100);
 
