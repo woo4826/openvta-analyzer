@@ -274,6 +274,28 @@ describe("useLapWorkspace", () => {
     });
     expect(mocks.saveTrackProfile).toHaveBeenCalledWith(expect.objectContaining({ id: "imported-layout" }));
   });
+
+  it("applies a library profile and clears gate-dependent overrides", async () => {
+    mocks.lookupOsmTracks.mockResolvedValue({ status: "no-match", candidates: [] });
+    const points = routePoints();
+    const { result } = renderHook(() => useLapWorkspace("file-1", "session.Vta", points));
+    act(() => result.current.useSelectedPointAsStartFinish(1));
+    await waitFor(() => expect(result.current.detection).toBeDefined());
+    act(() => result.current.addBoundary(3));
+    await waitFor(() => expect(result.current.detection?.boundaries.some((boundary) => boundary.source === "manual")).toBe(true));
+    const applied: TrackProfileV1 = {
+      ...osmCandidate().profile,
+      id: "library-inje",
+      source: { kind: "user" },
+      startFinish: createGateFromRoutePoint(points, 2),
+    };
+
+    act(() => result.current.applyProfile(applied));
+
+    await waitFor(() => expect(result.current.profile?.id).toBe("library-inje"));
+    expect(result.current.lookupState).toBe("imported");
+    expect(result.current.detection?.boundaries.some((boundary) => boundary.source === "manual")).toBe(false);
+  });
 });
 
 function osmCandidate(): OsmTrackCandidate {

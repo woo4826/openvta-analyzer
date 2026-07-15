@@ -1,0 +1,82 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { TrackProfileV1 } from "../../domain/types";
+
+const mocks = vi.hoisted(() => ({
+  importTexts: vi.fn(),
+  remove: vi.fn(),
+  refresh: vi.fn(),
+}));
+
+vi.mock("../../app/useTrackLibrary", () => ({
+  useTrackLibrary: () => ({
+    profiles: [profile("inje"), profile("taebaek")],
+    busy: false,
+    error: undefined,
+    importTexts: mocks.importTexts,
+    remove: mocks.remove,
+    refresh: mocks.refresh,
+  }),
+}));
+
+import { TrackLibrary } from "../TrackLibrary";
+
+describe("TrackLibrary", () => {
+  beforeEach(() => {
+    mocks.importTexts.mockReset().mockResolvedValue(undefined);
+    mocks.remove.mockReset().mockResolvedValue(undefined);
+    mocks.refresh.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("opens without a recording and keeps apply disabled", () => {
+    render(<TrackLibrary open onClose={vi.fn()} onApply={vi.fn()} />);
+
+    expect(screen.getByRole("dialog", { name: "Track Library" })).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Apply to current recording" }))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ disabled: true })]));
+  });
+
+  it("imports multiple JSON files and applies a selected profile", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    const { container } = render(
+      <TrackLibrary open activeFileName="session.Vta" onClose={vi.fn()} onApply={onApply} />,
+    );
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const files = [
+      new File(["one"], "inje.json", { type: "application/json" }),
+      new File(["two"], "catalog.json", { type: "application/json" }),
+    ];
+
+    fireEvent.change(input, { target: { files } });
+    await waitFor(() => expect(mocks.importTexts).toHaveBeenCalledWith(["one", "two"]));
+    await user.click(screen.getAllByRole("button", { name: "Apply to current recording" })[0]);
+
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ id: "inje" }));
+  });
+
+  it("closes on Escape", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<TrackLibrary open onClose={onClose} onApply={vi.fn()} />);
+
+    await user.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+function profile(id: string): TrackProfileV1 {
+  return {
+    schemaVersion: 1,
+    id,
+    name: id === "inje" ? "Inje Speedium" : "Taebaek Speedway",
+    centerline: { type: "LineString", coordinates: [[0, 0], [0.001, 0]] },
+    direction: "unknown",
+    sectorGates: [],
+    sections: [],
+    source: { kind: "user" },
+    updatedAt: "2026-07-15T00:00:00.000Z",
+  };
+}

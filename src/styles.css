@@ -1120,6 +1120,101 @@ tbody tr:hover {
   width: 100%;
 }
 
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+}
+
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(16, 24, 32, 0.58);
+}
+
+.track-library-dialog {
+  position: relative;
+  width: min(920px, 100%);
+  max-height: min(780px, calc(100vh - 2 * var(--space-5)));
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-6);
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: 0 22px 60px rgba(16, 24, 32, 0.32);
+}
+
+.track-library-header,
+.track-library-toolbar,
+.track-library-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.track-library-header {
+  align-items: flex-start;
+  margin-bottom: var(--space-5);
+}
+
+.track-library-header h2,
+.track-library-card h3 {
+  margin: 0;
+}
+
+.track-library-header p,
+.track-library-card p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.track-library-toolbar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.track-library-context {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.track-library-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.track-library-card {
+  align-items: flex-start;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-3);
+  padding: var(--space-4);
+  background: var(--color-surface-subtle);
+}
+
+.track-library-card-copy {
+  min-width: 180px;
+}
+
+.track-library-card small {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-text-subtle);
+}
+
+.button.danger {
+  color: var(--color-red);
+  border-color: color-mix(in srgb, var(--color-red) 45%, var(--color-border));
+}
+
 .tour-layer {
   position: fixed;
   inset: 0;

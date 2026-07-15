@@ -53,6 +53,7 @@ export interface LapWorkspace {
   referenceLapId?: string;
   includePartialLapSectors: boolean;
   importProfile: (text: string) => Promise<string | undefined>;
+  applyProfile: (profile: TrackProfileV1) => void;
   chooseCandidate: (profileId: string) => void;
   useSelectedPointAsStartFinish: (pointIndex: number) => void;
   updateStartFinish: (widthMeters: number, forwardBearingDegrees: number) => void;
@@ -243,6 +244,19 @@ export function useLapWorkspace(
       validityOverrides: [],
     }));
     return undefined;
+  }, [update]);
+
+  const applyProfile = useCallback((profile: TrackProfileV1) => {
+    update((workspace) => ({
+      ...workspace,
+      profile,
+      manualGate: undefined,
+      lookupState: "imported",
+      lookupMessage: undefined,
+      candidates: [],
+      boundaryOverrides: [],
+      validityOverrides: [],
+    }));
   }, [update]);
 
   const chooseCandidate = useCallback((profileId: string) => {
@@ -496,6 +510,7 @@ export function useLapWorkspace(
     referenceLapId: current.referenceLapId,
     includePartialLapSectors: settings.includePartialLapSectors,
     importProfile,
+    applyProfile,
     chooseCandidate,
     useSelectedPointAsStartFinish,
     updateStartFinish,

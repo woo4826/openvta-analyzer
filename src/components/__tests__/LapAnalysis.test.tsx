@@ -165,6 +165,7 @@ function emptyWorkspace(): LapWorkspace {
     selectedLapIds: [],
     includePartialLapSectors: false,
     importProfile: vi.fn().mockResolvedValue(undefined),
+    applyProfile: vi.fn(),
     chooseCandidate: vi.fn(),
     useSelectedPointAsStartFinish: vi.fn(),
     updateStartFinish: vi.fn(),
