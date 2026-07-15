@@ -319,6 +319,62 @@ export interface LapComparisonSample extends LapDistanceSample {
   deltaSeconds: number;
 }
 
+export type AnalysisScope =
+  | { kind: "whole-lap" }
+  | { kind: "section"; sectionId: string }
+  | {
+      kind: "range";
+      startDistanceMeters: number;
+      endDistanceMeters: number;
+      source: "map" | "chart" | "manual";
+    };
+
+export interface ScopeRange {
+  startDistanceMeters: number;
+  endDistanceMeters: number;
+}
+
+export interface SegmentTrajectorySample extends LapComparisonSample {
+  pathDistanceMeters: number;
+  signedOffsetMeters: number;
+  lossRateSecondsPer100m?: number;
+  accuracyMeters?: number;
+}
+
+export interface SegmentLapRecord {
+  lapId: string;
+  ordinal: number;
+  completion: LapCompletion;
+  validity: LapValidity;
+  flags: LapFlag[];
+  fromPartialLap: boolean;
+  coverage: "complete" | "partial" | "none";
+  eligibleForBest: boolean;
+  durationSeconds?: number;
+  deltaBestSeconds?: number;
+  drivenDistanceMeters?: number;
+  deltaShortestMeters?: number;
+  entrySpeedKmh?: number;
+  minimumSpeedKmh?: number;
+  averageSpeedKmh?: number;
+  maximumSpeedKmh?: number;
+  exitSpeedKmh?: number;
+  maxLateralG?: number;
+  maxDecelerationG?: number;
+  peakLossRateSecondsPer100m?: number;
+  gpsConfidence: "high" | "medium" | "low" | "unknown";
+  trajectory: SegmentTrajectorySample[];
+}
+
+export interface SegmentAnalysisResult {
+  scope: AnalysisScope;
+  range: ScopeRange;
+  referenceLapId?: string;
+  fastestLapId?: string;
+  shortestLapId?: string;
+  records: SegmentLapRecord[];
+}
+
 export interface LapSectionResult {
   id: string;
   lapId: string;
