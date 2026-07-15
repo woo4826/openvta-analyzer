@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrackProfileV1 } from "../../domain/types";
+import { I18nProvider } from "../../i18n/I18nProvider";
 
 const mocks = vi.hoisted(() => ({
   importTexts: vi.fn(),
@@ -30,7 +31,7 @@ describe("TrackLibrary", () => {
   });
 
   it("opens without a recording and keeps apply disabled", () => {
-    render(<TrackLibrary open onClose={vi.fn()} onApply={vi.fn()} />);
+    render(<I18nProvider><TrackLibrary open onClose={vi.fn()} onApply={vi.fn()} /></I18nProvider>);
 
     expect(screen.getByRole("dialog", { name: "Track Library" })).toBeVisible();
     expect(screen.getAllByRole("button", { name: "Apply to current recording" }))
@@ -41,7 +42,7 @@ describe("TrackLibrary", () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
     const { container } = render(
-      <TrackLibrary open activeFileName="session.Vta" onClose={vi.fn()} onApply={onApply} />,
+      <I18nProvider><TrackLibrary open activeFileName="session.Vta" onClose={vi.fn()} onApply={onApply} /></I18nProvider>,
     );
     const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const files = [
@@ -59,7 +60,7 @@ describe("TrackLibrary", () => {
   it("closes on Escape", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(<TrackLibrary open onClose={onClose} onApply={vi.fn()} />);
+    render(<I18nProvider><TrackLibrary open onClose={onClose} onApply={vi.fn()} /></I18nProvider>);
 
     await user.keyboard("{Escape}");
 

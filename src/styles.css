@@ -444,6 +444,18 @@ footer.privacy-note {
   min-width: 140px;
 }
 
+.lap-sector-matrix th:first-child,
+.lap-sector-matrix td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--color-surface-subtle);
+}
+
+.lap-sector-matrix thead th:first-child {
+  z-index: 3;
+}
+
 .lap-matrix-metric {
   display: grid;
   gap: 1px;
@@ -1366,6 +1378,48 @@ tbody tr:hover {
 
   .map-shell {
     min-height: 380px;
+  }
+}
+
+@media (max-width: 680px) {
+  .modal-layer {
+    align-items: end;
+    padding: var(--space-2);
+  }
+
+  .track-library-dialog {
+    max-height: calc(100vh - 2 * var(--space-2));
+    padding: var(--space-5);
+  }
+
+  .track-library-header,
+  .track-library-toolbar,
+  .track-library-card,
+  .track-library-card .row-actions,
+  .lap-explorer-controls {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .track-library-card .button,
+  .track-library-toolbar .button,
+  .lap-explorer-controls .button,
+  .lap-explorer-scope,
+  .lap-explorer-controls .segmented {
+    width: 100%;
+  }
+
+  .lap-explorer-controls .segmented button {
+    flex: 1 1 0;
+  }
+
+  .lap-explorer-reference {
+    align-self: stretch;
+  }
+
+  .lap-explorer-chart .chart {
+    height: 330px;
   }
 }
 

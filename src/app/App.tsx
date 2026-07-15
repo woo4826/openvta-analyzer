@@ -373,7 +373,7 @@ export function App() {
           </button>
           <button type="button" className="button ghost" onClick={() => setTrackLibraryOpen(true)}>
             <MapIcon size={16} aria-hidden />
-            Track Library
+            {t("trackLibrary.menu")}
           </button>
           <div className="settings-menu-wrap">
             <button

@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GpsPoint, LapResult, LapSectionResult, TrackSection } from "../../domain/types";
+import { I18nProvider } from "../../i18n/I18nProvider";
 
 const capturedOptions = vi.hoisted((): EChartsOption[] => []);
 
@@ -22,7 +23,7 @@ describe("LapExplorer", () => {
 
   it("navigates whole lap, corners, and straights and rebases graph distance", async () => {
     const user = userEvent.setup();
-    render(<LapExplorer {...props()} />);
+    render(<I18nProvider><LapExplorer {...props()} /></I18nProvider>);
 
     await user.selectOptions(screen.getByLabelText("Analysis scope"), "corner-1");
 
@@ -34,7 +35,7 @@ describe("LapExplorer", () => {
 
   it("opens a matrix row in the graph and shows every selected lap metric", async () => {
     const user = userEvent.setup();
-    render(<LapExplorer {...props()} />);
+    render(<I18nProvider><LapExplorer {...props()} /></I18nProvider>);
 
     await user.click(screen.getByRole("button", { name: "Analyze Corner 1" }));
 
@@ -44,7 +45,7 @@ describe("LapExplorer", () => {
   });
 
   it("offers inside and slider zoom plus chart restore", () => {
-    render(<LapExplorer {...props()} />);
+    render(<I18nProvider><LapExplorer {...props()} /></I18nProvider>);
 
     expect(latestChartOption().dataZoom).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: "inside" }),

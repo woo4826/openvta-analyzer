@@ -4,6 +4,8 @@ import type { LineString } from "geojson";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { scopedLapComparison } from "../domain/sectionAnalysis";
 import type { GpsPoint, LapResult, LapSectionResult, TrackSection } from "../domain/types";
+import type { Translate } from "../i18n/messages";
+import { useI18n } from "../i18n/useI18n";
 import { ChartPanel } from "./ChartPanel";
 import { Panel } from "./ui";
 
@@ -35,6 +37,7 @@ export function LapExplorer({
   sections,
   sectionResults,
 }: LapExplorerProps) {
+  const { t } = useI18n();
   const [scopeId, setScopeId] = useState(WHOLE_LAP);
   const [filter, setFilter] = useState<SectionFilter>("all");
 
@@ -54,7 +57,7 @@ export function LapExplorer({
   );
   const referenceLap = laps.find((lap) => lap.id === referenceLapId);
   const scopeSection = sections.find((section) => section.id === scopeId);
-  const scopeName = scopeSection?.name ?? "Whole lap";
+  const scopeName = scopeSection?.name ?? t("lap.explorer.wholeLap");
   const navigationSections = sections.filter((section) =>
     section.id === scopeId ||
     filter === "all" ||
@@ -64,9 +67,9 @@ export function LapExplorer({
   const scopeIndex = navigationIds.indexOf(scopeId);
   const chartOption = useMemo(
     () => analysisLine
-      ? buildChartOption(points, selectedLaps, referenceLap, analysisLine, scopeSection, primaryLapId)
+      ? buildChartOption(points, selectedLaps, referenceLap, analysisLine, scopeSection, primaryLapId, t)
       : emptyChartOption(),
-    [analysisLine, points, primaryLapId, referenceLap, scopeSection, selectedLaps],
+    [analysisLine, points, primaryLapId, referenceLap, scopeSection, selectedLaps, t],
   );
   const resultByLapAndSection = useMemo(
     () => new Map(sectionResults.map((result) => [`${result.lapId}:${result.sectionId}`, result])),
@@ -75,17 +78,17 @@ export function LapExplorer({
 
   if (!analysisLine) {
     return (
-      <Panel title="Lap Explorer" className="lap-wide-panel">
-        <div className="empty-state">Create a valid complete lap to build the distance-based explorer.</div>
+      <Panel title={t("lap.explorer.title")} className="lap-wide-panel">
+        <div className="empty-state">{t("lap.explorer.noLine")}</div>
       </Panel>
     );
   }
 
   return (
-    <section className="lap-explorer lap-wide-panel" aria-label="Lap Explorer">
-      <Panel title="Lap Explorer" eyebrow="Distance-based Speed and Delta-T">
+    <section className="lap-explorer lap-wide-panel" aria-label={t("lap.explorer.title")}>
+      <Panel title={t("lap.explorer.title")} eyebrow={t("lap.explorer.eyebrow")}>
         <div className="lap-explorer-controls">
-          <div className="segmented" role="group" aria-label="Section type filter">
+          <div className="segmented" role="group" aria-label={t("lap.explorer.filterAria")}>
             {(["all", "corners", "straights"] as const).map((value) => (
               <button
                 type="button"
@@ -94,23 +97,23 @@ export function LapExplorer({
                 aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
               >
-                {value === "all" ? "All" : value === "corners" ? "Corners" : "Straights"}
+                {value === "all" ? t("lap.explorer.all") : value === "corners" ? t("lap.explorer.corners") : t("lap.explorer.straights")}
               </button>
             ))}
           </div>
           <button
             type="button"
             className="button icon-button"
-            aria-label="Previous scope"
+            aria-label={t("lap.explorer.previous")}
             disabled={scopeIndex <= 0}
             onClick={() => setScopeId(navigationIds[scopeIndex - 1])}
           >
             <ChevronLeft size={16} aria-hidden />
           </button>
           <label className="field lap-explorer-scope">
-            <span>Analysis scope</span>
+            <span>{t("lap.explorer.scope")}</span>
             <select value={scopeId} onChange={(event) => setScopeId(event.target.value)}>
-              <option value={WHOLE_LAP}>Whole lap</option>
+              <option value={WHOLE_LAP}>{t("lap.explorer.wholeLap")}</option>
               {navigationSections.map((section) => (
                 <option value={section.id} key={section.id}>{section.name}</option>
               ))}
@@ -119,49 +122,49 @@ export function LapExplorer({
           <button
             type="button"
             className="button icon-button"
-            aria-label="Next scope"
+            aria-label={t("lap.explorer.next")}
             disabled={scopeIndex < 0 || scopeIndex >= navigationIds.length - 1}
             onClick={() => setScopeId(navigationIds[scopeIndex + 1])}
           >
             <ChevronRight size={16} aria-hidden />
           </button>
           <span className="lap-explorer-reference">
-            Reference: {referenceLap ? lapName(referenceLap) : "None"}
+            {t("lap.explorer.reference", { lap: referenceLap ? lapName(referenceLap, t) : t("lap.explorer.none") })}
           </span>
         </div>
       </Panel>
 
       <ChartPanel
-        title={`${scopeName} lap comparison`}
-        ariaLabel={`${scopeName} Speed and Delta-T by distance`}
+        title={t("lap.explorer.chartTitle", { scope: scopeName })}
+        ariaLabel={t("lap.explorer.chartAria", { scope: scopeName })}
         option={chartOption}
         className="lap-explorer-chart"
       />
 
-      <Panel title="Analysis sector matrix">
+      <Panel title={t("lap.explorer.matrixTitle")}>
         {sections.length && selectedLaps.length ? (
           <div className="table-wrap">
-            <table aria-label="Analysis sector by lap matrix" className="lap-sector-matrix">
+            <table aria-label={t("lap.explorer.matrixAria")} className="lap-sector-matrix">
               <thead>
                 <tr>
-                  <th>Scope</th>
-                  <th>Type</th>
-                  {selectedLaps.map((lap) => <th key={lap.id}>{lapName(lap)}</th>)}
-                  <th>Graph</th>
+                  <th>{t("lap.explorer.scopeColumn")}</th>
+                  <th>{t("lap.explorer.typeColumn")}</th>
+                  {selectedLaps.map((lap) => <th key={lap.id}>{lapName(lap, t)}</th>)}
+                  <th>{t("lap.explorer.graphColumn")}</th>
                 </tr>
               </thead>
               <tbody>
                 {sections.map((section) => (
                   <tr key={section.id} className={section.id === scopeId ? "lap-primary-row" : undefined}>
                     <th scope="row">{section.name}</th>
-                    <td>{sectionKind(section)}</td>
+                    <td>{sectionKind(section, t)}</td>
                     {selectedLaps.map((lap) => {
                       const result = resultByLapAndSection.get(`${lap.id}:${section.id}`);
                       return <td key={lap.id}>{result ? metricCell(result) : "—"}</td>;
                     })}
                     <td>
-                      <button type="button" className="button ghost" aria-label={`Analyze ${section.name}`} onClick={() => setScopeId(section.id)}>
-                        Analyze
+                      <button type="button" className="button ghost" aria-label={t("lap.explorer.analyzeAria", { scope: section.name })} onClick={() => setScopeId(section.id)}>
+                        {t("lap.explorer.analyze")}
                       </button>
                     </td>
                   </tr>
@@ -169,27 +172,27 @@ export function LapExplorer({
               </tbody>
             </table>
           </div>
-        ) : <div className="empty-state">Select laps and generate analysis sectors to compare them.</div>}
+        ) : <div className="empty-state">{t("lap.explorer.emptyMatrix")}</div>}
       </Panel>
 
-      <Panel title={`${scopeName} metrics`}>
+      <Panel title={t("lap.explorer.metricsTitle", { scope: scopeName })}>
         {scopeSection ? (
           <div className="table-wrap">
-            <table aria-label="Selected scope lap metrics">
+            <table aria-label={t("lap.explorer.metricsAria")}>
               <thead>
                 <tr>
-                  <th>Lap</th>
-                  <th>Duration</th>
-                  <th>Delta best</th>
-                  <th>Entry speed</th>
-                  <th>Minimum speed</th>
-                  <th>Average speed</th>
-                  <th>Maximum speed</th>
-                  <th>Exit speed</th>
-                  <th>Max lateral G</th>
-                  <th>Max deceleration G</th>
-                  <th>Partial lap</th>
-                  <th>Best eligible</th>
+                  <th>{t("lap.lap")}</th>
+                  <th>{t("lap.duration")}</th>
+                  <th>{t("lap.deltaBest")}</th>
+                  <th>{t("lap.entrySpeed")}</th>
+                  <th>{t("lap.minimumSpeed")}</th>
+                  <th>{t("lap.explorer.averageSpeed")}</th>
+                  <th>{t("lap.explorer.maximumSpeed")}</th>
+                  <th>{t("lap.exitSpeed")}</th>
+                  <th>{t("lap.maxLateralG")}</th>
+                  <th>{t("lap.maxDecelerationG")}</th>
+                  <th>{t("lap.explorer.partialLap")}</th>
+                  <th>{t("lap.bestEligible")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -197,7 +200,7 @@ export function LapExplorer({
                   const result = resultByLapAndSection.get(`${lap.id}:${scopeSection.id}`);
                   return (
                     <tr key={lap.id}>
-                      <th scope="row">{lapName(lap)}</th>
+                      <th scope="row">{lapName(lap, t)}</th>
                       <td>{result ? formatDuration(result.durationSeconds) : "—"}</td>
                       <td>{result?.deltaBestSeconds === undefined ? "—" : formatDelta(result.deltaBestSeconds)}</td>
                       <td>{formatSpeed(result?.entrySpeedKmh)}</td>
@@ -207,15 +210,15 @@ export function LapExplorer({
                       <td>{formatSpeed(result?.exitSpeedKmh)}</td>
                       <td>{formatG(result?.maxLateralG)}</td>
                       <td>{formatG(result?.maxDecelerationG)}</td>
-                      <td>{result ? yesNo(result.fromPartialLap) : "—"}</td>
-                      <td>{result ? yesNo(result.eligibleForBest) : "—"}</td>
+                      <td>{result ? yesNo(result.fromPartialLap, t) : "—"}</td>
+                      <td>{result ? yesNo(result.eligibleForBest, t) : "—"}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-        ) : <div className="empty-state">Choose an analysis sector to inspect its lap metrics.</div>}
+        ) : <div className="empty-state">{t("lap.explorer.chooseScope")}</div>}
       </Panel>
     </section>
   );
@@ -228,13 +231,14 @@ function buildChartOption(
   analysisLine: LineString,
   section: TrackSection | undefined,
   primaryLapId: string | undefined,
+  t: Translate,
 ): EChartsOption {
   const comparisons = laps.map((lap) => ({
     lap,
     samples: scopedLapComparison(points, lap, referenceLap, analysisLine, section, 5),
   }));
   const speedSeries = comparisons.map(({ lap, samples }, index) => ({
-    name: `${lapName(lap)} Speed`,
+    name: `${lapName(lap, t)} ${t("lap.chart.speed")}`,
     type: "line" as const,
     showSymbol: false,
     yAxisIndex: 0,
@@ -246,7 +250,7 @@ function buildChartOption(
   }));
   const deltaSeries = referenceLap
     ? comparisons.filter(({ lap }) => lap.id !== referenceLap.id).map(({ lap, samples }, index) => ({
-        name: `${lapName(lap)} Delta-T`,
+        name: `${lapName(lap, t)} ${t("lap.chart.delta")}`,
         type: "line" as const,
         showSymbol: false,
         yAxisIndex: 1,
@@ -260,10 +264,10 @@ function buildChartOption(
     legend: { type: "scroll", top: 0 },
     toolbox: { right: 8, feature: { restore: {} } },
     grid: { left: 60, right: 65, top: 48, bottom: 75 },
-    xAxis: { type: "value", name: "Distance (m)", nameLocation: "middle", nameGap: 30 },
+    xAxis: { type: "value", name: `${t("lap.distance")} (m)`, nameLocation: "middle", nameGap: 30 },
     yAxis: [
-      { type: "value", name: "Speed (km/h)" },
-      { type: "value", name: "Delta-T (s)", splitLine: { show: false } },
+      { type: "value", name: `${t("lap.chart.speed")} (km/h)` },
+      { type: "value", name: `${t("lap.chart.delta")} (s)`, splitLine: { show: false } },
     ],
     dataZoom: [
       { type: "inside", xAxisIndex: 0, filterMode: "none" },
@@ -281,17 +285,17 @@ function metricCell(result: LapSectionResult) {
   return <span className="lap-matrix-metric">{formatDuration(result.durationSeconds)} <small>{formatDelta(result.deltaBestSeconds ?? 0)}</small></span>;
 }
 
-function lapName(lap: LapResult): string {
-  if (lap.completion === "partial-start") return "Partial start";
-  if (lap.completion === "partial-end") return "Partial end";
-  if (lap.completion === "partial-both") return "Partial fragment";
-  return `Lap ${lap.ordinal}`;
+function lapName(lap: LapResult, t: Translate): string {
+  if (lap.completion === "partial-start") return t("lap.partialStart");
+  if (lap.completion === "partial-end") return t("lap.partialEnd");
+  if (lap.completion === "partial-both") return t("lap.partialBoth");
+  return `${t("lap.lap")} ${lap.ordinal}`;
 }
 
-function sectionKind(section: TrackSection): string {
-  if (section.kind === "corner-left") return "Left corner";
-  if (section.kind === "corner-right") return "Right corner";
-  return "Straight";
+function sectionKind(section: TrackSection, t: Translate): string {
+  if (section.kind === "corner-left") return t("lap.cornerLeft");
+  if (section.kind === "corner-right") return t("lap.cornerRight");
+  return t("lap.straight");
 }
 
 function formatDuration(seconds: number): string {
@@ -311,6 +315,6 @@ function formatG(value: number | undefined): string {
   return value === undefined ? "—" : `${value.toFixed(2)} g`;
 }
 
-function yesNo(value: boolean): string {
-  return value ? "Yes" : "No";
+function yesNo(value: boolean, t: Translate): string {
+  return value ? t("lap.yes") : t("lap.no");
 }

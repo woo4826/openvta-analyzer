@@ -18,7 +18,9 @@ For the current product plan, architecture, deployment workflow, and next-develo
 - CAL-file, session, static-window, or manual calibration offset estimation.
 - Named calibration presets with JSON import/export.
 - 2nd-order low-pass Butterworth filtering for acceleration channels.
-- Track-aware or mapless lap analysis with complete and partial laps, up to five comparison overlays, timing sectors, editable corner/straight sections, and manual corrections.
+- Track-aware or mapless lap analysis with complete and partial laps, up to five comparison overlays, timing sectors, automatic corner/straight analysis sectors, and manual corrections.
+- Lap Explorer graphs for distance-based Speed and Delta-T at whole-lap, corner, or straight scope, plus a section-by-lap metrics matrix.
+- A browser-local Track Library for single TrackProfile JSON and multi-track catalog import/export, application, and deletion.
 - Segment `.Vta`, transformed segment `.Vta`, GPS CSV, sensor CSV, validation CSV, and summary JSON export.
 - Multilingual UI with primary English and Korean translations plus secondary Japanese, Simplified Chinese, Spanish, French, and German translations.
 - Client-side trace processing: raw VTA rows and GPS traces are not uploaded by the app. Optional automatic track lookup sends an expanded recording bounding box to OpenStreetMap Overpass.
@@ -102,11 +104,11 @@ Lap Analysis works with a matched track profile, an imported profile, or no know
 2. Use the matched layout, choose among ambiguous candidates, or import an `.openvta-track.json` profile. If lookup is offline, fails, or finds no reliable match, select a route point and create a directional start/finish gate manually. The same manual workflow works without map tiles by using the coordinate fallback.
 3. Adjust the start/finish width and forward bearing. The detector keeps complete laps as well as opening, closing, and fully incomplete recording fragments instead of silently discarding them.
 4. Correct detection without changing the parsed VTA: split at the selected route point, remove a boundary to merge adjacent laps, and mark individual laps valid, invalid, or excluded.
-5. Select as many as five laps for simultaneous map and distance-based speed/Delta-T overlays. Choose separate primary and reference laps for metrics and comparisons.
-6. Add, move, reorder, resize, rename, or remove timing-sector gates, including in manual/trackless mode. Generate corner/straight proposals from the fastest valid complete lap, then edit each section's name, type, start distance, and end distance or remove it. Corner metrics use the primary lap and include GPS-derived lateral-G and deceleration-G estimates when enough samples exist.
-7. Export laps, sectors, and corners as separate CSV files or export the complete lap analysis as JSON. These downloads are generated locally and do not change the existing VTA, CSV, or summary export contracts.
+5. Select as many as five laps, then use **Lap Explorer** to switch between the whole lap and automatically derived corner/straight scopes. Speed and Delta-T share a distance axis; section distance and Delta-T are rebased to zero at the selected section start. Choose separate primary and reference laps for map emphasis and comparisons.
+6. Add, move, reorder, resize, rename, or remove directional timing-sector gates, including in manual/trackless mode. These timing sectors remain separate from analysis sectors: analysis sectors form a complete distance partition of left corners, right corners, and straights generated from the fastest valid complete lap. Automatic sectors can be edited without being overwritten unless replacement is explicitly confirmed.
+7. Review the section-by-lap matrix and detailed duration, best delta, entry/minimum/average/maximum/exit speed, lateral-G, and deceleration-G metrics. Export laps, timing sectors, corners, and analysis sectors as separate CSV files or export the complete lap analysis as JSON.
 
-Completed sectors inside incomplete laps remain visible. By default they do **not** count toward Best Sector or theoretical best. The Lap Analysis checkbox can include them, and that global preference is remembered locally under `openvta.lapAnalysisSettings.v1`.
+Only fully traversed sectors are reported for opening or closing fragments; a fragment with neither timing boundary is excluded from sector analysis. Completed sectors inside incomplete laps remain visible. By default they do **not** count toward Best Sector or either theoretical-best calculation. The Lap Analysis checkbox can include them for both timing and analysis sectors, and that global preference is remembered locally under `openvta.lapAnalysisSettings.v1`.
 
 ### TrackProfile JSON v1
 
@@ -114,16 +116,19 @@ Reusable track profiles are stable, versioned JSON documents. Version 1 contains
 
 - `schemaVersion: 1`, a stable `id`, circuit `name`, and optional `layoutName`;
 - a WGS84 GeoJSON `centerline` using `[longitude, latitude]` coordinates and a travel `direction`;
+- an optional WGS84 GeoJSON `analysisLine`, normally the resampled fastest valid complete lap, which provides a stable distance/progress axis without replacing the track identity centerline;
 - optional start/finish, timing-sector, pit-in, and pit-out gates, each represented by a finite GeoJSON line plus forward bearing and width;
-- editable distance-based `sections` for left corners, right corners, and straights, plus an optional pit-lane line;
+- editable distance-based `sections` for left corners, right corners, and straights, including optional `source` (`automatic` or `user`) and automatic-generation `confidence`, plus an optional pit-lane line;
 - `source` provenance for user, recording, or OSM profiles, including OSM element IDs, fetch time, attribution, and ODbL metadata when applicable; and
 - an `updatedAt` timestamp.
 
 Malformed profiles and unsupported schema versions are rejected without replacing the active profile. **Save / export track** saves the current profile locally and downloads `<recording>.openvta-track.json`; importing that JSON makes it reusable for later recordings.
 
+The header **Track Library** works before a VTA is loaded. It accepts either one TrackProfile v1 document or a catalog envelope with `schemaVersion: 1`, `kind: "openvta-track-catalog"`, and a `tracks` array. Every catalog entry and duplicate ID is validated before any profile is written, so a malformed catalog cannot partially update the library. Catalog and profile exports contain track definitions only, never VTA rows or recording samples.
+
 ### Track cache and automatic lookup
 
-Track profiles are cached in the browser's IndexedDB database `openvta-analyzer`, in the `track-profiles` object store. If IndexedDB is unavailable or blocked, an in-memory fallback keeps the profile usable for the current page session, and JSON import/export remains available. Cached profiles are scored against each new recording. A fresh OSM profile (less than 30 days old) avoids a network lookup; a stale match can remain visible while the app refreshes it.
+Track profiles are cached in the browser's IndexedDB database `openvta-analyzer`, in the `track-profiles` object store. Track Library catalog import uses one transaction. If IndexedDB is unavailable or blocked, an in-memory fallback keeps the complete validated batch usable for the current page session, and JSON import/export remains available. Cached profiles are scored against each new recording. A fresh OSM profile (less than 30 days old) avoids a network lookup; a stale match can remain visible while the app refreshes it.
 
 Automatic lookup posts a raceway query containing an expanded recording bounding box to a public OpenStreetMap Overpass endpoint, with one fallback endpoint and a 15-second timeout per attempt. It does not send raw VTA rows, individual GPS samples, sensor records, selected laps, or exports. Ambiguous, no-match, malformed-response, timeout, and offline results are non-fatal: users can choose a candidate where available, import a profile, or continue with the mapless manual gate workflow.
 

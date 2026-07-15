@@ -5,6 +5,7 @@ import { downloadText } from "../domain/export";
 import { exportTrackCatalog } from "../domain/trackCatalog";
 import { exportTrackProfile } from "../domain/trackProfile";
 import type { TrackProfileV1 } from "../domain/types";
+import { useI18n } from "../i18n/useI18n";
 import { FilePickerButton, IconButton } from "./ui";
 
 interface TrackLibraryProps {
@@ -15,6 +16,7 @@ interface TrackLibraryProps {
 }
 
 export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLibraryProps) {
+  const { t } = useI18n();
   const library = useTrackLibrary();
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -40,7 +42,7 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
 
   return (
     <div className="modal-layer">
-      <button className="modal-scrim" type="button" aria-label="Close Track Library" onClick={onClose} />
+      <button className="modal-scrim" type="button" aria-label={t("trackLibrary.closeAria")} onClick={onClose} />
       <div
         ref={dialogRef}
         className="track-library-dialog"
@@ -51,11 +53,11 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
       >
         <div className="track-library-header">
           <div>
-            <span className="panel-eyebrow">TrackProfile v1</span>
-            <h2 id="track-library-title">Track Library</h2>
-            <p>Store reusable track geometry, timing gates, and analysis sectors locally in this browser.</p>
+            <span className="panel-eyebrow">{t("trackLibrary.eyebrow")}</span>
+            <h2 id="track-library-title">{t("trackLibrary.title")}</h2>
+            <p>{t("trackLibrary.subtitle")}</p>
           </div>
-          <IconButton label="Close" icon={<X size={18} aria-hidden />} variant="ghost" onClick={onClose} />
+          <IconButton label={t("actions.close")} icon={<X size={18} aria-hidden />} variant="ghost" onClick={onClose} />
         </div>
 
         <div className="track-library-toolbar">
@@ -66,7 +68,7 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
             icon={<FileJson size={16} aria-hidden />}
             variant="primary"
           >
-            Import track JSON
+            {t("trackLibrary.import")}
           </FilePickerButton>
           <button
             type="button"
@@ -79,21 +81,21 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
             )}
           >
             <Download size={16} aria-hidden />
-            Export catalog
+            {t("trackLibrary.exportCatalog")}
           </button>
           <span className="track-library-context">
-            {activeFileName ? `Current recording: ${activeFileName}` : "Load a VTA to apply a track."}
+            {activeFileName ? t("trackLibrary.currentRecording", { name: activeFileName }) : t("trackLibrary.loadToApply")}
           </span>
         </div>
 
         {library.error ? <div className="notice error" role="alert">{library.error}</div> : null}
-        {library.busy ? <div className="notice">Updating local track library…</div> : null}
+        {library.busy ? <div className="notice">{t("trackLibrary.busy")}</div> : null}
 
         <div className="track-library-list">
           {!library.busy && !library.profiles.length ? (
             <div className="empty-state compact">
-              <strong>No saved tracks</strong>
-              <p>Import one TrackProfile JSON or an OpenVTA track catalog.</p>
+              <strong>{t("trackLibrary.empty")}</strong>
+              <p>{t("trackLibrary.emptyHelp")}</p>
             </div>
           ) : null}
           {library.profiles.map((profile) => (
@@ -102,7 +104,10 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
                 <h3>{profile.name}</h3>
                 <p>{profile.layoutName || profile.id}</p>
                 <small>
-                  {profile.sections.length} analysis sectors · {profile.sectorGates.length + (profile.startFinish ? 1 : 0)} timing gates
+                  {t("trackLibrary.summary", {
+                    sections: profile.sections.length,
+                    gates: profile.sectorGates.length + (profile.startFinish ? 1 : 0),
+                  })}
                 </small>
               </div>
               <div className="row-actions">
@@ -116,7 +121,7 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
                   }}
                 >
                   <Check size={16} aria-hidden />
-                  Apply to current recording
+                  {t("trackLibrary.apply")}
                 </button>
                 <button
                   type="button"
@@ -128,18 +133,18 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
                   )}
                 >
                   <Download size={16} aria-hidden />
-                  Export
+                  {t("trackLibrary.export")}
                 </button>
                 <button
                   type="button"
                   className="button danger"
                   disabled={library.busy}
                   onClick={() => {
-                    if (window.confirm(`Delete ${profile.name} from this browser?`)) void library.remove(profile.id);
+                    if (window.confirm(t("trackLibrary.confirmDelete", { name: profile.name }))) void library.remove(profile.id);
                   }}
                 >
                   <Trash2 size={16} aria-hidden />
-                  Delete
+                  {t("trackLibrary.delete")}
                 </button>
               </div>
             </article>

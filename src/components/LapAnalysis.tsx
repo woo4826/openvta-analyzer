@@ -208,8 +208,8 @@ export function LapAnalysis({
           <Metric label={t("lap.fastestLap")} value={fastest?.durationSeconds === undefined ? "—" : formatLapTime(fastest.durationSeconds)} />
           <Metric label={t("lap.theoreticalBest")} value={workspace.theoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.theoreticalBestSeconds)} />
           <Metric label={t("lap.sectorCount")} value={String(workspace.profile?.sectorGates.length ? workspace.profile.sectorGates.length + 1 : 0)} />
-          <Metric label="Automatic theoretical best" value={workspace.automaticTheoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.automaticTheoreticalBestSeconds)} />
-          <Metric label="Analysis sectors" value={String(workspace.profile?.sections.length ?? 0)} />
+          <Metric label={t("lap.automaticTheoreticalBest")} value={workspace.automaticTheoreticalBestSeconds === undefined ? "—" : formatLapTime(workspace.automaticTheoreticalBestSeconds)} />
+          <Metric label={t("lap.analysisSectorCount")} value={String(workspace.profile?.sections.length ?? 0)} />
         </div>
         {workspace.gate ? (
           <div className="form-grid lap-gate-form">
@@ -421,12 +421,12 @@ export function LapAnalysis({
             disabled={!workspace.canGenerateAutomaticSections}
             onClick={() => {
               const hasSections = Boolean(workspace.profile?.sections.length);
-              if (!hasSections || window.confirm("Replace all existing analysis sectors with automatic sectors?")) {
+              if (!hasSections || window.confirm(t("lap.confirmReplaceAutomatic"))) {
                 workspace.recalculateAutomaticSections(hasSections);
               }
             }}
           >
-            Recalculate automatic sectors
+            {t("lap.recalculateAutomatic")}
           </button>
         )}
         className="lap-wide-panel"
@@ -455,7 +455,7 @@ export function LapAnalysis({
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.laps.csv`, lapResultsCsv(laps), "text/csv")}>{t("lap.exportLaps")}</button>
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.sectors.csv`, sectorResultsCsv(workspace.sectors), "text/csv")}>{t("lap.exportSectors")}</button>
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.corners.csv`, cornerResultsCsv(corners), "text/csv")}>{t("lap.exportCorners")}</button>
-          <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.analysis-sectors.csv`, sectionResultsCsv(workspace.sectionResults), "text/csv")}>Export analysis sectors</button>
+          <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.analysis-sectors.csv`, sectionResultsCsv(workspace.sectionResults), "text/csv")}>{t("lap.exportAnalysisSectors")}</button>
           <button type="button" className="button primary" onClick={exportAllAnalysis}><Download size={16} aria-hidden />{t("lap.exportAnalysis")}</button>
         </div>
       </Panel>
