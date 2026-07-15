@@ -375,6 +375,18 @@ export interface SegmentAnalysisResult {
   records: SegmentLapRecord[];
 }
 
+export interface SectionOpportunity {
+  section: TrackSection;
+  focusedLapId: string;
+  referenceLapId: string;
+  timeDeltaSeconds: number;
+  pathDeltaMeters?: number;
+  minimumSpeedDeltaKmh?: number;
+  exitSpeedDeltaKmh?: number;
+  consistencyStdDevSeconds?: number;
+  eligibleSampleCount: number;
+}
+
 export interface LapSectionResult {
   id: string;
   lapId: string;
@@ -382,6 +394,7 @@ export interface LapSectionResult {
   name: string;
   kind: TrackSectionKind;
   durationSeconds: number;
+  drivenDistanceMeters?: number;
   deltaBestSeconds?: number;
   entrySpeedKmh: number;
   minimumSpeedKmh: number;

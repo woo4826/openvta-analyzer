@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { EChartsOption } from "echarts";
 import type { ReactNode } from "react";
 import type { SegmentAnalysisResult } from "../../domain/types";
+import { I18nProvider } from "../../i18n/I18nProvider";
 import { buildSegmentTelemetryOption } from "../segmentTelemetryOptions";
 
 vi.mock("../ChartPanel", () => ({
@@ -17,40 +18,47 @@ vi.mock("../ChartPanel", () => ({
 import { SegmentTelemetryChart } from "../SegmentTelemetryChart";
 
 describe("segment telemetry chart", () => {
-  it("builds four linked grids for speed, elapsed time, Delta-T, and loss rate", () => {
+  it("builds five linked grids for speed, GPS speed derivative, elapsed time, Delta-T, and loss rate", () => {
     const option = buildSegmentTelemetryOption(analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1") as {
       grid: unknown[];
-      series: Array<{ name: string; data: number[][] }>;
+      series: Array<{ id: string; name: string; data: number[][] }>;
+      legend: { data: string[] };
       dataZoom: Array<Record<string, unknown>>;
       axisPointer: { link: Array<Record<string, unknown>> };
     };
 
-    expect(option.grid).toHaveLength(4);
-    expect(option.series.map((series) => series.name)).toEqual(expect.arrayContaining([
-      "Lap 2 Speed", "Lap 2 Elapsed time", "Lap 2 Delta-T", "Lap 2 Loss rate",
+    expect(option.grid).toHaveLength(5);
+    expect(option.series.filter((series) => series.name === "Lap 2")).toHaveLength(5);
+    expect(option.series.map((series) => series.id)).toEqual(expect.arrayContaining([
+      "lap-2-speed", "lap-2-acceleration", "lap-2-elapsed", "lap-2-delta", "lap-2-loss",
     ]));
+    expect(option.legend.data).toEqual(["Lap 2", "Lap 1"]);
     expect(option.series.every((series) => series.data.every((point) => point.length === 3))).toBe(true);
     expect(option.dataZoom).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "inside", xAxisIndex: [0, 1, 2, 3] }),
+      expect.objectContaining({ type: "inside", xAxisIndex: [0, 1, 2, 3, 4] }),
     ]));
     expect(option.axisPointer).toEqual(expect.objectContaining({ link: [{ xAxisIndex: "all" }] }));
   });
 
   it("switches to elapsed time on x and emits an ordered distance range", () => {
     const onRange = vi.fn();
-    render(<SegmentTelemetryChart
-      analysis={analysis()}
-      overlayLapIds={["lap-1", "lap-2"]}
-      focusedLapId="lap-2"
-      referenceLapId="lap-1"
-      axis="time"
-      onRange={onRange}
-      onReset={vi.fn()}
-      onCursorDistance={vi.fn()}
-    />);
+    render(
+      <I18nProvider>
+        <SegmentTelemetryChart
+          analysis={analysis()}
+          overlayLapIds={["lap-1", "lap-2"]}
+          focusedLapId="lap-2"
+          referenceLapId="lap-1"
+          axis="time"
+          onRange={onRange}
+          onReset={vi.fn()}
+          onCursorDistance={vi.fn()}
+        />
+      </I18nProvider>,
+    );
 
     const option = JSON.parse(screen.getByTestId("segment-chart").getAttribute("data-option")!);
-    const speed = option.series.find((series: { name: string }) => series.name === "Lap 2 Speed");
+    const speed = option.series.find((series: { id: string }) => series.id === "lap-2-speed");
     expect(speed.data[1][0]).toBe(2);
     fireEvent.click(screen.getByRole("button", { name: "Emit range" }));
     expect(onRange).toHaveBeenCalledWith(1100, 1100);

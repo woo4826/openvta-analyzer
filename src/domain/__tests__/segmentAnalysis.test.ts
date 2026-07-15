@@ -69,21 +69,61 @@ describe("segment analysis", () => {
     expect(wide.deltaShortestMeters).toBeGreaterThan(0);
     expect(wide.trajectory.some((sample) => Math.abs(sample.signedOffsetMeters) > 1)).toBe(true);
     expect(wide.trajectory[0].deltaSeconds).toBeCloseTo(0);
-    expect(wide.gpsConfidence).toBe("high");
+    expect(wide.gpsConfidence).toBe("low");
     expect(scopeSourceIndexes(wide)).toEqual(expect.objectContaining({ startIndex: expect.any(Number), endIndex: expect.any(Number) }));
+    const partialWholeLap = result.records.find((record) => record.lapId === "partial-covered")!;
+    expect(partialWholeLap.coverage).toBe("partial");
+    expect(partialWholeLap).toMatchObject({
+      durationSeconds: undefined,
+      deltaBestSeconds: undefined,
+      drivenDistanceMeters: undefined,
+      entrySpeedKmh: undefined,
+      exitSpeedKmh: undefined,
+    });
   });
 
   it("masks loss-rate evidence at very low speed and applies partial-best policy only to complete scope coverage", () => {
     const fixture = lapsFixture();
-    const off = analyzeSegmentScope(fixture.points, fixture.laps, line, sections, sectionScope(), "tight-slow", false);
+    const off = analyzeSegmentScope(fixture.points, fixture.laps, line, sections, sectionScope(), "partial-covered", false);
     const on = analyzeSegmentScope(fixture.points, fixture.laps, line, sections, sectionScope(), "tight-slow", true);
 
+    expect(off.referenceLapId).toBe("wide-fast");
     expect(off.records.find((record) => record.lapId === "partial-covered")?.eligibleForBest).toBe(false);
     expect(on.records.find((record) => record.lapId === "partial-covered")?.eligibleForBest).toBe(true);
     const lowSpeed = on.records.find((record) => record.lapId === "low-speed")!;
     expect(lowSpeed.peakLossRateSecondsPer100m).toBeUndefined();
     expect(lowSpeed.trajectory.every((sample) => sample.lossRateSecondsPer100m === undefined)).toBe(true);
     expect(on.records.find((record) => record.lapId === "partial-uncovered")?.eligibleForBest).toBe(false);
+  });
+
+  it("rejects a nearby GPS jump across distant hairpin progress from partial best and reference", () => {
+    const hairpinLine = {
+      type: "LineString" as const,
+      coordinates: [[0, 0], [0.001, 0], [0.001, 0.00001], [0, 0.00001]],
+    };
+    const hairpinSection: TrackSection = {
+      id: "hairpin",
+      name: "Hairpin",
+      kind: "corner-left",
+      startDistanceMeters: 60,
+      endDistanceMeters: 160,
+    };
+    const fixture = hairpinJumpFixture();
+    const result = analyzeSegmentScope(
+      fixture.points,
+      fixture.laps,
+      hairpinLine,
+      [hairpinSection],
+      { kind: "section", sectionId: "hairpin" },
+      "nearby-fragment",
+      true,
+    );
+
+    const fragment = result.records.find((record) => record.lapId === "nearby-fragment")!;
+    expect(fragment).toMatchObject({ coverage: "none", eligibleForBest: false, durationSeconds: undefined });
+    expect(fragment.trajectory).toEqual([]);
+    expect(result.referenceLapId).toBe("complete-lap");
+    expect(result.fastestLapId).toBe("complete-lap");
   });
 });
 
@@ -155,5 +195,50 @@ function gps(index: number, longitude: number, latitude: number, seconds: number
     elapsedRealtimeNanos: seconds * 1_000_000_000,
     source: "RawGps",
     confidence: 1,
+  };
+}
+
+function hairpinJumpFixture(): { points: GpsPoint[]; laps: LapResult[] } {
+  const points = [
+    gps(0, 0, 0, 0, 80),
+    gps(1, 0.001, 0, 2, 60),
+    gps(2, 0.001, 0.00001, 3, 55),
+    gps(3, 0, 0.00001, 5, 85),
+    gps(4, 0.0005, 0, 10, 70),
+    gps(5, 0.0005, 0.00001, 10.14, 69),
+  ];
+  return {
+    points,
+    laps: [
+      {
+        id: "complete-lap",
+        ordinal: 1,
+        completion: "complete",
+        validity: "valid",
+        flags: [],
+        start: { id: "complete-start", source: "auto", pointIndex: 0, elapsedSeconds: 0, coordinate: [0, 0] },
+        end: { id: "complete-end", source: "auto", pointIndex: 3, elapsedSeconds: 5, coordinate: [0, 0.00001] },
+        startIndex: 0,
+        endIndex: 3,
+        durationSeconds: 5,
+        distanceKm: 0.22,
+        averageSpeedKmh: 70,
+        maxSpeedKmh: 85,
+      },
+      {
+        id: "nearby-fragment",
+        ordinal: 0,
+        completion: "partial-start",
+        validity: "valid",
+        flags: [],
+        start: { id: "fragment-start", source: "session-start", pointIndex: 4, elapsedSeconds: 10, coordinate: [0.0005, 0] },
+        end: { id: "fragment-end", source: "session-end", pointIndex: 5, elapsedSeconds: 10.14, coordinate: [0.0005, 0.00001] },
+        startIndex: 4,
+        endIndex: 5,
+        distanceKm: 0.001,
+        averageSpeedKmh: 69.5,
+        maxSpeedKmh: 70,
+      },
+    ],
   };
 }

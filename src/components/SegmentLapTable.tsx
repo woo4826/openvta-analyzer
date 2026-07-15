@@ -43,8 +43,8 @@ export function SegmentLapTable({
           {[...records].sort((left, right) => left.ordinal - right.ordinal).map((record) => (
             <tr key={record.lapId} className={record.lapId === focusedLapId ? "is-focused" : undefined}>
               <th scope="row">
-                <button type="button" className="lap-focus-button" aria-label={`Focus Lap ${record.ordinal}`} onClick={() => onFocusedLap(record.lapId)}>
-                  Lap {record.ordinal}
+                <button type="button" className="lap-focus-button" aria-label={`${t("lap.workbench.focus")} ${recordLapLabel(record, t)}`} onClick={() => onFocusedLap(record.lapId)}>
+                  {recordLapLabel(record, t)}
                 </button>
                 <div className="record-badges">
                   {record.lapId === fastestLapId ? <span>{t("lap.workbench.fastestPath")}</span> : null}
@@ -59,18 +59,18 @@ export function SegmentLapTable({
               <td>{formatSpeed(record.minimumSpeedKmh)}</td>
               <td>{formatSpeed(record.exitSpeedKmh)}</td>
               <td>{record.peakLossRateSecondsPer100m === undefined ? "—" : `+${record.peakLossRateSecondsPer100m.toFixed(2)} s/100m`}</td>
-              <td><span className={`gps-confidence ${record.gpsConfidence}`}>{record.gpsConfidence}</span></td>
+              <td><span className={`gps-confidence ${record.gpsConfidence}`}>{gpsConfidenceLabel(record.gpsConfidence, t)}</span></td>
               <td>
                 <input
                   type="radio"
                   name="segment-reference-lap"
-                  aria-label={`Reference Lap ${record.ordinal}`}
+                  aria-label={`${t("lap.reference")} ${recordLapLabel(record, t)}`}
                   checked={record.lapId === referenceLapId}
-                  disabled={record.coverage !== "complete" || record.validity === "excluded"}
+                  disabled={record.completion !== "complete" || !record.eligibleForBest}
                   onChange={() => onReferenceLap(record.lapId)}
                 />
                 <details className="segment-row-details">
-                  <summary>Details</summary>
+                  <summary>{t("lap.workbench.details")}</summary>
                   <dl>
                     <div><dt>{t("lap.avgSpeed")}</dt><dd>{formatSpeed(record.averageSpeedKmh)}</dd></div>
                     <div><dt>{t("lap.maxLateralG")}</dt><dd>{record.maxLateralG === undefined ? "—" : `${record.maxLateralG.toFixed(2)} g`}</dd></div>
@@ -101,6 +101,23 @@ function recordStatus(record: SegmentLapRecord, t: T): string {
       : t("lap.workbench.incompleteRecording");
   if (record.flags.includes("gps-gap")) return `${fragment} · ${t("lap.workbench.gpsGap")}`;
   return record.coverage === "complete" ? fragment : `${fragment} · ${t("lap.workbench.noCoverage").toLowerCase()}`;
+}
+
+function recordLapLabel(record: SegmentLapRecord, t: T): string {
+  if (record.completion === "partial-start") return t("lap.workbench.openingFragment");
+  if (record.completion === "partial-end") return t("lap.workbench.closingFragment");
+  if (record.completion === "partial-both") return t("lap.workbench.incompleteRecording");
+  return `${t("lap.lap")} ${record.ordinal}`;
+}
+
+function gpsConfidenceLabel(confidence: SegmentLapRecord["gpsConfidence"], t: T): string {
+  const keys = {
+    high: "lap.workbench.gpsHigh",
+    medium: "lap.workbench.gpsMedium",
+    low: "lap.workbench.gpsLow",
+    unknown: "lap.workbench.gpsUnknown",
+  } as const;
+  return t(keys[confidence]);
 }
 
 function formatTime(seconds: number | undefined): string {

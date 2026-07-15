@@ -25,9 +25,13 @@ describe("useSegmentWorkbench", () => {
     const { result } = renderHook(() => useSegmentWorkbench(fixture));
 
     expect(result.current.referenceLapId).toBe(result.current.analysis.fastestLapId);
-    act(() => result.current.setFocusedLap("lap-7"));
+    const sessionReferenceLapId = result.current.referenceLapId;
     expect(result.current.focusedLapId).toBe("lap-7");
-    expect(result.current.overlayLapIds).toContain("lap-7");
+    act(() => result.current.selectSection("c1"));
+    expect(result.current.referenceLapId).toBe(sessionReferenceLapId);
+    act(() => result.current.setFocusedLap("lap-5"));
+    expect(result.current.focusedLapId).toBe("lap-5");
+    expect(result.current.overlayLapIds).toContain("lap-5");
     expect(result.current.overlayLapIds).toContain(result.current.referenceLapId);
     expect(result.current.overlayLapIds).toHaveLength(5);
 

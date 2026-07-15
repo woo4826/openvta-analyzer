@@ -803,12 +803,27 @@ function addInferredGate(profile: TrackProfileV1, inferredGate: TrackGate | unde
   return touchProfile({ ...profile, startFinish: inferredGate });
 }
 
-function resolveCachedProfile(candidates: OsmTrackCandidate[]): { profile?: TrackProfileV1; ambiguous: boolean } {
+type CachedTrackCandidate = OsmTrackCandidate & { origin: EffectiveTrackProfileOrigin };
+
+function resolveCachedProfile(candidates: CachedTrackCandidate[]): { profile?: TrackProfileV1; ambiguous: boolean } {
   const best = candidates[0];
   if (!best) return { ambiguous: false };
   const nearbyThreshold = Math.max(best.score * 1.18, best.score + 8);
   const nearby = candidates.filter((candidate) => candidate.score <= nearbyThreshold);
   if (nearby.length <= 1) return { profile: best.profile, ambiguous: false };
+
+  const localOverrides = nearby.filter((candidate) => candidate.origin === "local-override");
+  if (localOverrides.length === 1) {
+    return { profile: localOverrides[0].profile, ambiguous: false };
+  }
+
+  const builtIns = nearby.filter((candidate) => candidate.origin === "built-in");
+  const onlyDiscoveryAlternatives = nearby.every((candidate) =>
+    candidate.origin === "built-in" || candidate.origin === "osm" || candidate.origin === "generated"
+  );
+  if (builtIns.length === 1 && onlyDiscoveryAlternatives) {
+    return { profile: builtIns[0].profile, ambiguous: false };
+  }
 
   const reusablePresets = nearby.filter((candidate) => candidate.profile.source.kind !== "recording");
   const hasGeneratedFallback = nearby.some((candidate) => candidate.profile.source.kind === "recording");

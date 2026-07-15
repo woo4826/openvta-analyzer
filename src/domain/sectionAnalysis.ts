@@ -55,6 +55,7 @@ export function analyzeLapSections(
         name: section.name,
         kind: section.kind,
         durationSeconds,
+        drivenDistanceMeters: routeDistanceMeters(scoped.map((sample) => [sample.longitude, sample.latitude])),
         entrySpeedKmh: scoped[0].speedKmh,
         minimumSpeedKmh: Math.min(...scoped.map((sample) => sample.speedKmh)),
         averageSpeedKmh: timeWeightedAverageSpeed(scoped),

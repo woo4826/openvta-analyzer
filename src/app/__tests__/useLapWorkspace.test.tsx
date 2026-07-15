@@ -75,6 +75,68 @@ describe("useLapWorkspace", () => {
     expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
   });
 
+  it("waits for the new recording's hosted presets instead of reusing the empty recording status", async () => {
+    const points = multiLapPoints();
+    const builtIn = {
+      ...osmCandidate().profile,
+      id: "kr-inje-speedium-full",
+      startFinish: createGateFromRoutePoint(points, 0),
+      analysisLine: { type: "LineString" as const, coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [{ id: "corner-1", name: "Corner 1", kind: "corner-right" as const, startDistanceMeters: 0, endDistanceMeters: 20 }],
+    };
+    const hosted = deferred<TrackProfileV1[]>();
+    mocks.loadHostedTrackPresets.mockImplementation((recording: GpsPoint[]) => recording.length ? hosted.promise : Promise.resolve([]));
+    mocks.scoreTrackProfile.mockImplementation((profile: TrackProfileV1) => ({
+      profile,
+      medianDistanceMeters: 4,
+      lengthRatio: 1,
+      score: 4,
+    }));
+    const { result, rerender } = renderHook(
+      ({ id, recording }) => useLapWorkspace(id, "session.Vta", recording),
+      { initialProps: { id: undefined as string | undefined, recording: [] as GpsPoint[] } },
+    );
+    await waitFor(() => expect(mocks.loadHostedTrackPresets).toHaveBeenCalledWith([]));
+
+    rerender({ id: "file-after-empty", recording: points });
+    await waitFor(() => expect(mocks.loadHostedTrackPresets).toHaveBeenCalledWith(points));
+    expect(result.current.lookupState).toBe("idle");
+    expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
+
+    await act(async () => hosted.resolve([builtIn]));
+    await waitFor(() => expect(result.current.profile?.id).toBe(builtIn.id));
+    expect(result.current.profileOrigin).toBe("built-in");
+    expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
+  });
+
+  it("prefers one curated built-in preset over an equivalent cached OSM discovery", async () => {
+    const points = multiLapPoints();
+    const builtIn = {
+      ...osmCandidate().profile,
+      id: "kr-inje-speedium-full",
+      startFinish: createGateFromRoutePoint(points, 0),
+      analysisLine: { type: "LineString" as const, coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [{ id: "corner-1", name: "Corner 1", kind: "corner-right" as const, startDistanceMeters: 0, endDistanceMeters: 20 }],
+    };
+    const cachedOsm = { ...builtIn, id: "osm-651693293", sections: [], analysisLine: undefined };
+    mocks.loadHostedTrackPresets.mockResolvedValue([builtIn]);
+    mocks.listTrackProfiles.mockResolvedValue([cachedOsm]);
+    mocks.getTrackProfileOrigins.mockResolvedValue({ [cachedOsm.id]: "osm" });
+    mocks.scoreTrackProfile.mockImplementation((profile: TrackProfileV1) => ({
+      profile,
+      medianDistanceMeters: profile.id === builtIn.id ? 4 : 4.5,
+      lengthRatio: 1,
+      score: profile.id === builtIn.id ? 4 : 4.5,
+    }));
+
+    const { result } = renderHook(() => useLapWorkspace("file-curated", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.lookupState).toBe("matched"));
+    expect(result.current.profile?.id).toBe(builtIn.id);
+    expect(result.current.profileOrigin).toBe("built-in");
+    expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
+  });
+
   it("turns a built-in preset edit into a persisted local override", async () => {
     const points = multiLapPoints();
     const builtIn = {

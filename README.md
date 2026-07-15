@@ -19,8 +19,10 @@ For the current product plan, architecture, deployment workflow, and next-develo
 - Named calibration presets with JSON import/export.
 - 2nd-order low-pass Butterworth filtering for acceleration channels.
 - A map-first Segment Analysis Workbench for whole-lap, corner, straight, or user-dragged A–B comparison across every detected lap, including explicit incomplete-lap rows.
-- Synchronized distance- or time-based speed, elapsed-time, Delta-T, and Time Slip Rate graphs with linked cursors, range selection, scroll/pinch zoom, and the same scope on the map and table.
+- Synchronized distance- or time-based speed, GPS speed-derivative estimate, elapsed-time, Delta-T, and Time Slip Rate graphs with linked cursors, range selection, scroll/pinch zoom, and the same scope on the map and table.
 - Actual driven trajectories, focused/reference Ghost markers, fastest-path and shortest-recorded-path labels, GPS-confidence states, and scope-level entry/minimum/exit speed evidence.
+- Reference-lap opportunity ranking across every corner and straight, with summed positive loss, exit-speed/path deltas, and section consistency; selecting a ranked loss synchronizes the map, charts, and lap table.
+- Split-detail visualizations for lap-by-lap segment-time trend and segment time versus actual driven distance, with focused/reference highlights and the partial-lap eligibility policy applied consistently.
 - Hosted static TrackProfile presets with a curated Inje Speedium full-course preset, browser-local overrides, and OSM/generated/manual fallbacks for unknown or offline tracks.
 - A browser-local Track Library for single TrackProfile JSON and multi-track catalog import/export, application, and deletion.
 - Segment `.Vta`, transformed segment `.Vta`, GPS CSV, sensor CSV, validation CSV, summary JSON, and current segment-analysis CSV/JSON export.
@@ -106,8 +108,8 @@ Lap Analysis works with a matched track profile, an imported profile, or no know
 1. Load one recording and open **Lap Analysis**. The app checks the hosted track index and browser-local overrides first, then saved/imported profiles. If no fresh match exists, it can search OpenStreetMap raceway data around an expanded recording bounding box.
 2. A matching profile supplies start/finish and saved corner/straight ranges. If nothing matches, repeatable closed-course passes generate a directional start/finish and editable recording preset. Open routes remain trackless until the user explicitly sets a gate or range.
 3. Start in **Segment Analysis Workbench**. Choose the whole lap or any corner/straight from the horizontal scope ribbon. Every detected complete, partial, invalid, and uncovered lap remains visible with an explicit status.
-4. Focus any lap and pin an eligible complete reference lap. The map shows actual trajectories, focused/reference Ghost markers, Time Slip Rate heat, fastest segment time, and shortest recorded path as separate evidence.
-5. Inspect the synchronized speed, cumulative elapsed-time, Delta-T, and local loss-rate graphs. Switch distance/time axes, zoom, or drag an A–B range; map, graphs, evidence inspector, lap table, and the legacy active-segment selection update together.
+4. Focus any lap and pin an eligible complete reference lap. The opportunity ranking identifies the largest positive losses across corners and straights; select a card to move the entire workbench to that range. The map shows actual trajectories, focused/reference Ghost markers, Time Slip Rate heat, fastest segment time, and shortest recorded path as separate evidence.
+5. Use the lap-trend and time-versus-driven-distance plots to distinguish inconsistent execution from a longer line, then inspect the synchronized speed, GPS speed-derivative estimate, cumulative elapsed-time, Delta-T, and local loss-rate graphs. Switch distance/time axes, zoom, or drag an A–B range; map, graphs, evidence inspector, lap table, and the legacy active-segment selection update together.
 6. Save a dragged A–B range as a named corner or straight. Editing a hosted preset creates a browser-local override without altering the deployed preset, and **Reset built-in preset** restores the hosted version. Export the current scope as CSV or versioned JSON.
 7. Open **Track & lap setup** to adjust the start/finish width and bearing, correct boundaries, edit generated sections, and add or reorder timing-sector gates. The detector retains opening and closing fragments instead of silently deleting incomplete laps.
 

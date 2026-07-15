@@ -22,10 +22,12 @@ describe("SegmentLapTable", () => {
     expect(screen.getAllByRole("row")).toHaveLength(10);
     await user.click(screen.getByRole("button", { name: /Focus Lap 6/ }));
     expect(onFocusedLap).toHaveBeenCalledWith("lap-6");
-    expect(screen.getByText("Fastest path")).toBeVisible();
+    expect(screen.getByText("Best time")).toBeVisible();
     expect(screen.getByText("Shortest recorded path")).toBeVisible();
     expect(screen.getByText("Opening fragment · scope not fully covered")).toBeVisible();
     expect(screen.getByText("Closing fragment · GPS gap")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Focus Opening fragment" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Focus Lap 1" })).not.toBeInTheDocument();
   });
 });
 

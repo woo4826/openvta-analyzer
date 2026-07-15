@@ -29,7 +29,13 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
     chartRef.current = chart;
     chart.setOption(option, true);
 
-    const resize = () => chart.resize();
+    const resize = () => {
+      if (ref.current && ref.current.clientWidth > 0 && ref.current.clientHeight > 0) {
+        chart.resize();
+      }
+    };
+    const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : undefined;
+    resizeObserver?.observe(ref.current);
     const cancelPendingHover = () => {
       if (hoverFrameRef.current !== undefined) {
         window.cancelAnimationFrame(hoverFrameRef.current);
@@ -96,6 +102,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
 
     return () => {
       window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
       cancelPendingHover();
       chart.off("click", handleClick);
       chart.off("mouseover", handleHover);

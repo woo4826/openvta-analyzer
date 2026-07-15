@@ -22,7 +22,7 @@ export function SegmentScopeRibbon({
   const { t } = useI18n();
   return (
     <nav className="segment-scope-ribbon" aria-label={t("lap.workbench.scope")}>
-      <div className="segmented-control segment-filter" role="group" aria-label="Section type filter">
+      <div className="segmented-control segment-filter" role="group" aria-label={t("lap.workbench.sectionFilter")}>
         {([
           ["all", t("lap.workbench.all")],
           ["corners", t("lap.workbench.corners")],

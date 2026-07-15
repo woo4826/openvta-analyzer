@@ -15,6 +15,8 @@ import type {
 
 const LOSS_RATE_HALF_WINDOW_METERS = 12.5;
 const LOSS_RATE_MINIMUM_SPEED_KMH = 20;
+const MAX_PROJECTED_TO_DRIVEN_RATIO = 3;
+const PROJECTED_PROGRESS_TOLERANCE_METERS = 5;
 const GRAVITY_MPS2 = 9.80665;
 
 export function analysisScopeRange(
@@ -70,10 +72,13 @@ export function analyzeSegmentScope(
     lineLengthMeters,
     includePartialLapSections,
   ));
-  const fastestLapId = minimumRecord(raw, (record) => record.durationSeconds)?.lapId;
   const requestedReference = raw.find((record) =>
-    record.lapId === requestedReferenceLapId && record.coverage === "complete" && record.trajectory.length > 1);
-  const referenceLapId = requestedReference?.lapId ?? fastestLapId;
+    record.lapId === requestedReferenceLapId && record.completion === "complete" && record.eligibleForBest && record.trajectory.length > 1);
+  const defaultReference = minimumRecord(
+    raw.filter((record) => record.completion === "complete"),
+    (record) => record.durationSeconds,
+  );
+  const referenceLapId = requestedReference?.lapId ?? defaultReference?.lapId;
   const referenceLap = laps.find((lap) => lap.id === referenceLapId);
 
   const compared = laps.map((lap) => buildComparedRecord(
@@ -153,17 +158,21 @@ function buildComparedRecord(
   includePartialLapSections: boolean,
 ): SegmentLapRecord {
   const comparison = scopedLapComparison(points, lap, referenceLap, analysisLine, scopedSection, 5);
-  const trajectory = enrichTrajectory(comparison, points, analysisLine);
+  const candidateTrajectory = enrichTrajectory(comparison, points, analysisLine);
+  const trajectory = hasPlausibleTrajectoryProgress(candidateTrajectory) ? candidateTrajectory : [];
   const coverage = scopeCoverage(scope, lap, trajectory, lineLengthMeters);
+  const hasCompleteCoverage = coverage === "complete";
   const fromPartialLap = lap.completion !== "complete";
-  const durationSeconds = trajectory.length > 1
+  const durationSeconds = hasCompleteCoverage && trajectory.length > 1
     ? trajectory.at(-1)!.elapsedSeconds - trajectory[0].elapsedSeconds
     : undefined;
-  const eligibleForBest = coverage === "complete" && lap.validity === "valid" && (
+  const eligibleForBest = hasCompleteCoverage && lap.validity === "valid" && (
     !fromPartialLap || includePartialLapSections
   );
-  const speeds = trajectory.map((sample) => sample.speedKmh);
-  const peakLossRate = maximumDefined(trajectory.map((sample) => sample.lossRateSecondsPer100m).filter(isNumber));
+  const speeds = hasCompleteCoverage ? trajectory.map((sample) => sample.speedKmh) : [];
+  const peakLossRate = hasCompleteCoverage
+    ? maximumDefined(trajectory.map((sample) => sample.lossRateSecondsPer100m).filter(isNumber))
+    : undefined;
   return {
     lapId: lap.id,
     ordinal: lap.ordinal,
@@ -174,18 +183,25 @@ function buildComparedRecord(
     coverage,
     eligibleForBest,
     durationSeconds,
-    drivenDistanceMeters: trajectory.at(-1)?.pathDistanceMeters,
+    drivenDistanceMeters: hasCompleteCoverage ? trajectory.at(-1)?.pathDistanceMeters : undefined,
     entrySpeedKmh: speeds[0],
     minimumSpeedKmh: speeds.length ? Math.min(...speeds) : undefined,
-    averageSpeedKmh: timeWeightedAverageSpeed(trajectory),
+    averageSpeedKmh: hasCompleteCoverage ? timeWeightedAverageSpeed(trajectory) : undefined,
     maximumSpeedKmh: speeds.length ? Math.max(...speeds) : undefined,
     exitSpeedKmh: speeds.at(-1),
-    maxLateralG: maximumLateralG(trajectory),
-    maxDecelerationG: maximumDerivedDecelerationG(trajectory),
+    maxLateralG: hasCompleteCoverage ? maximumLateralG(trajectory) : undefined,
+    maxDecelerationG: hasCompleteCoverage ? maximumDerivedDecelerationG(trajectory) : undefined,
     peakLossRateSecondsPer100m: peakLossRate !== undefined && peakLossRate > 0 ? peakLossRate : undefined,
     gpsConfidence: gpsConfidence(trajectory, points),
     trajectory,
   };
+}
+
+function hasPlausibleTrajectoryProgress(samples: SegmentTrajectorySample[]): boolean {
+  if (samples.length < 2) return false;
+  const projectedDistanceMeters = samples.at(-1)!.distanceMeters - samples[0].distanceMeters;
+  const drivenDistanceMeters = samples.at(-1)!.pathDistanceMeters - samples[0].pathDistanceMeters;
+  return projectedDistanceMeters <= drivenDistanceMeters * MAX_PROJECTED_TO_DRIVEN_RATIO + PROJECTED_PROGRESS_TOLERANCE_METERS;
 }
 
 function enrichTrajectory(
@@ -320,9 +336,25 @@ function gpsConfidence(
   const accuracies = sourcePoints.map((point) => point.accuracyMeters).filter(isNumber).sort((a, b) => a - b);
   const medianAccuracy = accuracies.length ? accuracies[Math.floor(accuracies.length / 2)] : undefined;
   const averageConfidence = sourcePoints.reduce((sum, point) => sum + point.confidence, 0) / sourcePoints.length;
-  if (medianAccuracy === undefined && !Number.isFinite(averageConfidence)) return "unknown";
-  if ((medianAccuracy === undefined || medianAccuracy <= 5) && averageConfidence >= 0.75) return "high";
-  if ((medianAccuracy === undefined || medianAccuracy <= 12) && averageConfidence >= 0.4) return "medium";
+  const elapsedSeconds = sourcePoints
+    .map((point) => point.elapsedRealtimeNanos !== undefined
+      ? point.elapsedRealtimeNanos / 1_000_000_000
+      : point.epochMillis !== undefined
+        ? point.epochMillis / 1000
+        : undefined)
+    .filter(isNumber)
+    .sort((left, right) => left - right);
+  const intervals = elapsedSeconds.slice(1)
+    .map((elapsed, index) => elapsed - elapsedSeconds[index])
+    .filter((interval) => interval > 0)
+    .sort((left, right) => left - right);
+  const medianIntervalSeconds = intervals.length ? intervals[Math.floor(intervals.length / 2)] : undefined;
+  if (medianIntervalSeconds === undefined) {
+    if (medianAccuracy !== undefined && medianAccuracy <= 5 && averageConfidence >= 0.75) return "medium";
+    return "unknown";
+  }
+  if (medianAccuracy !== undefined && medianAccuracy <= 5 && medianIntervalSeconds <= 0.2 && averageConfidence >= 0.75) return "high";
+  if ((medianAccuracy === undefined || medianAccuracy <= 12) && medianIntervalSeconds <= 0.5 && averageConfidence >= 0.4) return "medium";
   return "low";
 }
 

@@ -35,19 +35,34 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
 
   const analysisMain = page.locator(".analysis-main");
   await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
-  await expect(analysisMain.getByRole("tab", { name: "Insights" })).toHaveAttribute("aria-selected", "true");
-  await expect(analysisMain.getByRole("heading", { name: "Session performance" })).toBeVisible();
-  await expect(analysisMain.getByRole("heading", { name: "Time-loss map" })).toBeVisible();
-  await expect(analysisMain.getByRole("heading", { name: "Biggest time-loss opportunities" })).toBeVisible();
-  await expect(analysisMain.getByRole("img", { name: "Synchronized speed, GPS-derived acceleration, and Delta-T chart" })).toBeVisible();
+  await expect(analysisMain.getByRole("tab", { name: "Segment Analysis Workbench" })).toHaveAttribute("aria-selected", "true");
+  await expect(analysisMain.getByRole("heading", { name: "Where am I losing time?" })).toBeVisible();
+  await expect(analysisMain.getByRole("region", { name: "Biggest time-loss sections" })).toBeVisible();
+  await expect(analysisMain.getByRole("region", { name: "Lap trajectory comparison" })).toBeVisible();
+  await expect(analysisMain.getByRole("button", { name: "Whole lap" })).toHaveAttribute("aria-pressed", "true");
 
-  await analysisMain.getByRole("tab", { name: "Compare" }).click();
-  await expect(analysisMain.getByRole("heading", { name: "Lap Explorer" })).toBeVisible();
-  const scope = analysisMain.getByLabel("Analysis scope");
-  await expect(scope.locator("option").filter({ hasText: "Corner 1" })).toHaveCount(1);
-  await scope.selectOption({ label: "Corner 1" });
-  await expect(analysisMain.getByRole("heading", { name: "Corner 1 lap comparison" })).toBeVisible();
-  await expect(analysisMain.getByRole("table", { name: "Selected scope lap metrics" })).toBeVisible();
+  const corner = analysisMain.locator("button.segment-scope-chip", { hasText: "Corner 1" });
+  await expect(corner).toBeVisible();
+  await corner.click();
+  await expect(corner).toHaveAttribute("aria-pressed", "true");
+  await expect(analysisMain.getByText(/Corner 1 · \d+–\d+ m/)).toBeVisible();
+
+  if ((page.viewportSize()?.width ?? 0) <= 680) {
+    await analysisMain.getByRole("button", { name: "Graphs", exact: true }).click();
+    await expect.poll(async () => analysisMain.locator(".segment-graphs-stack canvas").evaluateAll((canvases) =>
+      canvases.length === 2 && canvases.every((canvas) => canvas.width > 0 && canvas.height > 0)
+    )).toBe(true);
+  }
+  await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" })).toBeVisible();
+  await analysisMain.getByRole("button", { name: "Time", exact: true }).click();
+  await expect(analysisMain.getByRole("button", { name: "Time", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  if ((page.viewportSize()?.width ?? 0) <= 680) {
+    await analysisMain.getByRole("button", { name: "Laps", exact: true }).click();
+  }
+  await expect(analysisMain.getByRole("columnheader", { name: "Driven path" })).toBeVisible();
+  await expect(analysisMain.getByRole("checkbox", { name: /Include completed sectors from partial laps/ })).toBeVisible();
 
   await analysisMain.getByRole("tab", { name: "Setup" }).click();
   await expect(analysisMain.getByRole("button", { name: "Export analysis sectors CSV" })).toBeVisible();

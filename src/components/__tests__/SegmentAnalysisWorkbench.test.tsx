@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { GpsPoint, LapResult, TrackProfileV1 } from "../../domain/types";
@@ -12,6 +12,11 @@ vi.mock("../SegmentTrajectoryMap", () => ({
 vi.mock("../SegmentTelemetryChart", () => ({
   SegmentTelemetryChart: ({ focusedLapId, referenceLapId, onRange }: { focusedLapId?: string; referenceLapId?: string; onRange: (start: number, end: number) => void }) => (
     <div data-testid="chart-state">{focusedLapId}:{referenceLapId}<button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
+  ),
+}));
+vi.mock("../SegmentVariationChart", () => ({
+  SegmentVariationChart: ({ focusedLapId, referenceLapId }: { focusedLapId?: string; referenceLapId?: string }) => (
+    <div data-testid="variation-state">{focusedLapId}:{referenceLapId}</div>
   ),
 }));
 
@@ -38,7 +43,7 @@ describe("SegmentAnalysisWorkbench", () => {
       onOpenSetup={vi.fn()}
     /></I18nProvider>);
 
-    await user.click(screen.getByRole("button", { name: /Corner 1/ }));
+    await user.click(within(screen.getByRole("navigation", { name: "Analysis scope" })).getByRole("button", { name: /Corner 1/ }));
     expect(screen.getByText(/Corner 1 · 10–90 m/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: /Focus Lap 2/ }));
     expect(screen.getByTestId("map-state")).toHaveTextContent("lap-2");

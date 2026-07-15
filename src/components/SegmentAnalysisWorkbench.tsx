@@ -4,12 +4,14 @@ import { Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
-import type { ActiveSegment, GpsPoint, LapResult, MapSettings, TrackProfileV1, TrackSectionKind } from "../domain/types";
+import type { ActiveSegment, GpsPoint, LapResult, MapSettings, SegmentLapRecord, TrackProfileV1, TrackSectionKind } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentLapTable } from "./SegmentLapTable";
+import { SegmentOpportunityRanking } from "./SegmentOpportunityRanking";
 import { SegmentScopeRibbon } from "./SegmentScopeRibbon";
 import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
 import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
+import { SegmentVariationChart } from "./SegmentVariationChart";
 
 interface SegmentAnalysisWorkbenchProps {
   sourceName: string;
@@ -58,11 +60,15 @@ export function SegmentAnalysisWorkbench({
   const [rangeName, setRangeName] = useState("");
   const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
+  const reference = workbench.analysis.records.find((record) => record.lapId === workbench.referenceLapId);
+  const visibleSectionIds = useMemo(() => new Set(workbench.navigationSections.map((section) => section.id)), [workbench.navigationSections]);
+  const visibleOpportunities = useMemo(() => workbench.opportunities.filter((opportunity) =>
+    visibleSectionIds.has(opportunity.section.id)), [visibleSectionIds, workbench.opportunities]);
   const scopeName = useMemo(() => {
     if (workbench.scope.kind === "whole-lap") return t("lap.workbench.wholeLap");
     if (workbench.scope.kind === "section") {
       const sectionId = workbench.scope.sectionId;
-      return profile.sections.find((section) => section.id === sectionId)?.name ?? "Section";
+      return profile.sections.find((section) => section.id === sectionId)?.name ?? t("lap.section");
     }
     return t("lap.workbench.customRange");
   }, [profile.sections, t, workbench.scope]);
@@ -80,7 +86,7 @@ export function SegmentAnalysisWorkbench({
           <p>{scopeName} · {Math.round(workbench.analysis.range.startDistanceMeters)}–{Math.round(workbench.analysis.range.endDistanceMeters)} m</p>
         </div>
         <div className="segment-workbench-actions">
-          <div className="segmented-control" role="group" aria-label="Graph x axis">
+          <div className="segmented-control" role="group" aria-label={t("lap.workbench.graphAxis")}>
             <button type="button" aria-pressed={workbench.axis === "distance"} onClick={() => workbench.setAxis("distance")}>{t("lap.workbench.distanceAxis")}</button>
             <button type="button" aria-pressed={workbench.axis === "time"} onClick={() => workbench.setAxis("time")}>{t("lap.workbench.timeAxis")}</button>
           </div>
@@ -157,10 +163,20 @@ export function SegmentAnalysisWorkbench({
         onSection={workbench.selectSection}
       />
 
-      <div className="segment-mobile-switch segmented-control" role="group" aria-label="Analysis view">
+      <div className="segment-mobile-switch segmented-control" role="group" aria-label={t("lap.workbench.analysisView")}>
         {(["map", "graphs", "laps"] as const).map((view) => (
           <button key={view} type="button" aria-pressed={mobileView === view} onClick={() => setMobileView(view)}>{t(`lap.workbench.${view}`)}</button>
         ))}
+      </div>
+
+      <div data-workbench-pane="map">
+        <SegmentOpportunityRanking
+          opportunities={visibleOpportunities}
+          scope={workbench.scope}
+          focusedLapOrdinal={focused?.ordinal}
+          referenceLapOrdinal={reference?.ordinal}
+          onSection={workbench.selectSection}
+        />
       </div>
 
       <div className="segment-map-stage" data-workbench-pane="map">
@@ -181,9 +197,9 @@ export function SegmentAnalysisWorkbench({
           onSegmentChange={onActiveSegment}
           onSettingsChange={onMapSettingsChange}
         />
-        <aside className="segment-evidence-panel" aria-label="Focused lap evidence">
+        <aside className="segment-evidence-panel" aria-label={t("lap.workbench.focusedEvidence")}>
           <span className="panel-eyebrow">{t("lap.workbench.focusedLap")}</span>
-          <h3>{focused ? `Lap ${focused.ordinal}` : "—"}</h3>
+          <h3>{focused ? workbenchLapLabel(focused, t) : "—"}</h3>
           <dl>
             <Metric label={t("lap.duration")} value={formatTime(focused?.durationSeconds)} />
             <Metric label={t("lap.deltaBest")} value={formatDelta(focused?.deltaBestSeconds)} />
@@ -192,12 +208,17 @@ export function SegmentAnalysisWorkbench({
             <Metric label={t("lap.minimumSpeed")} value={formatSpeed(focused?.minimumSpeedKmh)} />
             <Metric label={t("lap.exitSpeed")} value={formatSpeed(focused?.exitSpeedKmh)} />
             <Metric label={t("lap.workbench.lossRate")} value={focused?.peakLossRateSecondsPer100m === undefined ? "—" : `+${focused.peakLossRateSecondsPer100m.toFixed(2)} s/100m`} />
-            <Metric label={t("lap.workbench.gps")} value={focused?.gpsConfidence ?? "—"} />
+            <Metric label={t("lap.workbench.gps")} value={focused ? gpsConfidenceLabel(focused.gpsConfidence, t) : "—"} />
           </dl>
         </aside>
       </div>
 
-      <div data-workbench-pane="graphs">
+      <div className="segment-graphs-stack" data-workbench-pane="graphs">
+        <SegmentVariationChart
+          analysis={workbench.analysis}
+          focusedLapId={workbench.focusedLapId}
+          referenceLapId={workbench.referenceLapId}
+        />
         <SegmentTelemetryChart
           analysis={workbench.analysis}
           overlayLapIds={workbench.overlayLapIds}
@@ -255,4 +276,23 @@ function formatSpeed(speed: number | undefined): string {
 
 function safeBaseName(name: string): string {
   return name.replace(/\.vta$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "-") || "openvta";
+}
+
+type T = ReturnType<typeof useI18n>["t"];
+
+function workbenchLapLabel(record: SegmentLapRecord, t: T): string {
+  if (record.completion === "partial-start") return t("lap.workbench.openingFragment");
+  if (record.completion === "partial-end") return t("lap.workbench.closingFragment");
+  if (record.completion === "partial-both") return t("lap.workbench.incompleteRecording");
+  return `${t("lap.lap")} ${record.ordinal}`;
+}
+
+function gpsConfidenceLabel(confidence: SegmentLapRecord["gpsConfidence"], t: T): string {
+  const keys = {
+    high: "lap.workbench.gpsHigh",
+    medium: "lap.workbench.gpsMedium",
+    low: "lap.workbench.gpsLow",
+    unknown: "lap.workbench.gpsUnknown",
+  } as const;
+  return t(keys[confidence]);
 }

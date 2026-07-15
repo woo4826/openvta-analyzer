@@ -29,6 +29,7 @@ export function useTrackPresets(points: GpsPoint[]): TrackPresetState {
   const [localProfiles, setLocalProfiles] = useState<TrackProfileV1[]>([]);
   const [origins, setOrigins] = useState<Record<string, TrackProfileOrigin>>({});
   const [status, setStatus] = useState<TrackPresetLoadStatus>("loading");
+  const [loadedRecordingKey, setLoadedRecordingKey] = useState<string>();
   const [reloadKey, setReloadKey] = useState(0);
   const recordingKey = `${points.length}:${points[0]?.longitude ?? ""}:${points[0]?.latitude ?? ""}:${points.at(-1)?.longitude ?? ""}:${points.at(-1)?.latitude ?? ""}`;
 
@@ -50,6 +51,7 @@ export function useTrackPresets(points: GpsPoint[]): TrackPresetState {
         setOrigins({});
       }
       setStatus(hostedResult.status === "fulfilled" ? "ready" : "hosted-unavailable");
+      setLoadedRecordingKey(recordingKey);
     });
     return () => {
       cancelled = true;
@@ -86,10 +88,11 @@ export function useTrackPresets(points: GpsPoint[]): TrackPresetState {
     });
   }, [hostedProfiles, origins]);
 
+  const hasCurrentRecording = loadedRecordingKey === recordingKey;
   return {
-    profiles,
-    hostedProfiles,
-    status,
+    profiles: hasCurrentRecording ? profiles : [],
+    hostedProfiles: hasCurrentRecording ? hostedProfiles : [],
+    status: hasCurrentRecording ? status : "loading",
     resetOverride,
     reload: () => setReloadKey((key) => key + 1),
   };

@@ -15,6 +15,7 @@ import {
   type MapGhostMarker,
   type MapHeatSegment,
 } from "./RouteMap";
+import { useI18n } from "../i18n/useI18n";
 
 interface SegmentTrajectoryMapProps {
   analysis: SegmentAnalysisResult;
@@ -57,6 +58,7 @@ export function SegmentTrajectoryMap({
   onRegionChange = () => undefined,
   onSettingsChange = () => undefined,
 }: SegmentTrajectoryMapProps) {
+  const { t } = useI18n();
   const colorByLap = useMemo(() => new Map(
     analysis.records.map((record, index) => [record.lapId, LAP_COLORS[index % LAP_COLORS.length]]),
   ), [analysis.records]);
@@ -79,7 +81,7 @@ export function SegmentTrajectoryMap({
 
   const focusedRecord = analysis.records.find((record) => record.lapId === focusedLapId);
   const heatSegments = useMemo((): MapHeatSegment[] => {
-    if (!focusedRecord || focusedRecord.gpsConfidence === "low") return [];
+    if (!focusedRecord || focusedRecord.coverage !== "complete" || focusedRecord.gpsConfidence === "low") return [];
     return focusedRecord.trajectory.slice(1).flatMap((sample, index) => {
       const previous = focusedRecord.trajectory[index];
       if (sample.lossRateSecondsPer100m === undefined) return [];
@@ -108,22 +110,31 @@ export function SegmentTrajectoryMap({
       const role = record.lapId === focusedLapId ? "focused" : "reference";
       return [{
         id: `${role}-${record.lapId}`,
-        label: `Lap ${record.ordinal} ${role} Ghost`,
+        label: `${t("lap.lap")} ${record.ordinal} ${role === "focused" ? t("lap.workbench.focusedGhost") : t("lap.workbench.referenceGhost")}`,
         coordinate: [sample.longitude, sample.latitude],
         color: colorByLap.get(record.lapId) ?? "#64748b",
       } satisfies MapGhostMarker];
     });
-  }, [analysis.range.endDistanceMeters, analysis.range.startDistanceMeters, analysis.records, colorByLap, cursorDistanceMeters, focusedLapId, referenceLapId]);
+  }, [analysis.range.endDistanceMeters, analysis.range.startDistanceMeters, analysis.records, colorByLap, cursorDistanceMeters, focusedLapId, referenceLapId, t]);
 
   const fastest = analysis.records.find((record) => record.lapId === analysis.fastestLapId);
   const shortest = analysis.records.find((record) => record.lapId === analysis.shortestLapId);
+  const referenceRecord = analysis.records.find((record) => record.lapId === referenceLapId);
 
   return (
-    <section className="segment-trajectory-map" aria-label="Lap trajectory comparison">
-      <div className="segment-map-badges" aria-label="Path records">
-        {fastest ? <span className="status-chip fastest">Fastest path · Lap {fastest.ordinal}</span> : null}
-        {shortest ? <span className="status-chip shortest">Shortest recorded path · Lap {shortest.ordinal}</span> : null}
-        {focusedRecord?.gpsConfidence === "low" ? <span className="status-chip warning">Low GPS confidence · heat hidden</span> : null}
+    <section className="segment-trajectory-map" aria-label={t("lap.workbench.trajectoryComparison")}>
+      <div className="segment-map-legend" aria-label={t("lap.workbench.trajectoryComparison")}>
+        {focusedRecord ? (
+          <span><i style={{ background: colorByLap.get(focusedRecord.lapId) }} />{t("lap.workbench.focusedLap")} · {t("lap.lap")} {focusedRecord.ordinal}</span>
+        ) : null}
+        {referenceRecord && referenceRecord.lapId !== focusedRecord?.lapId ? (
+          <span><i className="is-reference" style={{ borderColor: colorByLap.get(referenceRecord.lapId) }} />{t("lap.workbench.referenceLap")} · {t("lap.lap")} {referenceRecord.ordinal}</span>
+        ) : null}
+      </div>
+      <div className="segment-map-badges" aria-label={t("lap.workbench.pathRecords")}>
+        {fastest ? <span className="status-chip fastest">{t("lap.workbench.fastestPath")} · {t("lap.lap")} {fastest.ordinal}</span> : null}
+        {shortest ? <span className="status-chip shortest">{t("lap.workbench.shortestPath")} · {t("lap.lap")} {shortest.ordinal}</span> : null}
+        {focusedRecord?.gpsConfidence === "low" ? <span className="status-chip warning">{t("lap.workbench.lowGpsHeatHidden")}</span> : null}
       </div>
       <RouteMap
         points={points}

@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { analyzeSegmentScope, scopeSourceIndexes } from "../domain/segmentAnalysis";
+import { buildSectionOpportunities } from "../domain/sectionOpportunities";
 import type {
   ActiveSegment,
   AnalysisScope,
   GpsPoint,
   LapResult,
   SegmentAnalysisResult,
+  SectionOpportunity,
   TrackSection,
 } from "../domain/types";
 import type { LineString } from "geojson";
@@ -29,6 +31,7 @@ export interface SegmentWorkbenchState {
   overlayLapIds: string[];
   axis: SegmentAxis;
   analysis: SegmentAnalysisResult;
+  opportunities: SectionOpportunity[];
   navigationSections: TrackSection[];
   activeSegment?: ActiveSegment;
   selectSection: (sectionId: string) => void;
@@ -51,13 +54,22 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   const [requestedOverlayLapIds, setRequestedOverlayLapIds] = useState<string[]>([]);
   const [axis, setAxis] = useState<SegmentAxis>("distance");
 
+  const defaultReferenceLapId = useMemo(() => [...input.laps]
+    .filter((lap) => lap.completion === "complete" && lap.validity === "valid" && lap.durationSeconds !== undefined)
+    .sort((left, right) => left.durationSeconds! - right.durationSeconds!)[0]?.id, [input.laps]);
+  const effectiveReferenceLapId = requestedReferenceLapId && input.laps.some((lap) =>
+    lap.id === requestedReferenceLapId && lap.completion === "complete" && lap.validity === "valid"
+  )
+    ? requestedReferenceLapId
+    : defaultReferenceLapId;
+
   const analysis = useMemo(() => analyzeSegmentScope(
     input.points,
     input.laps,
     input.analysisLine,
     input.sections,
     scope,
-    requestedReferenceLapId,
+    effectiveReferenceLapId,
     input.includePartialLapSections,
   ), [
     input.analysisLine,
@@ -65,20 +77,40 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     input.laps,
     input.points,
     input.sections,
-    requestedReferenceLapId,
+    effectiveReferenceLapId,
     scope,
   ]);
 
   const recordIds = useMemo(() => new Set(analysis.records.map((record) => record.lapId)), [analysis.records]);
   const referenceLapId = analysis.referenceLapId;
+  const latestCompleteLapId = [...analysis.records].reverse().find((record) =>
+    record.coverage === "complete" && record.completion === "complete" && record.validity === "valid" && record.lapId !== referenceLapId
+  )?.lapId;
   const focusedLapId = requestedFocusedLapId && recordIds.has(requestedFocusedLapId)
     ? requestedFocusedLapId
-    : analysis.fastestLapId ?? analysis.records[0]?.lapId;
+    : latestCompleteLapId ?? analysis.fastestLapId ?? analysis.records[0]?.lapId;
   const navigationSections = useMemo(() => input.sections.filter((section) => {
     if (filter === "corners") return section.kind !== "straight";
     if (filter === "straights") return section.kind === "straight";
     return true;
   }), [filter, input.sections]);
+  const opportunities = useMemo(() => buildSectionOpportunities(
+    input.points,
+    input.laps,
+    input.analysisLine,
+    input.sections,
+    focusedLapId,
+    referenceLapId,
+    input.includePartialLapSections,
+  ), [
+    focusedLapId,
+    input.analysisLine,
+    input.includePartialLapSections,
+    input.laps,
+    input.points,
+    input.sections,
+    referenceLapId,
+  ]);
 
   const overlayLapIds = useMemo(() => {
     const ranked = [...analysis.records]
@@ -143,6 +175,7 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     overlayLapIds,
     axis,
     analysis,
+    opportunities,
     navigationSections,
     activeSegment,
     selectSection,

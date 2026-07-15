@@ -3,6 +3,7 @@ import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import type { SegmentAnalysisResult, SegmentTrajectorySample } from "../domain/types";
 import { ChartPanel } from "./ChartPanel";
 import { buildSegmentTelemetryOption } from "./segmentTelemetryOptions";
+import { useI18n } from "../i18n/useI18n";
 
 interface SegmentTelemetryChartProps {
   analysis: SegmentAnalysisResult;
@@ -25,6 +26,7 @@ export function SegmentTelemetryChart({
   onReset,
   onCursorDistance,
 }: SegmentTelemetryChartProps) {
+  const { t } = useI18n();
   const [interaction, setInteraction] = useState<"range" | "zoom">("range");
   const option = useMemo(() => buildSegmentTelemetryOption(
     analysis,
@@ -32,7 +34,17 @@ export function SegmentTelemetryChart({
     axis,
     focusedLapId,
     referenceLapId,
-  ), [analysis, axis, focusedLapId, overlayLapIds, referenceLapId]);
+    {
+      speed: t("lap.workbench.chartSpeed"),
+      acceleration: t("lap.workbench.chartAcceleration"),
+      elapsed: t("lap.workbench.chartElapsed"),
+      delta: t("lap.workbench.chartDelta"),
+      loss: t("lap.workbench.chartLoss"),
+      distanceAxis: t("lap.workbench.chartDistanceAxis"),
+      timeAxis: t("lap.workbench.chartTimeAxis"),
+      lap: t("lap.lap"),
+    },
+  ), [analysis, axis, focusedLapId, overlayLapIds, referenceLapId, t]);
   const focused = analysis.records.find((record) => record.lapId === focusedLapId)
     ?? analysis.records.find((record) => record.lapId === referenceLapId);
 
@@ -53,17 +65,17 @@ export function SegmentTelemetryChart({
 
   return (
     <ChartPanel
-      title="Speed, elapsed time, Delta-T & Time Slip Rate"
-      ariaLabel={`Synchronized segment telemetry by ${axis}`}
+      title={t("lap.workbench.chartTitle")}
+      ariaLabel={axis === "distance" ? t("lap.workbench.chartAriaDistance") : t("lap.workbench.chartAriaTime")}
       className="segment-telemetry-panel"
       option={option}
       onPoint={selectPoint}
       onBrushRange={interaction === "range" ? selectRange : undefined}
       actions={(
-        <div className="segmented-control" role="group" aria-label="Graph drag behavior">
-          <button type="button" aria-pressed={interaction === "range"} onClick={() => setInteraction("range")}>Select range</button>
-          <button type="button" aria-pressed={interaction === "zoom"} onClick={() => setInteraction("zoom")}>Zoom</button>
-          <button type="button" onClick={onReset}>Reset</button>
+        <div className="segmented-control" role="group" aria-label={t("lap.workbench.graphDragBehavior")}>
+          <button type="button" aria-pressed={interaction === "range"} onClick={() => setInteraction("range")}>{t("lap.workbench.selectRange")}</button>
+          <button type="button" aria-pressed={interaction === "zoom"} onClick={() => setInteraction("zoom")}>{t("lap.workbench.zoom")}</button>
+          <button type="button" onClick={onReset}>{t("lap.workbench.reset")}</button>
         </div>
       )}
     />
