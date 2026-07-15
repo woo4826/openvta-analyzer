@@ -141,6 +141,17 @@ describe("RouteMap source updates", () => {
     expect(data.features).toEqual([]);
   });
 
+  it("keeps hidden route points available as an invisible map-selection target", async () => {
+    render(wrappedRoute(0, true, { showRoutePoints: false, interactiveRoutePoints: true }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+
+    await waitFor(() => expect(map.sources.get("route-points-source")?.setData).toHaveBeenCalled());
+    const data = map.sources.get("route-points-source")!.setData.mock.calls.at(-1)?.[0] as { features: unknown[] };
+    expect(data.features).toHaveLength(points.length);
+    expect(map.setPaintProperty).toHaveBeenCalledWith("route-points", "circle-opacity", 0);
+  });
+
   it("renders section overlays in the coordinate fallback", async () => {
     mapMock.MapDouble.shouldThrow = true;
     const view = render(wrappedRoute(0, true));
@@ -210,6 +221,7 @@ function wrappedRoute(
     onSectionSelect?: (sectionId: string) => void;
     sectionVisuals?: Record<string, { color: string; width?: number; opacity?: number }>;
     showRoutePoints?: boolean;
+    interactiveRoutePoints?: boolean;
     lapOverlays?: ComponentProps<typeof RouteMap>["lapOverlays"];
     heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
     ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
@@ -235,6 +247,7 @@ function wrappedRoute(
         heatSegments={options.heatSegments}
         ghostMarkers={options.ghostMarkers}
         showRoutePoints={options.showRoutePoints}
+        interactiveRoutePoints={options.interactiveRoutePoints}
         onSectionSelect={options.onSectionSelect}
         onSelectedIndex={vi.fn()}
         onSegmentChange={vi.fn()}

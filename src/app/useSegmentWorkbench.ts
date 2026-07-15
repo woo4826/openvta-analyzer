@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyzeSegmentScope, scopeSourceIndexes } from "../domain/segmentAnalysis";
 import { buildSectionOpportunities } from "../domain/sectionOpportunities";
 import type {
@@ -53,6 +53,17 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   const [requestedReferenceLapId, setRequestedReferenceLapId] = useState<string>();
   const [requestedOverlayLapIds, setRequestedOverlayLapIds] = useState<string[]>([]);
   const [axis, setAxis] = useState<SegmentAxis>("distance");
+  const effectiveScope = useMemo<AnalysisScope>(() => (
+    scope.kind === "section" && !input.sections.some((section) => section.id === scope.sectionId)
+      ? { kind: "whole-lap" }
+      : scope
+  ), [input.sections, scope]);
+
+  useEffect(() => {
+    if (scope.kind === "section" && !input.sections.some((section) => section.id === scope.sectionId)) {
+      setScope({ kind: "whole-lap" });
+    }
+  }, [input.sections, scope]);
 
   const defaultReferenceLapId = useMemo(() => [...input.laps]
     .filter((lap) => lap.completion === "complete" && lap.validity === "valid" && lap.durationSeconds !== undefined)
@@ -68,7 +79,7 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     input.laps,
     input.analysisLine,
     input.sections,
-    scope,
+    effectiveScope,
     effectiveReferenceLapId,
     input.includePartialLapSections,
   ), [
@@ -78,7 +89,7 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     input.points,
     input.sections,
     effectiveReferenceLapId,
-    scope,
+    effectiveScope,
   ]);
 
   const recordIds = useMemo(() => new Set(analysis.records.map((record) => record.lapId)), [analysis.records]);
@@ -113,17 +124,12 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   ]);
 
   const overlayLapIds = useMemo(() => {
-    const ranked = [...analysis.records]
-      .filter((record) => record.coverage !== "none")
-      .sort((left, right) => (left.deltaBestSeconds ?? Number.POSITIVE_INFINITY) - (right.deltaBestSeconds ?? Number.POSITIVE_INFINITY))
-      .map((record) => record.lapId);
     return unique([
       focusedLapId,
       referenceLapId,
       ...requestedOverlayLapIds.filter((id) => recordIds.has(id)),
-      ...ranked,
     ]).slice(0, MAX_OVERLAY_LAPS);
-  }, [analysis.records, focusedLapId, recordIds, referenceLapId, requestedOverlayLapIds]);
+  }, [focusedLapId, recordIds, referenceLapId, requestedOverlayLapIds]);
 
   const activeSegment = useMemo((): ActiveSegment | undefined => {
     const focused = analysis.records.find((record) => record.lapId === focusedLapId);
@@ -131,9 +137,9 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     if (!indexes) return undefined;
     return {
       ...indexes,
-      source: scope.kind === "range" ? scope.source : "map",
+      source: effectiveScope.kind === "range" ? effectiveScope.source : "map",
     };
-  }, [analysis.records, focusedLapId, scope]);
+  }, [analysis.records, effectiveScope, focusedLapId]);
 
   const selectSection = useCallback((sectionId: string) => {
     if (!input.sections.some((section) => section.id === sectionId)) return;
@@ -168,7 +174,7 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   }, [recordIds]);
 
   return {
-    scope,
+    scope: effectiveScope,
     filter,
     focusedLapId,
     referenceLapId,

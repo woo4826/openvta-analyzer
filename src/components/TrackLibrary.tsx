@@ -4,6 +4,7 @@ import { useTrackLibrary } from "../app/useTrackLibrary";
 import { downloadText } from "../domain/export";
 import { exportTrackCatalog } from "../domain/trackCatalog";
 import { exportTrackProfile } from "../domain/trackProfile";
+import type { TrackProfileOrigin } from "../domain/trackStorage";
 import type { TrackProfileV1 } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
 import { FilePickerButton, IconButton } from "./ui";
@@ -12,12 +13,13 @@ interface TrackLibraryProps {
   open: boolean;
   activeFileName?: string;
   onClose: () => void;
-  onApply: (profile: TrackProfileV1) => void;
+  onApply: (profile: TrackProfileV1, origin: TrackProfileOrigin) => void;
 }
 
 export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLibraryProps) {
   const { t } = useI18n();
   const library = useTrackLibrary();
+  const refreshLibrary = library.refresh;
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -33,6 +35,10 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
       previousFocus?.focus();
     };
   }, [onClose, open]);
+
+  useEffect(() => {
+    if (open) void refreshLibrary();
+  }, [open, refreshLibrary]);
 
   if (!open) return null;
 
@@ -103,6 +109,7 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
               <div className="track-library-card-copy">
                 <h3>{profile.name}</h3>
                 <p>{profile.layoutName || profile.id}</p>
+                <span className="status-badge status-badge-info">{trackOriginLabel(library.origins?.[profile.id], profile, t)}</span>
                 <small>
                   {t("trackLibrary.summary", {
                     sections: profile.sections.length,
@@ -116,7 +123,7 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
                   className="button primary"
                   disabled={!activeFileName || library.busy}
                   onClick={() => {
-                    onApply(profile);
+                    onApply(profile, effectiveTrackOrigin(library.origins?.[profile.id], profile));
                     onClose();
                   }}
                 >
@@ -153,6 +160,27 @@ export function TrackLibrary({ open, activeFileName, onClose, onApply }: TrackLi
       </div>
     </div>
   );
+}
+
+function trackOriginLabel(
+  origin: "local-override" | "imported" | "osm" | "generated" | undefined,
+  profile: TrackProfileV1,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const keys = {
+    "local-override": "trackLibrary.origin.localOverride",
+    imported: "trackLibrary.origin.imported",
+    osm: "trackLibrary.origin.osm",
+    generated: "trackLibrary.origin.generated",
+  } as const;
+  return t(keys[effectiveTrackOrigin(origin, profile)]);
+}
+
+function effectiveTrackOrigin(origin: TrackProfileOrigin | undefined, profile: TrackProfileV1): TrackProfileOrigin {
+  if (origin) return origin;
+  if (profile.source.kind === "recording") return "generated";
+  if (profile.source.kind === "osm") return "osm";
+  return "imported";
 }
 
 async function readTextFile(file: File): Promise<string> {

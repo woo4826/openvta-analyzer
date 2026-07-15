@@ -137,6 +137,52 @@ describe("useLapWorkspace", () => {
     expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
   });
 
+  it("keeps a hosted preset authoritative even when its OSM source snapshot is old", async () => {
+    const points = multiLapPoints();
+    const builtIn = {
+      ...osmCandidate().profile,
+      id: "kr-inje-speedium-full",
+      source: { kind: "osm" as const, fetchedAt: "2024-01-01T00:00:00.000Z" },
+      startFinish: createGateFromRoutePoint(points, 0),
+      analysisLine: { type: "LineString" as const, coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [{ id: "corner-1", name: "Corner 1", kind: "corner-right" as const, startDistanceMeters: 0, endDistanceMeters: 20 }],
+    };
+    mocks.loadHostedTrackPresets.mockResolvedValue([builtIn]);
+    mocks.scoreTrackProfile.mockReturnValue({ profile: builtIn, medianDistanceMeters: 4, lengthRatio: 1, score: 4 });
+    const { result } = renderHook(() => useLapWorkspace("file-old-built-in", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.profile?.id).toBe(builtIn.id));
+    await waitFor(() => expect(result.current.lookupState).toBe("matched"));
+    expect(result.current.profileOrigin).toBe("built-in");
+    expect(mocks.lookupOsmTracks).not.toHaveBeenCalled();
+  });
+
+  it("does not create an originless local shadow when a hosted preset needs an inferred gate", async () => {
+    const points = multiLapPoints();
+    const builtIn = {
+      ...osmCandidate().profile,
+      id: "hosted-without-gate",
+      startFinish: undefined,
+      analysisLine: { type: "LineString" as const, coordinates: points.slice(0, 6).map((point) => [point.longitude, point.latitude]) },
+      sections: [{
+        id: "corner-1",
+        name: "Corner 1",
+        kind: "corner-right" as const,
+        startDistanceMeters: 0,
+        endDistanceMeters: 20,
+        source: "automatic" as const,
+      }],
+    };
+    mocks.loadHostedTrackPresets.mockResolvedValue([builtIn]);
+    mocks.scoreTrackProfile.mockReturnValue({ profile: builtIn, medianDistanceMeters: 4, lengthRatio: 1, score: 4 });
+
+    const { result } = renderHook(() => useLapWorkspace("file-hosted-inferred", "session.Vta", points));
+
+    await waitFor(() => expect(result.current.profile?.startFinish).toBeDefined());
+    expect(result.current.profileOrigin).toBe("built-in");
+    expect(mocks.saveTrackProfile).not.toHaveBeenCalled();
+  });
+
   it("turns a built-in preset edit into a persisted local override", async () => {
     const points = multiLapPoints();
     const builtIn = {
@@ -299,7 +345,7 @@ describe("useLapWorkspace", () => {
       id: result.current.profile!.id,
       source: { kind: "recording" },
       sections: expect.arrayContaining([expect.objectContaining({ source: "automatic" })]),
-    })));
+    }), "generated"));
   });
 
   it("generates and persists a reusable preset when no saved or OSM track matches", async () => {
@@ -321,7 +367,7 @@ describe("useLapWorkspace", () => {
       id: "recording-file-auto",
       startFinish: expect.any(Object),
       sections: expect.arrayContaining([expect.objectContaining({ source: "automatic" })]),
-    })));
+    }), "generated"));
   });
 
   it("adds the inferred gate and automatic sections to a matched preset that only has a centerline", async () => {
@@ -596,7 +642,7 @@ describe("useLapWorkspace", () => {
       expect(result.current.profile?.name).toBe("Imported layout");
       expect(result.current.detection?.laps.filter((lap) => lap.completion === "complete")).toHaveLength(2);
     });
-    expect(mocks.saveTrackProfile).toHaveBeenCalledWith(expect.objectContaining({ id: "imported-layout" }));
+    expect(mocks.saveTrackProfile).toHaveBeenCalledWith(expect.objectContaining({ id: "imported-layout" }), "imported");
   });
 
   it("applies a library profile and clears gate-dependent overrides", async () => {
@@ -614,9 +660,10 @@ describe("useLapWorkspace", () => {
       startFinish: createGateFromRoutePoint(points, 2),
     };
 
-    act(() => result.current.applyProfile(applied));
+    act(() => result.current.applyProfile(applied, "osm"));
 
     await waitFor(() => expect(result.current.profile?.id).toBe("library-inje"));
+    expect(result.current.profileOrigin).toBe("osm");
     expect(result.current.lookupState).toBe("imported");
     expect(result.current.detection?.boundaries.some((boundary) => boundary.source === "manual")).toBe(false);
   });

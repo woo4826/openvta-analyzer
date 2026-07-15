@@ -16,7 +16,7 @@ import {
   loadLapAnalysisSettings,
   saveLapAnalysisSettings,
 } from "../domain/settings";
-import { saveTrackProfile } from "../domain/trackStorage";
+import { saveTrackProfile, type TrackProfileOrigin } from "../domain/trackStorage";
 import { parseTrackProfile } from "../domain/trackProfile";
 import { analyzeLapSections, automaticTheoreticalBestSeconds } from "../domain/sectionAnalysis";
 import type {
@@ -69,7 +69,7 @@ export interface LapWorkspace {
   referenceLapId?: string;
   includePartialLapSectors: boolean;
   importProfile: (text: string) => Promise<string | undefined>;
-  applyProfile: (profile: TrackProfileV1) => void;
+  applyProfile: (profile: TrackProfileV1, origin?: TrackProfileOrigin) => void;
   chooseCandidate: (profileId: string) => void;
   useSelectedPointAsStartFinish: (pointIndex: number) => void;
   updateStartFinish: (widthMeters: number, forwardBearingDegrees: number) => void;
@@ -155,14 +155,20 @@ export function useLapWorkspace(
         }));
         return;
       }
-      const isFresh = cachedProfile ? isFreshProfile(cachedProfile) : false;
+      const profileOrigin = cachedProfile
+        ? cached.find((candidate) => candidate.profile.id === cachedProfile.id)?.origin
+        : undefined;
+      const isFresh = cachedProfile
+        ? profileOrigin !== "osm" || isFreshProfile(cachedProfile)
+        : false;
       if (cachedProfile) {
-        const profileOrigin = cached.find((candidate) => candidate.profile.id === cachedProfile.id)?.origin;
         const profile = addInferredGate(
           cachedProfile,
           cachedProfile.startFinish ? undefined : await getInferredGate(),
         );
-        if (profile !== cachedProfile) await saveTrackProfile(profile);
+        if (profile !== cachedProfile && profileOrigin !== "built-in") {
+          await saveTrackProfile(profile, profileOrigin);
+        }
         setForFile((workspace) => ({
           ...workspace,
           profile,
@@ -318,6 +324,7 @@ export function useLapWorkspace(
     const profile = current.profile;
     if (
       current.profileOrigin === "local-override" ||
+      current.profileOrigin === "built-in" ||
       !profile?.startFinish ||
       !profile.analysisLine ||
       !profile.sections.some((section) => section.source === "automatic")
@@ -325,7 +332,8 @@ export function useLapWorkspace(
     const revision = `${profile.id}:${profile.updatedAt}`;
     if (persistedAutomaticProfiles.current.has(revision)) return;
     persistedAutomaticProfiles.current.add(revision);
-    void saveTrackProfile(profile).catch(() => {
+    const origin = current.profileOrigin ?? inferEditedProfileOrigin(profile);
+    void saveTrackProfile(profile, origin).catch(() => {
       persistedAutomaticProfiles.current.delete(revision);
     });
   }, [current.profile, current.profileOrigin]);
@@ -386,13 +394,13 @@ export function useLapWorkspace(
     return undefined;
   }, [update]);
 
-  const applyProfile = useCallback((profile: TrackProfileV1) => {
+  const applyProfile = useCallback((profile: TrackProfileV1, origin?: TrackProfileOrigin) => {
     update((workspace) => ({
       ...workspace,
       profile,
-      profileOrigin: "imported",
+      profileOrigin: origin ?? inferEditedProfileOrigin(profile),
       manualGate: undefined,
-      lookupState: "imported",
+      lookupState: origin === "generated" ? "generated" : "imported",
       lookupMessage: undefined,
       candidates: [],
       boundaryOverrides: [],
@@ -406,12 +414,13 @@ export function useLapWorkspace(
     void (async () => {
       const inferredGate = candidate.profile.startFinish ? undefined : await inferStartFinishGateAsync(points);
       const profile = addInferredGate(candidate.profile, inferredGate);
-      await saveTrackProfile(profile);
+      const origin = trackPresets.profiles.find((item) => item.profile.id === profileId)?.origin ?? "osm";
+      if (origin !== "built-in") await saveTrackProfile(profile, origin);
       update((workspace) => workspace.candidates.some((item) => item.profile.id === profileId)
         ? {
             ...workspace,
             profile,
-            profileOrigin: trackPresets.profiles.find((item) => item.profile.id === profileId)?.origin ?? "osm",
+            profileOrigin: origin,
             lookupState: "matched",
           }
         : workspace);
@@ -788,8 +797,16 @@ function withEditedProfile(workspace: FileLapWorkspace, profile: TrackProfileV1)
   return {
     ...workspace,
     profile,
-    profileOrigin: workspace.profileOrigin === "built-in" ? "local-override" : workspace.profileOrigin,
+    profileOrigin: workspace.profileOrigin === "built-in"
+      ? "local-override"
+      : workspace.profileOrigin ?? inferEditedProfileOrigin(profile),
   };
+}
+
+function inferEditedProfileOrigin(profile: TrackProfileV1): Exclude<EffectiveTrackProfileOrigin, "built-in"> {
+  if (profile.source.kind === "recording") return "generated";
+  if (profile.source.kind === "osm") return "osm";
+  return "imported";
 }
 
 function isFreshProfile(profile: TrackProfileV1): boolean {

@@ -60,6 +60,7 @@ interface RouteMapProps {
   ghostMarkers?: MapGhostMarker[];
   sectionVisuals?: Record<string, TrackSectionVisual>;
   showRoutePoints?: boolean;
+  interactiveRoutePoints?: boolean;
   onSectionSelect?: (sectionId: string) => void;
   onSelectedIndex: (index: number) => void;
   onSegmentChange: (segment?: ActiveSegment) => void;
@@ -83,6 +84,7 @@ export function RouteMap({
   ghostMarkers = EMPTY_GHOST_MARKERS,
   sectionVisuals = EMPTY_SECTION_VISUALS,
   showRoutePoints = true,
+  interactiveRoutePoints = showRoutePoints,
   onSectionSelect,
   onSelectedIndex,
   onSegmentChange,
@@ -146,22 +148,22 @@ export function RouteMap({
     })) : [],
     [bounds, gates],
   );
-  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds && showRoutePoints ? points.map((point, index) => {
+  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds && interactiveRoutePoints ? points.map((point, index) => {
     const [cx, cy] = toSvgPointArray(point, bounds);
     return (
       <circle
         key={`${point.source}-${point.index}-${point.lineNumber}`}
         cx={cx}
         cy={cy}
-        r={settings.pointSize}
-        fill={speedColor(point.speedKmh, settings.speedThresholds)}
-        stroke="#0c1b22"
-        strokeWidth="1.5"
+        r={showRoutePoints ? settings.pointSize : 10}
+        fill={showRoutePoints ? speedColor(point.speedKmh, settings.speedThresholds) : "transparent"}
+        stroke={showRoutePoints ? "#0c1b22" : "transparent"}
+        strokeWidth={showRoutePoints ? 1.5 : 0}
         onClick={() => onSelectedIndex(index)}
         style={{ pointerEvents: "auto", cursor: "pointer" }}
       />
     );
-  }) : [], [bounds, mapFailed, onSelectedIndex, points, settings.pointSize, settings.speedThresholds, showRoutePoints]);
+  }) : [], [bounds, interactiveRoutePoints, mapFailed, onSelectedIndex, points, settings.pointSize, settings.speedThresholds, showRoutePoints]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !points.length) {
@@ -254,8 +256,8 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints);
-  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints]);
+    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints, interactiveRoutePoints);
+  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints, interactiveRoutePoints]);
 
   useEffect(() => {
     if (!mapRef.current || !styleLoaded) {
@@ -618,6 +620,7 @@ function updateMapRoute(
   sectionGeometry: TrackSectionGeometry[],
   sectionVisuals: Record<string, TrackSectionVisual>,
   showRoutePoints: boolean,
+  interactiveRoutePoints: boolean,
 ) {
   if (!map.isStyleLoaded() || !points.length) {
     return;
@@ -645,7 +648,7 @@ function updateMapRoute(
   };
   const pointData: FeatureCollection<Point> = {
     type: "FeatureCollection",
-    features: showRoutePoints ? points.map((point, index) => ({
+    features: showRoutePoints || interactiveRoutePoints ? points.map((point, index) => ({
       type: "Feature",
       properties: { index, speedKmh: point.speedKmh },
       geometry: { type: "Point", coordinates: [point.longitude, point.latitude] },
@@ -929,8 +932,10 @@ function updateMapRoute(
     });
   }
 
-  map.setPaintProperty("route-points", "circle-radius", settings.pointSize);
+  map.setPaintProperty("route-points", "circle-radius", showRoutePoints ? settings.pointSize : 10);
   map.setPaintProperty("route-points", "circle-color", speedColorExpression(settings.speedThresholds));
+  map.setPaintProperty("route-points", "circle-opacity", showRoutePoints ? 1 : 0);
+  map.setPaintProperty("route-points", "circle-stroke-opacity", showRoutePoints ? 1 : 0);
   map.setPaintProperty("selected-point", "circle-radius", Math.max(settings.pointSize + 5, 10));
   map.setPaintProperty("selected-point-core", "circle-radius", Math.max(settings.pointSize - 1, 4));
 }

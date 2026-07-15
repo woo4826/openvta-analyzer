@@ -37,6 +37,10 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
   await expect(analysisMain.getByRole("tab", { name: "Segment Analysis Workbench" })).toHaveAttribute("aria-selected", "true");
   await expect(analysisMain.getByRole("heading", { name: "Where am I losing time?" })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) <= 680) {
+    const workbenchBox = await analysisMain.locator(".segment-workbench").boundingBox();
+    expect(workbenchBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(page.viewportSize()?.height ?? 0);
+  }
   await expect(analysisMain.getByRole("region", { name: "Biggest time-loss sections" })).toBeVisible();
   await expect(analysisMain.getByRole("region", { name: "Lap trajectory comparison" })).toBeVisible();
   await expect(analysisMain.getByRole("button", { name: "Whole lap" })).toHaveAttribute("aria-pressed", "true");
@@ -58,6 +62,15 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   }
   await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" })).toBeVisible();
+  await analysisMain.getByRole("button", { name: "Select range", exact: true }).click();
+  const telemetryCanvas = analysisMain.locator(".segment-telemetry-panel canvas");
+  const telemetryBox = await telemetryCanvas.boundingBox();
+  expect(telemetryBox).not.toBeNull();
+  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.28, telemetryBox!.y + telemetryBox!.height * 0.1);
+  await page.mouse.down();
+  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.62, telemetryBox!.y + telemetryBox!.height * 0.1, { steps: 12 });
+  await page.mouse.up();
+  await expect(analysisMain.locator(".segment-workbench-header")).toContainText(/Custom range · \d+–\d+ m/);
   await analysisMain.getByRole("button", { name: "Time", exact: true }).click();
   await expect(analysisMain.getByRole("button", { name: "Time", exact: true })).toHaveAttribute("aria-pressed", "true");
 

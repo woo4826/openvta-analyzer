@@ -53,6 +53,7 @@ export function SegmentOpportunityRanking({
                     type="button"
                     className="segment-opportunity-row"
                     aria-pressed={selected}
+                    aria-current={selected ? "true" : undefined}
                     onClick={() => onSection(opportunity.section.id)}
                   >
                     <span className="segment-opportunity-rank">{index + 1}</span>

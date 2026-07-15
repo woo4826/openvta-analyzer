@@ -1,10 +1,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LapWorkspace } from "../../app/useLapWorkspace";
 import type { GpsPoint, LapResult, TrackProfileV1 } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { LapAnalysis } from "../LapAnalysis";
+
+const downloadText = vi.hoisted(() => vi.fn());
+vi.mock("../../domain/export", () => ({ downloadText }));
 
 vi.mock("../RouteMap", () => ({
   RouteMap: ({
@@ -22,6 +25,8 @@ vi.mock("../ChartPanel", () => ({
 }));
 
 describe("LapAnalysis", () => {
+  beforeEach(() => downloadText.mockReset());
+
   it("imports a track profile and exposes the partial-lap sector policy", async () => {
     const user = userEvent.setup();
     const workspace = emptyWorkspace();
@@ -52,7 +57,7 @@ describe("LapAnalysis", () => {
 
     await user.click(screen.getByRole("checkbox", { name: /Include completed sectors from partial laps/i }));
     expect(workspace.setIncludePartialLapSectors).toHaveBeenCalledWith(true);
-    expect(screen.getByTestId("lap-route-map")).toBeInTheDocument();
+    expect(screen.getAllByTestId("lap-route-map").length).toBeGreaterThan(0);
   });
 
   it("keeps gate numeric edits as drafts until a confirmed Apply", async () => {
@@ -104,6 +109,20 @@ describe("LapAnalysis", () => {
     confirm.mockRestore();
   });
 
+  it("exports a built-in profile without turning it into a local override", async () => {
+    const user = userEvent.setup();
+    const workspace = emptyWorkspace();
+    workspace.profile = trackProfile();
+    workspace.profileOrigin = "built-in";
+    renderLapAnalysis(workspace);
+
+    await user.click(screen.getByRole("tab", { name: "Setup" }));
+    await user.click(screen.getByRole("button", { name: "Save / export track" }));
+
+    expect(downloadText).toHaveBeenCalledWith("session.openvta-track.json", expect.stringContaining('"schemaVersion": 1'), "application/json");
+    expect(workspace.saveCurrentProfile).not.toHaveBeenCalled();
+  });
+
   it("renders reverse crossing and missed-sector diagnostics as localized warnings", () => {
     const workspace = emptyWorkspace();
     const flaggedLap = lapWithFlags();
@@ -142,12 +161,12 @@ describe("LapAnalysis", () => {
     await user.click(screen.getByRole("tab", { name: "Setup" }));
     expect(screen.getByText("+1.000 s")).toBeInTheDocument();
 
-    const name = screen.getByRole("textbox", { name: "Name" });
+    const name = screen.getByRole("textbox", { name: "Sector 1 Name" });
     await user.clear(name);
     await user.type(name, "Back straight");
     await user.tab();
     expect(workspace.updateSectorGate).toHaveBeenCalledWith("sector-1", { name: "Back straight" });
-    await user.click(screen.getByRole("button", { name: "Move to selected point" }));
+    await user.click(screen.getByRole("button", { name: "Sector 1 Move to selected point" }));
     expect(workspace.moveSectorGateToPoint).toHaveBeenCalledWith("sector-1", 0);
   });
 
@@ -216,6 +235,37 @@ describe("LapAnalysis", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: /straight-neutral 100 m/i })).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByText(/straight-neutral ·/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Setup" }));
+    await user.click(screen.getByRole("tab", { name: "Segment Analysis Workbench" }));
+    expect(screen.getByRole("button", { name: /straight-neutral 100 m/i })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("uses automatic section results for the partial-lap policy summary", async () => {
+    const user = userEvent.setup();
+    const workspace = emptyWorkspace();
+    workspace.profile = trackProfile();
+    workspace.sectionResults = [{ ...sectionResult("partial-lap", 4, 90), fromPartialLap: true, eligibleForBest: false }];
+    workspace.automaticTheoreticalBestSeconds = 42;
+    renderLapAnalysis(workspace);
+
+    await user.click(screen.getByRole("tab", { name: "Setup" }));
+    expect(screen.getByText(/0 of 1 completed partial-lap sectors.*0:42\.000/i)).toBeInTheDocument();
+  });
+
+  it("does not mix a timing-sector theoretical value into an incomplete analysis-section summary", async () => {
+    const user = userEvent.setup();
+    const workspace = emptyWorkspace();
+    workspace.profile = trackProfile();
+    workspace.sectionResults = [{ ...sectionResult("partial-lap", 4, 90), fromPartialLap: true, eligibleForBest: false }];
+    workspace.theoreticalBestSeconds = 42;
+    workspace.automaticTheoreticalBestSeconds = undefined;
+    renderLapAnalysis(workspace);
+
+    await user.click(screen.getByRole("tab", { name: "Setup" }));
+
+    expect(screen.getByText(/0 of 1 completed partial-lap sectors.*not available/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0:42\.000/)).not.toBeInTheDocument();
   });
 });
 

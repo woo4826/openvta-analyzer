@@ -47,6 +47,8 @@ export function SegmentLapTable({
                   {recordLapLabel(record, t)}
                 </button>
                 <div className="record-badges">
+                  {record.lapId === focusedLapId ? <span className="is-focus">{t("lap.workbench.focusedLap")}</span> : null}
+                  {record.lapId === referenceLapId ? <span className="is-reference">{t("lap.workbench.referenceLap")}</span> : null}
                   {record.lapId === fastestLapId ? <span>{t("lap.workbench.fastestPath")}</span> : null}
                   {record.lapId === shortestLapId ? <span>{t("lap.workbench.shortestPath")}</span> : null}
                 </div>

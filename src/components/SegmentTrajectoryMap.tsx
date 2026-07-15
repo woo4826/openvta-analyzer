@@ -16,6 +16,7 @@ import {
   type MapHeatSegment,
 } from "./RouteMap";
 import { useI18n } from "../i18n/useI18n";
+import { FOCUSED_LAP_COLOR, REFERENCE_LAP_COLOR } from "./segmentTelemetryOptions";
 
 interface SegmentTrajectoryMapProps {
   analysis: SegmentAnalysisResult;
@@ -37,7 +38,7 @@ interface SegmentTrajectoryMapProps {
   onSettingsChange?: (settings: MapSettings) => void;
 }
 
-const LAP_COLORS = ["#2563eb", "#ef4444", "#16a34a", "#7c3aed", "#ea580c", "#0891b2", "#be123c"];
+const LAP_COLORS = ["#16a34a", "#7c3aed", "#ea580c", "#0891b2", "#be123c"];
 
 export function SegmentTrajectoryMap({
   analysis,
@@ -60,8 +61,15 @@ export function SegmentTrajectoryMap({
 }: SegmentTrajectoryMapProps) {
   const { t } = useI18n();
   const colorByLap = useMemo(() => new Map(
-    analysis.records.map((record, index) => [record.lapId, LAP_COLORS[index % LAP_COLORS.length]]),
-  ), [analysis.records]);
+    analysis.records.map((record, index) => [
+      record.lapId,
+      record.lapId === focusedLapId
+        ? FOCUSED_LAP_COLOR
+        : record.lapId === referenceLapId
+          ? REFERENCE_LAP_COLOR
+          : LAP_COLORS[index % LAP_COLORS.length],
+    ]),
+  ), [analysis.records, focusedLapId, referenceLapId]);
   const lapOverlays = useMemo((): LapMapOverlay[] => analysis.records
     .filter((record) => record.trajectory.length >= 2)
     .sort((left, right) => pathLayerRank(left.lapId, focusedLapId, referenceLapId) - pathLayerRank(right.lapId, focusedLapId, referenceLapId))
@@ -150,6 +158,7 @@ export function SegmentTrajectoryMap({
         heatSegments={heatSegments}
         ghostMarkers={ghostMarkers}
         showRoutePoints={false}
+        interactiveRoutePoints
         onSectionSelect={onSectionSelect}
         onSelectedIndex={onSelectedIndex}
         onSegmentChange={onSegmentChange}

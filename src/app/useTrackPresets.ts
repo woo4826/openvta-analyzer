@@ -68,6 +68,7 @@ export function useTrackPresets(points: GpsPoint[]): TrackPresetState {
     }
     for (const profile of localProfiles) {
       const origin = origins[profile.id] ?? inferOrigin(profile);
+      if (effective.has(profile.id) && origin !== "local-override") continue;
       effective.set(profile.id, { profile, origin });
     }
     return [...effective.values()].sort((left, right) => {
@@ -78,7 +79,7 @@ export function useTrackPresets(points: GpsPoint[]): TrackPresetState {
   }, [hostedProfiles, localProfiles, origins]);
 
   const resetOverride = useCallback(async (id: string) => {
-    if (!hostedProfiles.some((profile) => profile.id === id) || origins[id] !== "local-override") return;
+    if (!hostedProfiles.some((profile) => profile.id === id)) return;
     await deleteTrackProfile(id);
     setLocalProfiles((profiles) => profiles.filter((profile) => profile.id !== id));
     setOrigins((previous) => {
@@ -86,7 +87,7 @@ export function useTrackPresets(points: GpsPoint[]): TrackPresetState {
       delete next[id];
       return next;
     });
-  }, [hostedProfiles, origins]);
+  }, [hostedProfiles]);
 
   const hasCurrentRecording = loadedRecordingKey === recordingKey;
   return {

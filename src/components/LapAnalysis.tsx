@@ -62,6 +62,7 @@ export function LapAnalysis({
   const [importError, setImportError] = useState<string>();
   const [gateWidthDraft, setGateWidthDraft] = useState(workspace.gate?.widthMeters ?? 50);
   const [gateBearingDraft, setGateBearingDraft] = useState(workspace.gate?.forwardBearingDegrees ?? 0);
+  const [selectedSectionId, setSelectedSectionId] = useState<string>();
   const laps = workspace.detection?.laps ?? EMPTY_LAPS;
   const selectedLaps = useMemo(
     () => workspace.selectedLapIds
@@ -85,6 +86,18 @@ export function LapAnalysis({
     }
     return best;
   }, [workspace.sectors]);
+  const usesAnalysisSectionPolicy = workspace.sectionResults.length > 0 || Boolean(workspace.analysisLine && workspace.profile?.sections.length);
+  const partialPolicyResults = usesAnalysisSectionPolicy ? workspace.sectionResults : workspace.sectors;
+  const partialCompletedSectorCount = partialPolicyResults.filter((sector) => sector.fromPartialLap).length;
+  const partialEligibleSectorCount = partialPolicyResults.filter((sector) => sector.fromPartialLap && sector.eligibleForBest).length;
+  const policyTheoreticalBestSeconds = usesAnalysisSectionPolicy
+    ? workspace.automaticTheoreticalBestSeconds
+    : workspace.theoreticalBestSeconds;
+  const selectedSection = workspace.profile?.sections.find((section) => section.id === selectedSectionId)
+    ?? workspace.profile?.sections[0];
+  const selectedSectionVisuals = useMemo(() => selectedSection ? {
+    [selectedSection.id]: { color: "#dc2626", width: 13, opacity: 1 },
+  } : {}, [selectedSection]);
   const overlays: LapMapOverlay[] = useMemo(() => selectedLaps.map((lap, index) => ({
     id: lap.id,
     color: LAP_COLORS[index % LAP_COLORS.length],
@@ -101,6 +114,16 @@ export function LapAnalysis({
     setGateBearingDraft(workspace.gate.forwardBearingDegrees);
   }, [workspace.gate]);
 
+  useEffect(() => {
+    if (!workspace.profile?.sections.length) {
+      setSelectedSectionId(undefined);
+      return;
+    }
+    if (!workspace.profile.sections.some((section) => section.id === selectedSectionId)) {
+      setSelectedSectionId(workspace.profile.sections[0].id);
+    }
+  }, [selectedSectionId, workspace.profile]);
+
   async function importTrack(files: File[]) {
     const file = files[0];
     if (!file) return;
@@ -109,7 +132,7 @@ export function LapAnalysis({
   }
 
   async function saveAndExportProfile() {
-    const profile = await workspace.saveCurrentProfile();
+    const profile = workspace.profile ?? await workspace.saveCurrentProfile();
     if (!profile) return;
     downloadText(`${safeBaseName(fileName)}.openvta-track.json`, exportTrackProfile(profile), "application/json");
   }
@@ -172,15 +195,19 @@ export function LapAnalysis({
         </div>
       ) : null}
 
-      {activeView === "insights" ? (
-        insightsReady && workspace.profile && workspace.analysisLine ? (
+      <div className="lap-analysis-view-content" hidden={activeView !== "insights"}>
+        {insightsReady && workspace.profile && workspace.analysisLine ? (
           <SegmentAnalysisWorkbench
+            active={activeView === "insights"}
             sourceName={fileName}
             points={points}
             laps={laps}
             profile={workspace.profile}
             analysisLine={workspace.analysisLine}
             includePartialLapSections={workspace.includePartialLapSectors}
+            partialCompletedSectorCount={partialCompletedSectorCount}
+            partialEligibleSectorCount={partialEligibleSectorCount}
+            theoreticalBestSeconds={policyTheoreticalBestSeconds}
             onIncludePartialLapSections={workspace.setIncludePartialLapSectors}
             mapSettings={mapSettings}
             selectedPointIndex={selectedPointIndex}
@@ -241,14 +268,16 @@ export function LapAnalysis({
               <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
             </Panel>
           </>
-        )
-      ) : null}
+        )}
+      </div>
 
       {activeView === "setup" ? (
         <>
           <Panel title={t("lap.title")} eyebrow={t("lap.subtitle")} className="lap-wide-panel">
             <div className="lap-setup-summary">
               <StatusBadge tone={lookupTone(workspace.lookupState)}>{workspace.profile?.name ?? t("lap.trackless")}</StatusBadge>
+              <StatusBadge tone={workspace.profileOrigin === "local-override" ? "warning" : "info"}>{profileOriginLabel(workspace.profileOrigin, t)}</StatusBadge>
+              {workspace.profile ? <span>{t("lap.profileAutosaved")}</span> : null}
               <span>{t("lap.selectedPoint")}: {selectedPointIndex + 1}</span>
               <span>{t("lap.detectedLaps")}: {completeLapCount}</span>
               <span>{t("lap.analysisSectorCount")}: {workspace.profile?.sections.length ?? 0}</span>
@@ -256,12 +285,15 @@ export function LapAnalysis({
             <div className="lap-track-toolbar">
               <FilePickerButton accept=".json,.openvta-track.json,application/json" onFiles={(files) => void importTrack(files)} icon={<Upload size={16} aria-hidden />}>{t("lap.importTrack")}</FilePickerButton>
               <button type="button" className="button" onClick={() => void saveAndExportProfile()}><Download size={16} aria-hidden />{t("lap.saveExportTrack")}</button>
-              {workspace.profileOrigin === "local-override" ? (
-                <button type="button" className="button" onClick={() => void workspace.resetProfileOverride()}>{t("lap.workbench.resetBuiltIn")}</button>
+              {workspace.profileOrigin === "built-in" || workspace.profileOrigin === "local-override" ? (
+                <button type="button" className="button" disabled={workspace.profileOrigin === "built-in"} title={workspace.profileOrigin === "built-in" ? t("lap.workbench.builtInOriginalActive") : undefined} onClick={() => {
+                  if (window.confirm(t("lap.confirmResetBuiltIn"))) void workspace.resetProfileOverride();
+                }}>{t("lap.workbench.resetBuiltIn")}</button>
               ) : null}
               <button type="button" className="button primary" onClick={useSelectedPointAsStartFinish}><Flag size={16} aria-hidden />{t("lap.useSelectedPoint")}</button>
               <button type="button" className="button" onClick={() => workspace.addSectorGate(selectedPointIndex)} disabled={!workspace.gate}><MapPinned size={16} aria-hidden />{t("lap.addSectorGate")}</button>
             </div>
+            {workspace.profileOrigin === "built-in" || workspace.profileOrigin === "local-override" ? <p className="lap-profile-edit-help">{t("lap.workbench.profileEditHelp")}</p> : null}
             <p className="lap-privacy-note">{t("lap.osmPrivacy")}</p>
             {importError ? <p className="inline-error" role="alert">{importError}</p> : null}
             {workspace.candidates.length > 1 && workspace.lookupState === "ambiguous" ? (
@@ -278,7 +310,7 @@ export function LapAnalysis({
           </Panel>
 
           <Panel title={t("lap.routeAndGate")} className="lap-map-panel lap-wide-panel">
-            <RouteMap points={points} selectedIndex={selectedPointIndex} sourceVisibility={sourceVisibility} settings={mapSettings} segment={activeSegment} trackCenterline={workspace.profile?.centerline} sectionCenterline={workspace.sectionCenterline} trackSections={workspace.profile?.sections} gates={gates} lapOverlays={overlays} onSelectedIndex={onSelectedPointIndex} onSegmentChange={onActiveSegment} onRegionChange={() => undefined} onSettingsChange={onMapSettingsChange} />
+            <RouteMap points={points} selectedIndex={selectedPointIndex} sourceVisibility={sourceVisibility} settings={mapSettings} segment={activeSegment} trackCenterline={workspace.profile?.centerline} sectionCenterline={workspace.sectionCenterline} trackSections={workspace.profile?.sections} sectionVisuals={selectedSectionVisuals} gates={gates} lapOverlays={overlays} onSectionSelect={setSelectedSectionId} onSelectedIndex={onSelectedPointIndex} onSegmentChange={onActiveSegment} onRegionChange={() => undefined} onSettingsChange={onMapSettingsChange} />
             <PointTimeline points={points} selectedPointIndex={selectedPointIndex} onSelectedPointIndex={onSelectedPointIndex} />
           </Panel>
 
@@ -295,7 +327,7 @@ export function LapAnalysis({
             {workspace.detection.boundaries.map((boundary, index) => (
               <div key={boundary.id}>
                 <span>{t("lap.boundary")} {index + 1} · {formatLapTime(boundary.elapsedSeconds)} · #{boundary.pointIndex + 1}</span>
-                <button type="button" className="button ghost" onClick={() => workspace.removeBoundary(boundary.id)}>{t("lap.mergeRemove")}</button>
+                <button type="button" className="button ghost" aria-label={`${t("lap.boundary")} ${index + 1} · ${t("lap.mergeRemove")}`} onClick={() => workspace.removeBoundary(boundary.id)}>{t("lap.mergeRemove")}</button>
               </div>
             ))}
           </div>
@@ -313,6 +345,13 @@ export function LapAnalysis({
         className="lap-wide-panel"
       >
         <p className="lap-help">{t("lap.partialSectorHelp")}</p>
+        <p className="partial-policy-impact" aria-live="polite">{partialCompletedSectorCount === 0
+          ? t("lap.workbench.partialNoCandidates", { theoretical: policyTheoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatLapTime(policyTheoreticalBestSeconds) })
+          : t(workspace.includePartialLapSectors ? "lap.workbench.partialIncludedImpact" : "lap.workbench.partialExcludedImpact", {
+              eligible: partialEligibleSectorCount,
+              completed: partialCompletedSectorCount,
+              theoretical: policyTheoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatLapTime(policyTheoreticalBestSeconds),
+            })}</p>
         {workspace.profile?.sectorGates.length ? (
           <div className="sector-gate-editor-list">
             <h3>{t("lap.sectorGates")}</h3>
@@ -368,11 +407,24 @@ export function LapAnalysis({
         )}
         className="lap-wide-panel"
       >
-        {workspace.profile?.sections.length ? (
+        {workspace.profile?.sections.length && selectedSection ? (
           <div className="section-editor-list">
-            {workspace.profile.sections.map((section) => (
-              <SectionEditor key={section.id} section={section} onUpdate={(patch) => workspace.updateSection(section.id, patch)} onRemove={() => workspace.removeSection(section.id)} />
-            ))}
+            <div className="section-editor-navigation">
+              <label className="field">
+                <span>{t("lap.selectedSection")}</span>
+                <select value={selectedSection.id} onChange={(event) => setSelectedSectionId(event.target.value)}>
+                  {workspace.profile.sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
+                </select>
+              </label>
+              <span>{t("lap.sectionPosition", { current: workspace.profile.sections.indexOf(selectedSection) + 1, total: workspace.profile.sections.length })}</span>
+            </div>
+            <SectionEditor
+              section={selectedSection}
+              onUpdate={(patch) => workspace.updateSection(selectedSection.id, patch)}
+              onRemove={() => {
+                if (window.confirm(t("lap.confirmRemoveSection", { name: selectedSection.name }))) workspace.removeSection(selectedSection.id);
+              }}
+            />
           </div>
         ) : <div className="empty-state">{t("lap.noSections")}</div>}
           </Panel>
@@ -420,14 +472,15 @@ function SectorGateEditor({
   onRemove: () => void;
 }) {
   const { t } = useI18n();
+  const gateLabel = gate.name || `${t("lap.sector")} ${order + 1}`;
   return (
     <div className="sector-gate-editor-row">
-      <label className="field"><span>{t("lap.name")}</span><input defaultValue={gate.name} onBlur={(event) => onUpdate({ name: event.target.value })} /></label>
-      <label className="field"><span>{t("lap.order")}</span><select value={order} onChange={(event) => onReorder(Number(event.target.value))}>{Array.from({ length: gateCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
-      <label className="field"><span>{t("lap.gateWidth")}</span><input type="number" min={10} max={200} value={gate.widthMeters} onChange={(event) => onUpdate({ widthMeters: Number(event.target.value) })} /></label>
-      <label className="field"><span>{t("lap.forwardBearing")}</span><input type="number" min={0} max={359.9} step={0.1} value={gate.forwardBearingDegrees} onChange={(event) => onUpdate({ forwardBearingDegrees: Number(event.target.value) })} /></label>
-      <button type="button" className="button" onClick={onMove}>{t("lap.moveHere")}</button>
-      <button type="button" className="button ghost" onClick={onRemove}>{t("lap.remove")}</button>
+      <label className="field"><span>{t("lap.name")}</span><input aria-label={`${gateLabel} ${t("lap.name")}`} defaultValue={gate.name} onBlur={(event) => onUpdate({ name: event.target.value })} /></label>
+      <label className="field"><span>{t("lap.order")}</span><select aria-label={`${gateLabel} ${t("lap.order")}`} value={order} onChange={(event) => onReorder(Number(event.target.value))}>{Array.from({ length: gateCount }, (_, index) => <option key={index} value={index}>{index + 1}</option>)}</select></label>
+      <label className="field"><span>{t("lap.gateWidth")}</span><input aria-label={`${gateLabel} ${t("lap.gateWidth")}`} type="number" min={10} max={200} value={gate.widthMeters} onChange={(event) => onUpdate({ widthMeters: Number(event.target.value) })} /></label>
+      <label className="field"><span>{t("lap.forwardBearing")}</span><input aria-label={`${gateLabel} ${t("lap.forwardBearing")}`} type="number" min={0} max={359.9} step={0.1} value={gate.forwardBearingDegrees} onChange={(event) => onUpdate({ forwardBearingDegrees: Number(event.target.value) })} /></label>
+      <button type="button" className="button" aria-label={`${gateLabel} ${t("lap.moveHere")}`} onClick={onMove}>{t("lap.moveHere")}</button>
+      <button type="button" className="button ghost" aria-label={`${gateLabel} ${t("lap.remove")}`} onClick={onRemove}>{t("lap.remove")}</button>
     </div>
   );
 }
@@ -435,13 +488,14 @@ function SectorGateEditor({
 function SectionEditor({ section, onUpdate, onRemove }: { section: TrackSection; onUpdate: (patch: Partial<TrackSection>) => void; onRemove: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="section-editor-row">
-      <label className="field"><span>{t("lap.name")}</span><input value={section.name} onChange={(event) => onUpdate({ name: event.target.value })} /></label>
-      <label className="field"><span>{t("lap.kind")}</span><select value={section.kind} onChange={(event) => onUpdate({ kind: event.target.value as TrackSection["kind"] })}><option value="corner-left">{t("lap.cornerLeft")}</option><option value="corner-right">{t("lap.cornerRight")}</option><option value="straight">{t("lap.straight")}</option></select></label>
-      <label className="field"><span>{t("lap.startMeters")}</span><input type="number" min={0} value={section.startDistanceMeters} onChange={(event) => onUpdate({ startDistanceMeters: Number(event.target.value) })} /></label>
-      <label className="field"><span>{t("lap.endMeters")}</span><input type="number" min={0} value={section.endDistanceMeters} onChange={(event) => onUpdate({ endDistanceMeters: Number(event.target.value) })} /></label>
-      <button type="button" className="button ghost" onClick={onRemove}>{t("lap.remove")}</button>
-    </div>
+    <fieldset className="section-editor-row">
+      <legend>{section.name}</legend>
+      <label className="field"><span>{t("lap.name")}</span><input aria-label={`${section.name} ${t("lap.name")}`} value={section.name} onChange={(event) => onUpdate({ name: event.target.value })} /></label>
+      <label className="field"><span>{t("lap.kind")}</span><select aria-label={`${section.name} ${t("lap.kind")}`} value={section.kind} onChange={(event) => onUpdate({ kind: event.target.value as TrackSection["kind"] })}><option value="corner-left">{t("lap.cornerLeft")}</option><option value="corner-right">{t("lap.cornerRight")}</option><option value="straight">{t("lap.straight")}</option></select></label>
+      <label className="field"><span>{t("lap.startMeters")}</span><input aria-label={`${section.name} ${t("lap.startMeters")}`} type="number" min={0} value={section.startDistanceMeters} onChange={(event) => onUpdate({ startDistanceMeters: Number(event.target.value) })} /></label>
+      <label className="field"><span>{t("lap.endMeters")}</span><input aria-label={`${section.name} ${t("lap.endMeters")}`} type="number" min={0} value={section.endDistanceMeters} onChange={(event) => onUpdate({ endDistanceMeters: Number(event.target.value) })} /></label>
+      <button type="button" className="button ghost" aria-label={`${section.name} ${t("lap.remove")}`} onClick={onRemove}>{t("lap.remove")}</button>
+    </fieldset>
   );
 }
 
@@ -492,6 +546,17 @@ function lookupLabel(state: LapWorkspace["lookupState"], t: Translate): string {
     generated: "lap.lookup.generated",
   };
   return t(keys[state]);
+}
+
+function profileOriginLabel(origin: LapWorkspace["profileOrigin"], t: Translate): string {
+  const keys = {
+    "built-in": "lap.profileOrigin.builtIn",
+    "local-override": "lap.profileOrigin.localOverride",
+    imported: "lap.profileOrigin.imported",
+    osm: "lap.profileOrigin.osm",
+    generated: "lap.profileOrigin.generated",
+  } as const;
+  return origin ? t(keys[origin]) : t("lap.profileOrigin.none");
 }
 
 function lookupTone(state: LapWorkspace["lookupState"]): "neutral" | "success" | "warning" | "danger" | "info" {

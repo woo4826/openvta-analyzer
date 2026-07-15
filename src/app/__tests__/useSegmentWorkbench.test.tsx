@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { GpsPoint, LapResult, TrackSection } from "../../domain/types";
 import { useSegmentWorkbench } from "../useSegmentWorkbench";
@@ -20,7 +20,7 @@ describe("useSegmentWorkbench", () => {
     expect(result.current.scope).toEqual({ kind: "whole-lap" });
   });
 
-  it("keeps focused and reference laps in a five-lap overlay and normalizes invalid references", () => {
+  it("defaults to focused and reference laps while allowing explicit extra overlays", () => {
     const fixture = workbenchFixture(7);
     const { result } = renderHook(() => useSegmentWorkbench(fixture));
 
@@ -33,7 +33,9 @@ describe("useSegmentWorkbench", () => {
     expect(result.current.focusedLapId).toBe("lap-5");
     expect(result.current.overlayLapIds).toContain("lap-5");
     expect(result.current.overlayLapIds).toContain(result.current.referenceLapId);
-    expect(result.current.overlayLapIds).toHaveLength(5);
+    expect(result.current.overlayLapIds).toHaveLength(2);
+    act(() => result.current.toggleOverlayLap("lap-3"));
+    expect(result.current.overlayLapIds).toEqual(expect.arrayContaining(["lap-5", result.current.referenceLapId!, "lap-3"]));
 
     act(() => result.current.setReferenceLap("missing"));
     expect(result.current.referenceLapId).toBe(result.current.analysis.fastestLapId);
@@ -49,6 +51,22 @@ describe("useSegmentWorkbench", () => {
       endIndex: expect.any(Number),
       source: "map",
     }));
+  });
+
+  it("resets a selected section synchronously when that section is removed", async () => {
+    const fixture = workbenchFixture();
+    const { result, rerender } = renderHook(
+      ({ sections }) => useSegmentWorkbench({ ...fixture, sections }),
+      { initialProps: { sections: fixture.sections } },
+    );
+    act(() => result.current.selectSection("c1"));
+    expect(result.current.scope).toEqual({ kind: "section", sectionId: "c1" });
+
+    rerender({ sections: fixture.sections.filter((section) => section.id !== "c1") });
+
+    expect(result.current.scope).toEqual({ kind: "whole-lap" });
+    expect(result.current.analysis.scope).toEqual({ kind: "whole-lap" });
+    await waitFor(() => expect(result.current.scope).toEqual({ kind: "whole-lap" }));
   });
 });
 

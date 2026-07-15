@@ -10,12 +10,14 @@ export interface ChartPanelProps {
   className?: string;
   eyebrow?: ReactNode;
   actions?: ReactNode;
+  caption?: ReactNode;
+  interactionMode?: "range" | "zoom";
   onPoint?: (index: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
   onBrushRange?: (start: number, end: number) => void;
 }
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const hoverFrameRef = useRef<number | undefined>(undefined);
@@ -28,6 +30,16 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
     const chart = chartRef.current ?? echarts.init(ref.current);
     chartRef.current = chart;
     chart.setOption(option, true);
+    if (interactionMode) {
+      chart.dispatchAction({
+        type: "takeGlobalCursor",
+        key: "brush",
+        brushOption: {
+          brushType: interactionMode === "range" ? "lineX" : false,
+          brushMode: "single",
+        },
+      });
+    }
 
     const resize = () => {
       if (ref.current && ref.current.clientWidth > 0 && ref.current.clientHeight > 0) {
@@ -108,7 +120,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       chart.off("mouseover", handleHover);
       chart.off("brushSelected", handleBrush);
     };
-  }, [option, onPoint, onBrushSegment, onBrushRange]);
+  }, [interactionMode, option, onPoint, onBrushSegment, onBrushRange]);
 
   useEffect(() => {
     return () => {
@@ -128,6 +140,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       </div>
       <div className="panel-body">
         <div className="chart" ref={ref} role="img" aria-label={ariaLabel ?? `${title} chart`} />
+        {caption}
       </div>
     </section>
   );

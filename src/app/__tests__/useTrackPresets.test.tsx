@@ -45,6 +45,30 @@ describe("useTrackPresets", () => {
     await waitFor(() => expect(result.current.profiles[0]).toMatchObject({ profile: hostedProfile(), origin: "built-in" }));
   });
 
+  it("deletes an override created after the preset snapshot was loaded", async () => {
+    const { result } = renderHook(() => useTrackPresets(points()));
+
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.profiles[0]).toMatchObject({ origin: "built-in" });
+
+    await act(() => result.current.resetOverride(hostedProfile().id));
+
+    expect(mocks.deleteTrackProfile).toHaveBeenCalledWith(hostedProfile().id);
+    expect(result.current.profiles[0]).toMatchObject({ origin: "built-in" });
+  });
+
+  it("keeps the hosted preset authoritative over same-id non-override cache entries", async () => {
+    const staleOsm = { ...hostedProfile(), name: "Old OSM cache", updatedAt: "2025-01-01T00:00:00.000Z" };
+    mocks.listTrackProfiles.mockResolvedValue([staleOsm]);
+    mocks.getTrackProfileOrigins.mockResolvedValue({ [staleOsm.id]: "osm" });
+    const { result } = renderHook(() => useTrackPresets(points()));
+
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    expect(result.current.profiles).toContainEqual({ profile: hostedProfile(), origin: "built-in" });
+    expect(result.current.profiles).not.toContainEqual(expect.objectContaining({ profile: staleOsm }));
+  });
+
   it("reports hosted failure without discarding local profiles", async () => {
     const imported = { ...hostedProfile(), id: "imported", source: { kind: "user" as const } };
     mocks.loadHostedTrackPresets.mockRejectedValue(new Error("offline"));

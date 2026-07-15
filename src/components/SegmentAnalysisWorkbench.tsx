@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LineString } from "geojson";
 import { Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
+import { projectCoordinateToLineProgress } from "../domain/geometry";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
 import type { ActiveSegment, GpsPoint, LapResult, MapSettings, SegmentLapRecord, TrackProfileV1, TrackSectionKind } from "../domain/types";
 import { useI18n } from "../i18n/useI18n";
@@ -14,12 +15,16 @@ import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
 import { SegmentVariationChart } from "./SegmentVariationChart";
 
 interface SegmentAnalysisWorkbenchProps {
+  active?: boolean;
   sourceName: string;
   points: GpsPoint[];
   laps: LapResult[];
   profile: TrackProfileV1;
   analysisLine: LineString;
   includePartialLapSections: boolean;
+  partialCompletedSectorCount?: number;
+  partialEligibleSectorCount?: number;
+  theoreticalBestSeconds?: number;
   onIncludePartialLapSections: (include: boolean) => void;
   mapSettings: MapSettings;
   selectedPointIndex: number;
@@ -31,12 +36,16 @@ interface SegmentAnalysisWorkbenchProps {
 }
 
 export function SegmentAnalysisWorkbench({
+  active = true,
   sourceName,
   points,
   laps,
   profile,
   analysisLine,
   includePartialLapSections,
+  partialCompletedSectorCount = 0,
+  partialEligibleSectorCount = 0,
+  theoreticalBestSeconds,
   onIncludePartialLapSections,
   mapSettings,
   selectedPointIndex,
@@ -64,6 +73,28 @@ export function SegmentAnalysisWorkbench({
   const visibleSectionIds = useMemo(() => new Set(workbench.navigationSections.map((section) => section.id)), [workbench.navigationSections]);
   const visibleOpportunities = useMemo(() => workbench.opportunities.filter((opportunity) =>
     visibleSectionIds.has(opportunity.section.id)), [visibleSectionIds, workbench.opportunities]);
+  const lossesBySection = useMemo(() => Object.fromEntries(workbench.opportunities.map((opportunity) => [
+    opportunity.section.id,
+    opportunity.timeDeltaSeconds,
+  ])), [workbench.opportunities]);
+  const selectMapSegment = useCallback((segment?: ActiveSegment) => {
+    if (!segment) {
+      workbench.resetScope();
+      return;
+    }
+    const start = points[segment.startIndex];
+    const end = points[segment.endIndex];
+    if (!start || !end) return;
+    const startDistanceMeters = projectCoordinateToLineProgress(
+      [start.longitude, start.latitude],
+      analysisLine,
+    ).distanceMeters;
+    const endDistanceMeters = projectCoordinateToLineProgress(
+      [end.longitude, end.latitude],
+      analysisLine,
+    ).distanceMeters;
+    workbench.selectRange(startDistanceMeters, endDistanceMeters, "map");
+  }, [analysisLine, points, workbench]);
   const scopeName = useMemo(() => {
     if (workbench.scope.kind === "whole-lap") return t("lap.workbench.wholeLap");
     if (workbench.scope.kind === "section") {
@@ -72,6 +103,7 @@ export function SegmentAnalysisWorkbench({
     }
     return t("lap.workbench.customRange");
   }, [profile.sections, t, workbench.scope]);
+  const coachCue = useMemo(() => buildCoachCue(scopeName, focused, reference, t), [focused, reference, scopeName, t]);
 
   useEffect(() => {
     onActiveSegment(workbench.activeSegment);
@@ -154,15 +186,35 @@ export function SegmentAnalysisWorkbench({
         </form>
       ) : null}
 
+      <div className="segment-comparison-bar" aria-label={t("lap.workbench.comparisonControls")}>
+        <label className="comparison-role is-focus">
+          <span><i aria-hidden />{t("lap.workbench.focusedLap")}</span>
+          <select aria-label={t("lap.workbench.focusedLap")} value={workbench.focusedLapId ?? ""} onChange={(event) => workbench.setFocusedLap(event.target.value)}>
+            {workbench.analysis.records.map((record) => <option key={record.lapId} value={record.lapId}>{workbenchLapLabel(record, t)}</option>)}
+          </select>
+        </label>
+        <span className="comparison-separator" aria-hidden>↔</span>
+        <label className="comparison-role is-reference">
+          <span><i aria-hidden />{t("lap.workbench.referenceLap")}</span>
+          <select aria-label={t("lap.workbench.referenceLap")} value={workbench.referenceLapId ?? ""} onChange={(event) => workbench.setReferenceLap(event.target.value)}>
+            {workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest).map((record) => <option key={record.lapId} value={record.lapId}>{workbenchLapLabel(record, t)}</option>)}
+          </select>
+        </label>
+        <span className="comparison-scope"><small>{t("lap.workbench.selectedScope")}</small><strong>{scopeName}</strong></span>
+        <span className="sr-only" role="status" aria-live="polite">{focused ? workbenchLapLabel(focused, t) : "—"} {t("lap.workbench.focusVs")} {reference ? workbenchLapLabel(reference, t) : "—"} · {scopeName}</span>
+      </div>
+
       <SegmentScopeRibbon
         scope={workbench.scope}
         filter={workbench.filter}
         sections={workbench.navigationSections}
+        losses={lossesBySection}
         onWholeLap={workbench.resetScope}
         onFilter={workbench.setFilter}
         onSection={workbench.selectSection}
       />
 
+      {active ? <>
       <div className="segment-mobile-switch segmented-control" role="group" aria-label={t("lap.workbench.analysisView")}>
         {(["map", "graphs", "laps"] as const).map((view) => (
           <button key={view} type="button" aria-pressed={mobileView === view} onClick={() => setMobileView(view)}>{t(`lap.workbench.${view}`)}</button>
@@ -194,7 +246,7 @@ export function SegmentAnalysisWorkbench({
           segment={workbench.activeSegment}
           onSelectedIndex={onSelectedPointIndex}
           onSectionSelect={workbench.selectSection}
-          onSegmentChange={onActiveSegment}
+          onSegmentChange={selectMapSegment}
           onSettingsChange={onMapSettingsChange}
         />
         <aside className="segment-evidence-panel" aria-label={t("lap.workbench.focusedEvidence")}>
@@ -210,6 +262,12 @@ export function SegmentAnalysisWorkbench({
             <Metric label={t("lap.workbench.lossRate")} value={focused?.peakLossRateSecondsPer100m === undefined ? "—" : `+${focused.peakLossRateSecondsPer100m.toFixed(2)} s/100m`} />
             <Metric label={t("lap.workbench.gps")} value={focused ? gpsConfidenceLabel(focused.gpsConfidence, t) : "—"} />
           </dl>
+          <div className={`segment-coach-card ${coachCue.actionable ? "is-actionable" : "is-caution"}`}>
+            <span className="panel-eyebrow">{t("lap.workbench.nextRun")}</span>
+            <strong>{coachCue.evidence}</strong>
+            <p>{coachCue.action}</p>
+            {coachCue.verification ? <small>{t("lap.workbench.verifyNext")}: {coachCue.verification}</small> : null}
+          </div>
         </aside>
       </div>
 
@@ -238,6 +296,15 @@ export function SegmentAnalysisWorkbench({
             <input type="checkbox" checked={includePartialLapSections} onChange={(event) => onIncludePartialLapSections(event.target.checked)} />
             <span>{t("lap.workbench.includePartial")}</span>
           </label>
+          <p className="partial-policy-impact" aria-live="polite">
+            {partialCompletedSectorCount === 0
+              ? t("lap.workbench.partialNoCandidates", { theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds) })
+              : t(includePartialLapSections ? "lap.workbench.partialIncludedImpact" : "lap.workbench.partialExcludedImpact", {
+                  eligible: partialEligibleSectorCount,
+                  completed: partialCompletedSectorCount,
+                  theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds),
+                })}
+          </p>
         </div>
         <div className="panel-body">
           <SegmentLapTable
@@ -251,6 +318,7 @@ export function SegmentAnalysisWorkbench({
           />
         </div>
       </section>
+      </> : null}
     </section>
   );
 }
@@ -295,4 +363,35 @@ function gpsConfidenceLabel(confidence: SegmentLapRecord["gpsConfidence"], t: T)
     unknown: "lap.workbench.gpsUnknown",
   } as const;
   return t(keys[confidence]);
+}
+
+function buildCoachCue(scope: string, focused: SegmentLapRecord | undefined, reference: SegmentLapRecord | undefined, t: T) {
+  if (!focused || !reference) {
+    return { actionable: false, evidence: t("lap.workbench.coachUnavailable"), action: t("lap.workbench.chooseComparableLaps") };
+  }
+  if (focused.gpsConfidence === "low" || focused.flags.includes("gps-gap")) {
+    return { actionable: false, evidence: t("lap.workbench.coachGpsCaution"), action: t("lap.workbench.coachGpsAction") };
+  }
+  const metrics = [
+    { label: t("lap.entrySpeed"), focused: focused.entrySpeedKmh, reference: reference.entrySpeedKmh },
+    { label: t("lap.minimumSpeed"), focused: focused.minimumSpeedKmh, reference: reference.minimumSpeedKmh },
+    { label: t("lap.exitSpeed"), focused: focused.exitSpeedKmh, reference: reference.exitSpeedKmh },
+  ].flatMap((metric) => metric.focused === undefined || metric.reference === undefined ? [] : [{
+    ...metric,
+    delta: metric.focused - metric.reference,
+  }]);
+  const largestDeficit = metrics.sort((left, right) => left.delta - right.delta)[0];
+  if (!largestDeficit || largestDeficit.delta >= -0.5) {
+    return {
+      actionable: false,
+      evidence: t("lap.workbench.noClearSpeedDeficit"),
+      action: t("lap.workbench.inspectDeltaShape"),
+    };
+  }
+  return {
+    actionable: true,
+    evidence: t("lap.workbench.measuredDeficit", { metric: largestDeficit.label, delta: largestDeficit.delta.toFixed(1) }),
+    action: t("lap.workbench.nextRunTarget", { scope, metric: largestDeficit.label, target: Number(largestDeficit.reference).toFixed(1) }),
+    verification: t("lap.workbench.nextRunVerification", { metric: largestDeficit.label }),
+  };
 }

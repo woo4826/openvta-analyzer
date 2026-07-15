@@ -2,13 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { parseTrackBundle } from "../domain/trackCatalog";
 import {
   deleteTrackProfile,
+  getTrackProfileOrigins,
   listTrackProfiles,
   saveTrackProfiles,
+  type TrackProfileOrigin,
 } from "../domain/trackStorage";
 import type { TrackProfileV1 } from "../domain/types";
 
 export interface TrackLibraryState {
   profiles: TrackProfileV1[];
+  origins: Record<string, TrackProfileOrigin>;
   busy: boolean;
   error?: string;
   refresh: () => Promise<void>;
@@ -18,6 +21,7 @@ export interface TrackLibraryState {
 
 export function useTrackLibrary(): TrackLibraryState {
   const [profiles, setProfiles] = useState<TrackProfileV1[]>([]);
+  const [origins, setOrigins] = useState<Record<string, TrackProfileOrigin>>({});
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -25,7 +29,9 @@ export function useTrackLibrary(): TrackLibraryState {
     setBusy(true);
     setError(undefined);
     try {
-      setProfiles(await listTrackProfiles());
+      const [nextProfiles, nextOrigins] = await Promise.all([listTrackProfiles(), getTrackProfileOrigins()]);
+      setProfiles(nextProfiles);
+      setOrigins(nextOrigins);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -47,8 +53,10 @@ export function useTrackLibrary(): TrackLibraryState {
         if (!result.profiles) throw new Error(result.error ?? "Invalid track bundle.");
         for (const profile of result.profiles) imported.set(profile.id, profile);
       }
-      await saveTrackProfiles([...imported.values()]);
-      setProfiles(await listTrackProfiles());
+      await saveTrackProfiles([...imported.values()], "imported");
+      const [nextProfiles, nextOrigins] = await Promise.all([listTrackProfiles(), getTrackProfileOrigins()]);
+      setProfiles(nextProfiles);
+      setOrigins(nextOrigins);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -62,6 +70,7 @@ export function useTrackLibrary(): TrackLibraryState {
     try {
       await deleteTrackProfile(id);
       setProfiles(await listTrackProfiles());
+      setOrigins(await getTrackProfileOrigins());
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -69,7 +78,7 @@ export function useTrackLibrary(): TrackLibraryState {
     }
   }, []);
 
-  return { profiles, busy, error, refresh, importTexts, remove };
+  return { profiles, origins, busy, error, refresh, importTexts, remove };
 }
 
 function errorMessage(error: unknown): string {

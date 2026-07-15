@@ -8,11 +8,13 @@ const mocks = vi.hoisted(() => ({
   importTexts: vi.fn(),
   remove: vi.fn(),
   refresh: vi.fn(),
+  origins: { inje: "local-override", taebaek: "generated" } as Record<string, "local-override" | "imported" | "osm" | "generated">,
 }));
 
 vi.mock("../../app/useTrackLibrary", () => ({
   useTrackLibrary: () => ({
     profiles: [profile("inje"), profile("taebaek")],
+    origins: mocks.origins,
     busy: false,
     error: undefined,
     importTexts: mocks.importTexts,
@@ -28,6 +30,7 @@ describe("TrackLibrary", () => {
     mocks.importTexts.mockReset().mockResolvedValue(undefined);
     mocks.remove.mockReset().mockResolvedValue(undefined);
     mocks.refresh.mockReset().mockResolvedValue(undefined);
+    mocks.origins = { inje: "local-override", taebaek: "generated" };
   });
 
   it("opens without a recording and keeps apply disabled", () => {
@@ -36,6 +39,7 @@ describe("TrackLibrary", () => {
     expect(screen.getByRole("dialog", { name: "Track Library" })).toBeVisible();
     expect(screen.getAllByRole("button", { name: "Apply to current recording" }))
       .toEqual(expect.arrayContaining([expect.objectContaining({ disabled: true })]));
+    expect(mocks.refresh).toHaveBeenCalled();
   });
 
   it("imports multiple JSON files and applies a selected profile", async () => {
@@ -54,7 +58,7 @@ describe("TrackLibrary", () => {
     await waitFor(() => expect(mocks.importTexts).toHaveBeenCalledWith(["one", "two"]));
     await user.click(screen.getAllByRole("button", { name: "Apply to current recording" })[0]);
 
-    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ id: "inje" }));
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ id: "inje" }), "local-override");
   });
 
   it("closes on Escape", async () => {
@@ -65,6 +69,13 @@ describe("TrackLibrary", () => {
     await user.keyboard("{Escape}");
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("infers a missing legacy origin from the profile source", () => {
+    mocks.origins = {};
+    render(<I18nProvider><TrackLibrary open onClose={vi.fn()} onApply={vi.fn()} /></I18nProvider>);
+
+    expect(screen.getByText("Recording-based")).toBeInTheDocument();
   });
 });
 
@@ -77,7 +88,7 @@ function profile(id: string): TrackProfileV1 {
     direction: "unknown",
     sectorGates: [],
     sections: [],
-    source: { kind: "user" },
+    source: id === "taebaek" ? { kind: "recording" } : { kind: "user" },
     updatedAt: "2026-07-15T00:00:00.000Z",
   };
 }
