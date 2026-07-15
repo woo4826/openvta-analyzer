@@ -1,6 +1,6 @@
 # Synchronized Motion Timeline MVP Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add measured IMU X/Y/Z acceleration and one map/chart cursor to the Segment Analysis Workbench, while making the open floating controls reserve desktop layout space.
 
@@ -17,7 +17,7 @@
 - Create: `src/domain/__tests__/sensorSynchronization.test.ts`
 - Modify: `src/domain/types.ts`
 
-- [ ] **Step 1: Add the synchronization result types**
+- [x] **Step 1: Add the synchronization result types**
 
 Add to `src/domain/types.ts`:
 
@@ -40,7 +40,7 @@ export interface SynchronizedAccelerationSeries {
 }
 ```
 
-- [ ] **Step 2: Write failing domain tests**
+- [x] **Step 2: Write failing domain tests**
 
 Cover these concrete cases in `sensorSynchronization.test.ts`:
 
@@ -68,7 +68,7 @@ it("drops samples outside the trajectory scope and returns undefined without anc
 });
 ```
 
-- [ ] **Step 3: Run the focused test and confirm failure**
+- [x] **Step 3: Run the focused test and confirm failure**
 
 Run:
 
@@ -78,7 +78,7 @@ corepack pnpm vitest run src/domain/__tests__/sensorSynchronization.test.ts
 
 Expected: FAIL because `synchronizeAccelerationToTrajectory` and the result types do not exist.
 
-- [ ] **Step 4: Implement the pure adapter**
+- [x] **Step 4: Implement the pure adapter**
 
 Create `src/domain/sensorSynchronization.ts` with this public contract:
 
@@ -108,13 +108,13 @@ Implementation requirements:
 8. Return `undefined` when fewer than two anchors or zero synchronized samples
    remain.
 
-- [ ] **Step 5: Run the focused domain test**
+- [x] **Step 5: Run the focused domain test**
 
 Run the command from Step 3.
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the domain unit**
+- [x] **Step 6: Commit the domain unit**
 
 ```bash
 git add src/domain/types.ts src/domain/sensorSynchronization.ts src/domain/__tests__/sensorSynchronization.test.ts
@@ -130,14 +130,14 @@ git commit -m "feat: synchronize IMU acceleration to lap trajectories"
 - Modify: `src/components/__tests__/LapAnalysis.test.tsx`
 - Modify: `src/components/__tests__/SegmentAnalysisWorkbench.test.tsx`
 
-- [ ] **Step 1: Write failing prop-flow tests**
+- [x] **Step 1: Write failing prop-flow tests**
 
 Update the Lap Analysis test fixture with one `SensorPoint`, render it, and
 assert the workbench exposes an `IMU acceleration` status after Task 3. Add a
 workbench test that renders `sensors={[]}` and proves the rest of the workbench
 still renders.
 
-- [ ] **Step 2: Run the component tests and confirm failure**
+- [x] **Step 2: Run the component tests and confirm failure**
 
 ```bash
 corepack pnpm vitest run src/components/__tests__/LapAnalysis.test.tsx src/components/__tests__/SegmentAnalysisWorkbench.test.tsx
@@ -145,7 +145,7 @@ corepack pnpm vitest run src/components/__tests__/LapAnalysis.test.tsx src/compo
 
 Expected: FAIL because these components do not accept `sensors`.
 
-- [ ] **Step 3: Add explicit sensor props**
+- [x] **Step 3: Add explicit sensor props**
 
 Add `sensors: SensorPoint[]` to `LapAnalysisProps` and
 `SegmentAnalysisWorkbenchProps`. In `App.tsx`, pass `chartSensors` to
@@ -153,7 +153,7 @@ Add `sensors: SensorPoint[]` to `LapAnalysisProps` and
 the one used by the workbench. Forward the prop unchanged to
 `SegmentAnalysisWorkbench`.
 
-- [ ] **Step 4: Run the component tests**
+- [x] **Step 4: Run the component tests**
 
 Run the Step 2 command.
 
@@ -168,7 +168,7 @@ Task 3, while the empty-sensor compatibility assertion passes.
 - Modify: `src/components/__tests__/SegmentTelemetryChart.test.tsx`
 - Modify: `src/i18n/lapLocales.ts`
 
-- [ ] **Step 1: Write failing option tests**
+- [x] **Step 1: Write failing option tests**
 
 Extend `SegmentTelemetryChart.test.tsx` to pass a synchronized series with X/Y/Z
 values. Assert the rendered ECharts option contains series IDs
@@ -178,7 +178,7 @@ the compact metrics still contain speed and Delta-T.
 Also assert that `cursorDistanceMeters={25}` produces a vertical cursor mark at
 25 metres on each visible grid.
 
-- [ ] **Step 2: Run the telemetry tests and confirm failure**
+- [x] **Step 2: Run the telemetry tests and confirm failure**
 
 ```bash
 corepack pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
@@ -187,7 +187,7 @@ corepack pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
 Expected: FAIL because synchronized samples and controlled cursor props are not
 accepted.
 
-- [ ] **Step 3: Extend the telemetry option contract**
+- [x] **Step 3: Extend the telemetry option contract**
 
 Add these inputs to `buildSegmentTelemetryOption`:
 
@@ -213,7 +213,7 @@ sample's distance or elapsed value and its source index as the third tuple
 coordinate. Add a cursor mark line to the first series on every grid. Rename the
 existing derivative label to `GPS speed derivative` and keep unit `g (GPS)`.
 
-- [ ] **Step 4: Make the component cursor controlled**
+- [x] **Step 4: Make the component cursor controlled**
 
 Replace the local cursor state in `SegmentTelemetryChart` with props:
 
@@ -228,7 +228,7 @@ onCursor: (distanceMeters: number, sourceIndex: number) => void;
 sample count and `timestamp` or `row-order` method; no synchronized series
 reports `IMU unavailable` without hiding speed/Delta.
 
-- [ ] **Step 5: Add localized copy**
+- [x] **Step 5: Add localized copy**
 
 Add source-of-truth English keys and Korean translations for:
 
@@ -246,7 +246,7 @@ lap.workbench.imuSampleCount
 Populate the remaining locale objects with concise English fallback values to
 keep their key contracts complete.
 
-- [ ] **Step 6: Run telemetry and i18n tests**
+- [x] **Step 6: Run telemetry and i18n tests**
 
 ```bash
 corepack pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx src/i18n/__tests__/i18n.test.ts
@@ -262,14 +262,14 @@ Expected: PASS.
 - Modify: `src/components/__tests__/SegmentAnalysisWorkbench.test.tsx`
 - Modify: `src/components/__tests__/SegmentTelemetryChart.test.tsx`
 
-- [ ] **Step 1: Write failing synchronization tests**
+- [x] **Step 1: Write failing synchronization tests**
 
 In the workbench test, select a point through the mocked map callback and assert
 the telemetry receives the corresponding controlled distance. Trigger the
 telemetry `onCursor` callback and assert `onSelectedPointIndex` receives the same
 source index.
 
-- [ ] **Step 2: Run the focused tests and confirm failure**
+- [x] **Step 2: Run the focused tests and confirm failure**
 
 ```bash
 corepack pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.tsx src/components/__tests__/SegmentTelemetryChart.test.tsx
@@ -277,7 +277,7 @@ corepack pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.
 
 Expected: FAIL because the telemetry owns its cursor locally.
 
-- [ ] **Step 3: Centralize cursor state**
+- [x] **Step 3: Centralize cursor state**
 
 In `SegmentAnalysisWorkbench`:
 
@@ -290,13 +290,13 @@ In `SegmentAnalysisWorkbench`:
 4. Pass controlled distance, synchronized series, and callback to telemetry.
 5. Keep passing controlled distance to `SegmentTrajectoryMap`.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 Run the Step 2 command.
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit prop flow, telemetry, and cursor work**
+- [x] **Step 5: Commit prop flow, telemetry, and cursor work**
 
 ```bash
 git add src/app/App.tsx src/components src/i18n/lapLocales.ts
@@ -311,7 +311,7 @@ git commit -m "feat: add synchronized IMU timeline to lap analysis"
 - Modify: `src/components/__tests__/SegmentAnalysisWorkbench.test.tsx`
 - Modify: `tests/analyzer.spec.ts`
 
-- [ ] **Step 1: Write failing layout tests**
+- [x] **Step 1: Write failing layout tests**
 
 Assert the workbench root has `is-controls-open` when the remembered preference
 opens the drawer and loses it after the close callback. In E2E, open the drawer
@@ -319,7 +319,7 @@ at desktop width and assert the workbench content left bound increases while its
 right bound remains within two pixels; at mobile width assert the left bound is
 unchanged and the scrim is visible.
 
-- [ ] **Step 2: Run focused tests and confirm failure**
+- [x] **Step 2: Run focused tests and confirm failure**
 
 ```bash
 corepack pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.tsx
@@ -327,7 +327,7 @@ corepack pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.
 
 Expected: FAIL because the root does not expose drawer state.
 
-- [ ] **Step 3: Add the state class and desktop inset**
+- [x] **Step 3: Add the state class and desktop inset**
 
 Render the workbench root as:
 
@@ -354,7 +354,7 @@ Add CSS:
 Under `prefers-reduced-motion: reduce`, disable this transition. Do not change
 the mobile drawer or scrim rules.
 
-- [ ] **Step 4: Run component and browser tests**
+- [x] **Step 4: Run component and browser tests**
 
 ```bash
 corepack pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.tsx
@@ -363,7 +363,7 @@ corepack pnpm test:e2e
 
 Expected: PASS on desktop and mobile projects.
 
-- [ ] **Step 5: Commit the drawer layout change**
+- [x] **Step 5: Commit the drawer layout change**
 
 ```bash
 git add src/components/SegmentAnalysisWorkbench.tsx src/components/__tests__/SegmentAnalysisWorkbench.test.tsx src/styles.css tests/analyzer.spec.ts
@@ -375,7 +375,7 @@ git commit -m "feat: reserve workspace for open analysis controls"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-16-synchronized-motion-timeline.md`
 
-- [ ] **Step 1: Run all repository gates**
+- [x] **Step 1: Run all repository gates**
 
 ```bash
 corepack pnpm typecheck
@@ -388,7 +388,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 2: Verify the supplied VTA with Aside**
+- [x] **Step 2: Verify the supplied VTA with Aside**
 
 At desktop width, load
 `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta`, open Lap Analysis, and
@@ -405,7 +405,7 @@ verify:
 Repeat a smoke check at mobile width and confirm the drawer overlays with a
 scrim rather than pushing content.
 
-- [ ] **Step 3: Mark plan steps complete and review the diff**
+- [x] **Step 3: Mark plan steps complete and review the diff**
 
 Run:
 
@@ -422,7 +422,7 @@ Confirm no `.Vta`, screenshots, build artifacts, or test output are staged.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-16-synchronized-motion-timeline.md`
 
-- [ ] **Step 1: Commit the design and plan documents if not already committed**
+- [x] **Step 1: Commit the design and plan documents if not already committed**
 
 ```bash
 git add docs/superpowers/specs/2026-07-16-synchronized-motion-timeline-design.md docs/superpowers/plans/2026-07-16-synchronized-motion-timeline.md
@@ -447,3 +447,26 @@ Use `gh run list` and `gh run view` for the pushed commit. Both `CI` and
 
 Open `https://woo4826.github.io/openvta-analyzer/` with Aside, load the supplied
 VTA locally, and confirm the IMU timeline and drawer-push behavior are present.
+
+## Implementation notes
+
+- `sourcePosition` was added as an internal fractional GPS anchor so narrow,
+  resampled corners remain synchronizable even when adjacent display points
+  share one integer source index. Schema-v1 segment JSON strips this internal
+  field before export.
+- Rendering uses at most 2,400 IMU points while preserving the first/last
+  samples and per-bucket X/Y/Z extrema. The synchronization status continues to
+  report the full effective sample count.
+- The shared chart cursor is a reused zrender overlay, not a static series
+  mark-line. Cursor movement therefore does not rebuild the full ECharts option.
+  All distance/time grids share one explicit X domain so the cursor remains
+  geometrically aligned.
+- Actual-file desktop QA used Aside MCP with
+  `VTA24082025_101142_CC00.Vta`: Inje Speedium matched, Lap 7 synchronized 9,958
+  row-order IMU samples, cursor movement updated the 3,915 m lap position, and
+  distance/time modes rendered without browser errors. Mobile drawer behavior
+  was covered by the repository mobile E2E project because the attached Aside
+  tab does not expose viewport resizing.
+- Final pre-deploy gates: TypeScript and ESLint passed; Vitest passed 271 tests;
+  production build passed; desktop/mobile E2E passed 16 tests; `git diff
+  --check` passed. Independent review reported no Critical or Important blocker.
