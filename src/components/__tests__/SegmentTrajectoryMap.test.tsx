@@ -12,6 +12,8 @@ vi.mock("../RouteMap", () => ({
       data-overlays={JSON.stringify(props.lapOverlays)}
       data-heat={JSON.stringify(props.heatSegments)}
       data-ghosts={JSON.stringify(props.ghostMarkers)}
+      data-interaction-indexes={JSON.stringify(props.interactionPoints?.map((point) => point.index))}
+      data-show-route-line={String(props.showRouteLine)}
     >
       {props.ghostMarkers?.map((ghost) => <span key={ghost.id}>{ghost.label}</span>)}
     </div>
@@ -45,6 +47,8 @@ describe("SegmentTrajectoryMap", () => {
     expect(overlays).toHaveLength(2);
     expect(overlays.find((overlay: { id: string }) => overlay.id === "lap-2")).toMatchObject({ width: 8, opacity: 0.96 });
     expect(overlays.some((overlay: { id: string }) => overlay.id === "lap-3")).toBe(false);
+    expect(map).toHaveAttribute("data-show-route-line", "false");
+    expect(JSON.parse(map.getAttribute("data-interaction-indexes")!)).toEqual([0, 1, 2]);
     expect(JSON.parse(map.getAttribute("data-heat")!)).not.toHaveLength(0);
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
     expect(screen.getByText("Lap 1 reference Ghost")).toBeVisible();

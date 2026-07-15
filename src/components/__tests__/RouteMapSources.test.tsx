@@ -152,6 +152,30 @@ describe("RouteMap source updates", () => {
     expect(map.setPaintProperty).toHaveBeenCalledWith("route-points", "circle-opacity", 0);
   });
 
+  it("can hide the session route and publish explicit source-index hit targets", async () => {
+    const focusedHitPoints = [
+      { ...point(0), index: 401 },
+      { ...point(1), index: 422 },
+    ];
+    render(wrappedRoute(0, false, {
+      showRouteLine: false,
+      interactionPoints: focusedHitPoints,
+      showRoutePoints: false,
+      interactiveRoutePoints: true,
+    }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+
+    await waitFor(() => expect(map.sources.get("route-line-source")?.setData).toHaveBeenCalled());
+    const route = map.sources.get("route-line-source")!.setData.mock.calls.at(-1)?.[0] as { features: unknown[] };
+    const hits = map.sources.get("route-points-source")!.setData.mock.calls.at(-1)?.[0] as {
+      features: Array<{ properties: { index: number } }>;
+    };
+
+    expect(route.features).toEqual([]);
+    expect(hits.features.map((feature) => feature.properties.index)).toEqual([401, 422]);
+  });
+
   it("renders section overlays in the coordinate fallback", async () => {
     mapMock.MapDouble.shouldThrow = true;
     const view = render(wrappedRoute(0, true));
@@ -222,6 +246,8 @@ function wrappedRoute(
     sectionVisuals?: Record<string, { color: string; width?: number; opacity?: number }>;
     showRoutePoints?: boolean;
     interactiveRoutePoints?: boolean;
+    showRouteLine?: boolean;
+    interactionPoints?: GpsPoint[];
     lapOverlays?: ComponentProps<typeof RouteMap>["lapOverlays"];
     heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
     ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
@@ -248,6 +274,8 @@ function wrappedRoute(
         ghostMarkers={options.ghostMarkers}
         showRoutePoints={options.showRoutePoints}
         interactiveRoutePoints={options.interactiveRoutePoints}
+        showRouteLine={options.showRouteLine}
+        interactionPoints={options.interactionPoints}
         onSectionSelect={options.onSectionSelect}
         onSelectedIndex={vi.fn()}
         onSegmentChange={vi.fn()}

@@ -82,6 +82,10 @@ export function SegmentTrajectoryMap({
         dashArray: reference && !focused ? [3, 2] : undefined,
       };
     }), [analysis.records, colorByLap, focusedLapId, points, referenceLapId, roleLapIds]);
+  const focusedInteractionPoints = useMemo(
+    () => lapOverlays.find((overlay) => overlay.id === focusedLapId)?.points ?? [],
+    [focusedLapId, lapOverlays],
+  );
 
   const focusedRecord = analysis.records.find((record) => record.lapId === focusedLapId && roleLapIds.has(record.lapId));
   const heatSegments = useMemo((): MapHeatSegment[] => {
@@ -153,8 +157,10 @@ export function SegmentTrajectoryMap({
         lapOverlays={lapOverlays}
         heatSegments={heatSegments}
         ghostMarkers={ghostMarkers}
+        showRouteLine={false}
         showRoutePoints={false}
         interactiveRoutePoints
+        interactionPoints={focusedInteractionPoints}
         onSectionSelect={onSectionSelect}
         onSelectedIndex={onSelectedIndex}
         onSegmentChange={onSegmentChange}

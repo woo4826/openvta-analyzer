@@ -61,6 +61,8 @@ interface RouteMapProps {
   sectionVisuals?: Record<string, TrackSectionVisual>;
   showRoutePoints?: boolean;
   interactiveRoutePoints?: boolean;
+  showRouteLine?: boolean;
+  interactionPoints?: GpsPoint[];
   onSectionSelect?: (sectionId: string) => void;
   onSelectedIndex: (index: number) => void;
   onSegmentChange: (segment?: ActiveSegment) => void;
@@ -85,6 +87,8 @@ export function RouteMap({
   sectionVisuals = EMPTY_SECTION_VISUALS,
   showRoutePoints = true,
   interactiveRoutePoints = showRoutePoints,
+  showRouteLine = true,
+  interactionPoints,
   onSectionSelect,
   onSelectedIndex,
   onSegmentChange,
@@ -101,7 +105,14 @@ export function RouteMap({
   onSectionSelectRef.current = onSectionSelect;
   const bounds = useMemo(() => coordinateBounds(points), [points]);
   const segmentPoints = useMemo(() => selectedSegmentPoints(points, segment), [points, segment]);
-  const routePolyline = useMemo(() => bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, points]);
+  const routePolyline = useMemo(
+    () => showRouteLine && bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "",
+    [bounds, points, showRouteLine],
+  );
+  const routePointEntries = useMemo(() => (interactionPoints ?? points).map((point, index) => ({
+    point,
+    selectionIndex: interactionPoints ? point.index : index,
+  })), [interactionPoints, points]);
   const segmentPolyline = useMemo(() => bounds ? segmentPoints.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, segmentPoints]);
   const regionRect = useMemo(() => bounds && region ? regionToSvgRect(region, bounds) : undefined, [bounds, region]);
   const trackPolyline = useMemo(
@@ -148,7 +159,7 @@ export function RouteMap({
     })) : [],
     [bounds, gates],
   );
-  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds && interactiveRoutePoints ? points.map((point, index) => {
+  const fallbackRoutePointMarkers = useMemo(() => mapFailed && bounds && interactiveRoutePoints ? routePointEntries.map(({ point, selectionIndex }) => {
     const [cx, cy] = toSvgPointArray(point, bounds);
     return (
       <circle
@@ -159,11 +170,11 @@ export function RouteMap({
         fill={showRoutePoints ? speedColor(point.speedKmh, settings.speedThresholds) : "transparent"}
         stroke={showRoutePoints ? "#0c1b22" : "transparent"}
         strokeWidth={showRoutePoints ? 1.5 : 0}
-        onClick={() => onSelectedIndex(index)}
+        onClick={() => onSelectedIndex(selectionIndex)}
         style={{ pointerEvents: "auto", cursor: "pointer" }}
       />
     );
-  }) : [], [bounds, interactiveRoutePoints, mapFailed, onSelectedIndex, points, settings.pointSize, settings.speedThresholds, showRoutePoints]);
+  }) : [], [bounds, interactiveRoutePoints, mapFailed, onSelectedIndex, routePointEntries, settings.pointSize, settings.speedThresholds, showRoutePoints]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current || !points.length) {
@@ -256,8 +267,8 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints, interactiveRoutePoints);
-  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints, interactiveRoutePoints]);
+    updateMapRoute(mapRef.current, points, routePointEntries, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRouteLine, showRoutePoints, interactiveRoutePoints);
+  }, [points, routePointEntries, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRouteLine, showRoutePoints, interactiveRoutePoints]);
 
   useEffect(() => {
     if (!mapRef.current || !styleLoaded) {
@@ -609,6 +620,7 @@ function speedColor(speedKmh: number, thresholds: MapSettings["speedThresholds"]
 function updateMapRoute(
   map: maplibregl.Map,
   points: GpsPoint[],
+  routePointEntries: Array<{ point: GpsPoint; selectionIndex: number }>,
   segment: ActiveSegment | undefined,
   region: AxisAlignedRegion | undefined,
   settings: MapSettings,
@@ -619,19 +631,23 @@ function updateMapRoute(
   ghostMarkers: MapGhostMarker[],
   sectionGeometry: TrackSectionGeometry[],
   sectionVisuals: Record<string, TrackSectionVisual>,
+  showRouteLine: boolean,
   showRoutePoints: boolean,
   interactiveRoutePoints: boolean,
 ) {
   if (!map.isStyleLoaded() || !points.length) {
     return;
   }
-  const routeData: Feature<LineString> = {
-    type: "Feature",
-    properties: {},
-    geometry: {
-      type: "LineString",
-      coordinates: lineCoordinates(points),
-    },
+  const routeData: FeatureCollection<LineString> = {
+    type: "FeatureCollection",
+    features: showRouteLine && points.length >= 2 ? [{
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: lineCoordinates(points),
+      },
+    }] : [],
   };
   const segmentCoordinates = lineCoordinates(selectedSegmentPoints(points, segment));
   const segmentData: FeatureCollection<LineString> = {
@@ -648,9 +664,9 @@ function updateMapRoute(
   };
   const pointData: FeatureCollection<Point> = {
     type: "FeatureCollection",
-    features: showRoutePoints || interactiveRoutePoints ? points.map((point, index) => ({
+    features: showRoutePoints || interactiveRoutePoints ? routePointEntries.map(({ point, selectionIndex }) => ({
       type: "Feature",
-      properties: { index, speedKmh: point.speedKmh },
+      properties: { index: selectionIndex, speedKmh: point.speedKmh },
       geometry: { type: "Point", coordinates: [point.longitude, point.latitude] },
     })) : [],
   };
