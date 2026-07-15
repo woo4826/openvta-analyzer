@@ -69,7 +69,10 @@ const mapMock = vi.hoisted(() => {
   }
 
   class LngLatBoundsDouble {
-    extend() {
+    coordinates: number[][] = [];
+
+    extend(coordinate: number[]) {
+      this.coordinates.push(coordinate);
       return this;
     }
   }
@@ -84,7 +87,7 @@ vi.mock("maplibre-gl", () => ({
   },
 }));
 
-const points = [point(0), point(1)];
+const points = [point(0), point(1), point(2)];
 const settings: MapSettings = {
   pointSize: 6,
   tileUrl: "https://tiles.invalid/{z}/{x}/{y}.png",
@@ -131,6 +134,31 @@ describe("RouteMap source updates", () => {
 
     await waitFor(() => expect(map.sources.get("selected-point-source")?.setData).toHaveBeenCalledOnce());
     expect(map.jumpTo).not.toHaveBeenCalled();
+  });
+
+  it("fits and resolves the selected marker against the active interaction scope", async () => {
+    const scopePoints = points.slice(1);
+    const view = render(wrappedRoute(0, false, {
+      interactionPoints: scopePoints,
+      fitPoints: scopePoints,
+      followSelectedPoint: false,
+    }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+
+    await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+    const fitted = map.fitBounds.mock.calls.at(-1)?.[0] as { coordinates: number[][] };
+    expect(fitted.coordinates).toEqual(scopePoints.map((point) => [point.longitude, point.latitude]));
+    await waitFor(() => expect(map.sources.get("selected-point-source")?.setData).toHaveBeenCalled());
+    const selected = map.sources.get("selected-point-source")!.setData.mock.calls.at(-1)?.[0] as {
+      features: Array<{ geometry: { coordinates: number[] } }>;
+    };
+    expect(selected.features[0].geometry.coordinates).toEqual([scopePoints[0].longitude, scopePoints[0].latitude]);
+
+    map.fitBounds.mockClear();
+    await userEvent.setup().click(view.getByRole("button", { name: "Fit route" }));
+    const manuallyFitted = map.fitBounds.mock.calls.at(-1)?.[0] as { coordinates: number[][] };
+    expect(manuallyFitted.coordinates).toEqual(scopePoints.map((point) => [point.longitude, point.latitude]));
   });
 
   it("publishes section overlays to the MapLibre source", async () => {
@@ -332,6 +360,7 @@ function wrappedRoute(
     interactiveRoutePoints?: boolean;
     showRouteLine?: boolean;
     interactionPoints?: GpsPoint[];
+    fitPoints?: GpsPoint[];
     onSelectedIndex?: (index: number) => void;
     segment?: ActiveSegment;
     onSegmentChange?: ((segment?: ActiveSegment) => void) | null;
@@ -367,6 +396,7 @@ function wrappedRoute(
         interactiveRoutePoints={options.interactiveRoutePoints}
         showRouteLine={options.showRouteLine}
         interactionPoints={options.interactionPoints}
+        fitPoints={options.fitPoints}
         onSectionSelect={options.onSectionSelect}
         onSelectedIndex={options.onSelectedIndex ?? vi.fn()}
         onSegmentChange={options.onSegmentChange === null ? undefined : options.onSegmentChange ?? vi.fn()}

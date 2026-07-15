@@ -65,7 +65,9 @@ interface RouteMapProps {
   interactiveRoutePoints?: boolean;
   showRouteLine?: boolean;
   interactionPoints?: GpsPoint[];
+  fitPoints?: GpsPoint[];
   followSelectedPoint?: boolean;
+  mapAriaLabel?: string;
   onSectionSelect?: (sectionId: string) => void;
   onSelectedIndex: (index: number) => void;
   onSegmentChange?: (segment?: ActiveSegment) => void;
@@ -92,7 +94,9 @@ export function RouteMap({
   interactiveRoutePoints = showRoutePoints,
   showRouteLine = true,
   interactionPoints,
+  fitPoints,
   followSelectedPoint = true,
+  mapAriaLabel,
   onSectionSelect,
   onSelectedIndex,
   onSegmentChange,
@@ -107,7 +111,8 @@ export function RouteMap({
   const focusFrameRef = useRef<number>();
   const onSectionSelectRef = useRef(onSectionSelect);
   onSectionSelectRef.current = onSectionSelect;
-  const bounds = useMemo(() => coordinateBounds(points), [points]);
+  const routeFitPoints = fitPoints?.length ? fitPoints : interactionPoints?.length ? interactionPoints : points;
+  const bounds = useMemo(() => coordinateBounds(routeFitPoints), [routeFitPoints]);
   const segmentPoints = useMemo(() => selectedSegmentPoints(points, segment), [points, segment]);
   const routePolyline = useMemo(
     () => showRouteLine && bounds ? points.map((point) => toSvgPoint(point, bounds)).join(" ") : "",
@@ -117,6 +122,12 @@ export function RouteMap({
     point,
     selectionIndex: interactionPoints ? point.index : index,
   })), [interactionPoints, points]);
+  const selectedPoint = useMemo(
+    () => interactionPoints?.find((point) => point.index === selectedIndex)
+      ?? (interactionPoints?.length ? interactionPoints[0] : points[selectedIndex]),
+    [interactionPoints, points, selectedIndex],
+  );
+  const accessibleMapLabel = mapAriaLabel ?? t("map.speedColoredRoutePlot");
   const segmentPolyline = useMemo(() => bounds ? segmentPoints.map((point) => toSvgPoint(point, bounds)).join(" ") : "", [bounds, segmentPoints]);
   const regionRect = useMemo(() => bounds && region ? regionToSvgRect(region, bounds) : undefined, [bounds, region]);
   const trackPolyline = useMemo(
@@ -188,7 +199,8 @@ export function RouteMap({
     setMapFailed(false);
     setStyleLoaded(false);
     try {
-      const center: [number, number] = [points[0].longitude, points[0].latitude];
+      const centerPoint = routeFitPoints[0] ?? points[0];
+      const center: [number, number] = [centerPoint.longitude, centerPoint.latitude];
       const map = new maplibregl.Map({
         container: containerRef.current,
         center,
@@ -279,16 +291,15 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    const selected = points[selectedIndex];
     if (focusFrameRef.current !== undefined) {
       window.cancelAnimationFrame(focusFrameRef.current);
     }
     focusFrameRef.current = window.requestAnimationFrame(() => {
       if (!mapRef.current) return;
-      updateSelectedPoint(mapRef.current, selected);
-      if (selected && followSelectedPoint) {
+      updateSelectedPoint(mapRef.current, selectedPoint);
+      if (selectedPoint && followSelectedPoint) {
         mapRef.current.jumpTo({
-          center: [selected.longitude, selected.latitude],
+          center: [selectedPoint.longitude, selectedPoint.latitude],
         });
       }
     });
@@ -297,22 +308,29 @@ export function RouteMap({
         window.cancelAnimationFrame(focusFrameRef.current);
       }
     };
-  }, [followSelectedPoint, points, selectedIndex, styleLoaded]);
+  }, [followSelectedPoint, selectedPoint, styleLoaded]);
+
+  useEffect(() => {
+    if (!mapRef.current || !styleLoaded) return;
+    fitRoute();
+    // Fit only when the active analysis scope changes; cursor movement is handled above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeFitPoints, styleLoaded]);
 
   function fitRoute() {
-    if (!mapRef.current || !points.length) {
+    if (!mapRef.current || !routeFitPoints.length) {
       return;
     }
-    if (points.length === 1) {
+    if (routeFitPoints.length === 1) {
       mapRef.current.easeTo({
-        center: [points[0].longitude, points[0].latitude],
+        center: [routeFitPoints[0].longitude, routeFitPoints[0].latitude],
         zoom: Math.max(mapRef.current.getZoom(), 16),
         duration: 250,
       });
       return;
     }
     const routeBounds = new maplibregl.LngLatBounds();
-    points.forEach((point) => routeBounds.extend([point.longitude, point.latitude]));
+    routeFitPoints.forEach((point) => routeBounds.extend([point.longitude, point.latitude]));
     mapRef.current.fitBounds(routeBounds, { padding: 70, maxZoom: 16, duration: 250 });
   }
 
@@ -328,7 +346,7 @@ export function RouteMap({
     if (!points.length || !onSegmentChange) {
       return;
     }
-    const pointIndex = clampIndex(selectedIndex, points.length);
+    const pointIndex = clampIndex(selectedPoint?.index ?? selectedIndex, points.length);
     const nextSegment = normalizeSegment(
       {
         startIndex: boundary === "startIndex" ? pointIndex : segment?.startIndex ?? pointIndex,
@@ -356,13 +374,12 @@ export function RouteMap({
     return <div className="map-shell empty-state">{t("map.noGpsData")}</div>;
   }
 
-  const selected = points[selectedIndex];
   return (
     <div className="map-shell" data-source-visibility={sourceVisibilityState(sourceVisibility)}>
       {!mapFailed ? <div className="map-container" ref={containerRef} /> : null}
       {mapFailed ? <div className="empty-state">{t("map.tilesUnavailable")}</div> : null}
       {mapFailed ? (
-        <svg className="coordinate-layer" viewBox="0 0 1000 640" role="img" aria-label={t("map.speedColoredRoutePlot")}>
+        <svg className="coordinate-layer" viewBox="0 0 1000 640" role="img" aria-label={accessibleMapLabel}>
           {regionRect ? (
             <rect
               x={regionRect.x}
@@ -496,12 +513,12 @@ export function RouteMap({
               <circle cx={marker.position[0]} cy={marker.position[1]} r="5" fill={marker.color} stroke="#ffffff" strokeWidth="1.5" />
             </g>
           ))}
-          {selected ? (
-            <SelectedPointMarker point={selected} bounds={bounds} pointSize={settings.pointSize} />
+          {selectedPoint ? (
+            <SelectedPointMarker point={selectedPoint} bounds={bounds} pointSize={settings.pointSize} />
           ) : null}
         </svg>
       ) : (
-        <div className="coordinate-layer" aria-label={t("map.speedColoredRoutePlot")} role="img" />
+        <div className="coordinate-layer" aria-label={accessibleMapLabel} role="img" />
       )}
       <MapControls
         settings={settings}

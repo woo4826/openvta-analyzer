@@ -15,10 +15,12 @@ vi.mock("../RouteMap", () => ({
       data-heat={JSON.stringify(props.heatSegments)}
       data-ghosts={JSON.stringify(props.ghostMarkers)}
       data-interaction-indexes={JSON.stringify(props.interactionPoints?.map((point) => point.index))}
+      data-fit-indexes={JSON.stringify(props.fitPoints?.map((point) => point.index))}
       data-show-route-line={String(props.showRouteLine)}
       data-track-centerline={String(Boolean(props.trackCenterline))}
       data-track-sections={String(props.trackSections?.length ?? 0)}
       data-follow-selected={String(props.followSelectedPoint)}
+      aria-label={props.mapAriaLabel}
     >
       {props.ghostMarkers?.map((ghost) => <span key={ghost.id}>{ghost.label}</span>)}
     </div>
@@ -42,6 +44,8 @@ describe("SegmentTrajectoryMap", () => {
     expect(map).toHaveAttribute("data-track-centerline", "false");
     expect(map).toHaveAttribute("data-follow-selected", "false");
     expect(JSON.parse(map.getAttribute("data-interaction-indexes")!)).toEqual([0, 1, 2]);
+    expect(JSON.parse(map.getAttribute("data-fit-indexes")!)).toEqual([0, 1, 2]);
+    expect(map).toHaveAccessibleName("Lap trajectory comparison");
     expect(map).not.toHaveAttribute("data-heat");
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
     expect(screen.getByText("Lap 1 reference Ghost")).toBeVisible();

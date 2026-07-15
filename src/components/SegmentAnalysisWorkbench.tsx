@@ -183,9 +183,12 @@ export function SegmentAnalysisWorkbench({
       return;
     }
     telemetrySelectionRef.current = undefined;
-    const sample = nearestSourceSample(focused?.trajectory ?? [], selectedPointIndex);
-    if (sample) setCursorDistanceMeters(sample.distanceMeters);
-  }, [focused?.trajectory, selectedPointIndex]);
+    const selected = focused?.trajectory.find((sample) => sample.sourceIndex === selectedPointIndex);
+    const next = selected ?? focused?.trajectory[0];
+    if (!next) return;
+    setCursorDistanceMeters(next.distanceMeters);
+    if (!selected) onSelectedPointIndex(next.sourceIndex);
+  }, [focused?.trajectory, onSelectedPointIndex, selectedPointIndex]);
 
   const selectMapPoint = useCallback((sourceIndex: number) => {
     telemetrySelectionRef.current = undefined;

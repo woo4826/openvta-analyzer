@@ -168,7 +168,9 @@ export function SegmentTrajectoryMap({
         showRoutePoints={false}
         interactiveRoutePoints
         interactionPoints={focusedInteractionPoints}
+        fitPoints={focusedInteractionPoints}
         followSelectedPoint={false}
+        mapAriaLabel={t("lap.workbench.trajectoryComparison")}
         onSectionSelect={onSectionSelect}
         onSelectedIndex={onSelectedIndex}
         onSegmentChange={onSegmentChange}
