@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import * as echarts from "echarts";
 import type { EChartsOption } from "echarts";
-import { brushSegmentFromOption, chartPointIndex, toBrushSelectedPayload } from "./chartInteraction";
+import { brushDomainRange, brushSegmentFromOption, chartPointIndex, toBrushSelectedPayload } from "./chartInteraction";
 
 export interface ChartPanelProps {
   title: string;
@@ -12,9 +12,10 @@ export interface ChartPanelProps {
   actions?: ReactNode;
   onPoint?: (index: number) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
+  onBrushRange?: (start: number, end: number) => void;
 }
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, onPoint, onBrushSegment }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, onPoint, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const hoverFrameRef = useRef<number | undefined>(undefined);
@@ -74,6 +75,10 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       if (!params) {
         return;
       }
+      const range = brushDomainRange(params);
+      if (range) {
+        onBrushRange?.(range.start, range.end);
+      }
       const segment = brushSegmentFromOption(params, option);
       if (segment) {
         onBrushSegment?.(segment.startIndex, segment.endIndex);
@@ -85,7 +90,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       chart.on("click", handleClick);
       chart.on("mouseover", handleHover);
     }
-    if (onBrushSegment) {
+    if (onBrushSegment || onBrushRange) {
       chart.on("brushSelected", handleBrush);
     }
 
@@ -96,7 +101,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       chart.off("mouseover", handleHover);
       chart.off("brushSelected", handleBrush);
     };
-  }, [option, onPoint, onBrushSegment]);
+  }, [option, onPoint, onBrushSegment, onBrushRange]);
 
   useEffect(() => {
     return () => {

@@ -59,6 +59,17 @@ export function brushSegmentFromOption(
   return coordinateValues.length >= 2 ? toSegment(coordinateValues) : undefined;
 }
 
+export function brushDomainRange(
+  params: BrushSelectedPayload,
+): { start: number; end: number } | undefined {
+  const values = params.batch?.flatMap((batch) => batch.areas?.flatMap((area) => [
+    ...coordinateRangePairs(area.coordRange).flat(),
+    ...coordinateRangePairs(area.coordRanges).flat(),
+  ]) ?? []) ?? [];
+  if (values.length < 2) return undefined;
+  return { start: Math.min(...values), end: Math.max(...values) };
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
