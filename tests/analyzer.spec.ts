@@ -126,8 +126,23 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(analysisMain.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
   await expect(analysisMain.getByText(/Focused − Reference; a negative value/)).toBeVisible();
   await expect(analysisMain.getByText(/raw focused-lap device axes/)).toBeVisible();
+  await expect(analysisMain.locator(".segment-comparison-bar .sr-only")).toHaveCSS("clip-path", "inset(50%)");
+  await expect(analysisMain.locator(".segment-comparison-bar .sr-only")).toHaveCSS("width", "1px");
   await expect(analysisMain.locator(".segment-telemetry-readout")).toContainText(/Timestamp · [1-9]\d* samples/);
   await analysisMain.locator(".dashboard-widget-telemetry").scrollIntoViewIfNeeded();
+  if ((page.viewportSize()?.width ?? 0) > 680) {
+    const comparisonBox = await analysisMain.locator(".segment-comparison-bar").boundingBox();
+    const ribbonBox = await analysisMain.locator(".segment-scope-ribbon").boundingBox();
+    expect(comparisonBox).not.toBeNull();
+    expect(ribbonBox).not.toBeNull();
+    expect(comparisonBox!.y).toBeGreaterThanOrEqual(0);
+    expect(comparisonBox!.y + comparisonBox!.height).toBeLessThanOrEqual(ribbonBox!.y + 1);
+  }
+  const telemetryWidgetBox = await analysisMain.locator(".dashboard-widget-telemetry").boundingBox();
+  const telemetryContextBox = await analysisMain.locator(".segment-telemetry-context").boundingBox();
+  expect(telemetryWidgetBox).not.toBeNull();
+  expect(telemetryContextBox).not.toBeNull();
+  expect(telemetryContextBox!.y + telemetryContextBox!.height).toBeLessThanOrEqual(telemetryWidgetBox!.y + telemetryWidgetBox!.height + 1);
   await expect(analysisMain.getByRole("button", { name: "Detailed channels" })).toHaveCount(0);
   await expect(analysisMain.getByRole("button", { name: "Select range", exact: true })).toHaveCount(0);
   await expect(analysisMain.getByRole("button", { name: "Zoom", exact: true })).toHaveCount(0);
@@ -141,9 +156,9 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const keyboardCursorBefore = await cursorDistance.textContent();
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => cursorDistance.textContent()).not.toBe(keyboardCursorBefore);
-  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.22, telemetryBox!.y + telemetryBox!.height * 0.16);
+  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.22, telemetryBox!.y + telemetryBox!.height * 0.72);
   const earlyCursor = await cursorDistance.textContent();
-  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.76, telemetryBox!.y + telemetryBox!.height * 0.16);
+  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.76, telemetryBox!.y + telemetryBox!.height * 0.72);
   await expect.poll(() => cursorDistance.textContent()).not.toBe(earlyCursor);
 
   await analysisMain.getByRole("button", { name: "Analysis controls" }).click();

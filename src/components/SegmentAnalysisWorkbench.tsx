@@ -298,6 +298,7 @@ export function SegmentAnalysisWorkbench({
         </form>
       ) : null}
 
+      <div className="segment-sticky-stack">
       <div className="segment-comparison-bar" aria-label={t("lap.workbench.comparisonControls")}>
         <label className="comparison-role is-focus">
           <span><i aria-hidden />{t("lap.workbench.focusedLap")}</span>
@@ -367,6 +368,7 @@ export function SegmentAnalysisWorkbench({
         onFilter={workbench.setFilter}
         onSection={workbench.selectSection}
       />
+      </div>
 
       {active ? <>
       <SegmentDashboard

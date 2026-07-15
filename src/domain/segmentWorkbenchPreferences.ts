@@ -22,20 +22,20 @@ const lapVisibilities: SegmentLapVisibility[] = ["all", "focus-reference", "focu
 const defaultLayouts: Record<string, SegmentWidgetLayout[]> = {
   lg: [
     { i: "map", x: 0, y: 0, w: 12, h: 11, minW: 6, minH: 8 },
-    { i: "telemetry", x: 0, y: 11, w: 12, h: 9, minW: 6, minH: 7 },
-    { i: "evidence", x: 0, y: 20, w: 4, h: 7, minW: 3, minH: 5 },
-    { i: "variation", x: 4, y: 20, w: 8, h: 7, minW: 4, minH: 5 },
-    { i: "laps", x: 0, y: 27, w: 12, h: 7, minW: 5, minH: 5 },
+    { i: "telemetry", x: 0, y: 11, w: 12, h: 11, minW: 6, minH: 11 },
+    { i: "evidence", x: 0, y: 22, w: 4, h: 7, minW: 3, minH: 5 },
+    { i: "variation", x: 4, y: 22, w: 8, h: 7, minW: 4, minH: 5 },
+    { i: "laps", x: 0, y: 29, w: 12, h: 7, minW: 5, minH: 5 },
   ],
   md: [
     { i: "map", x: 0, y: 0, w: 8, h: 10, minW: 4, minH: 8 },
-    { i: "telemetry", x: 0, y: 10, w: 8, h: 9, minW: 4, minH: 7 },
-    { i: "evidence", x: 0, y: 19, w: 3, h: 7, minW: 3, minH: 5 },
-    { i: "variation", x: 3, y: 19, w: 5, h: 7, minW: 3, minH: 5 },
-    { i: "laps", x: 0, y: 26, w: 8, h: 8, minW: 4, minH: 5 },
+    { i: "telemetry", x: 0, y: 10, w: 8, h: 11, minW: 4, minH: 11 },
+    { i: "evidence", x: 0, y: 21, w: 3, h: 7, minW: 3, minH: 5 },
+    { i: "variation", x: 3, y: 21, w: 5, h: 7, minW: 3, minH: 5 },
+    { i: "laps", x: 0, y: 28, w: 8, h: 8, minW: 4, minH: 5 },
   ],
-  sm: SEGMENT_WIDGET_IDS.map((i, index) => ({ i, x: 0, y: index * 8, w: 1, h: i === "map" || i === "telemetry" ? 9 : 7, minW: 1, minH: 4 })),
-  xs: SEGMENT_WIDGET_IDS.map((i, index) => ({ i, x: 0, y: index * 8, w: 1, h: i === "map" || i === "telemetry" ? 9 : 7, minW: 1, minH: 4 })),
+  sm: compactLayout(),
+  xs: compactLayout(),
 };
 
 export function defaultSegmentWorkbenchPreferences(): SegmentWorkbenchPreferences {
@@ -97,7 +97,16 @@ export function mergeSegmentLayouts(
   return Object.fromEntries(Object.entries(defaults).map(([breakpoint, fallback]) => {
     const existing = saved[breakpoint] ?? [];
     const existingById = new Map(existing.map((item) => [item.i, item]));
-    return [breakpoint, fallback.map((item) => ({ ...item, ...existingById.get(item.i), i: item.i }))];
+    return [breakpoint, fallback.map((item) => {
+      const merged = { ...item, ...existingById.get(item.i), i: item.i };
+      return {
+        ...merged,
+        minW: item.minW,
+        minH: item.minH,
+        w: Math.max(merged.w, item.minW ?? 1),
+        h: Math.max(merged.h, item.minH ?? 1),
+      };
+    })];
   }));
 }
 
@@ -134,6 +143,16 @@ function isWidgetLayout(value: unknown): value is SegmentWidgetLayout {
 
 function cloneLayouts(layouts: Record<string, SegmentWidgetLayout[]>): Record<string, SegmentWidgetLayout[]> {
   return Object.fromEntries(Object.entries(layouts).map(([key, items]) => [key, items.map((item) => ({ ...item }))]));
+}
+
+function compactLayout(): SegmentWidgetLayout[] {
+  return [
+    { i: "map", x: 0, y: 0, w: 1, h: 9, minW: 1, minH: 8 },
+    { i: "telemetry", x: 0, y: 9, w: 1, h: 15, minW: 1, minH: 15 },
+    { i: "evidence", x: 0, y: 24, w: 1, h: 7, minW: 1, minH: 5 },
+    { i: "variation", x: 0, y: 31, w: 1, h: 7, minW: 1, minH: 5 },
+    { i: "laps", x: 0, y: 38, w: 1, h: 7, minW: 1, minH: 5 },
+  ];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

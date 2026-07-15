@@ -34,7 +34,9 @@ describe("segment workbench preferences", () => {
     ]);
     expect(preferences.layouts.lg.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 12 });
     expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ x: 0, w: 12 });
+    expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 11, minH: 11 });
     expect(preferences.layouts.md.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 8 });
+    expect(preferences.layouts.sm.find((item) => item.i === "telemetry")).toMatchObject({ y: 9, h: 15, minH: 15 });
     expect(SEGMENT_WORKBENCH_STORAGE_KEY).toBe("openvta.segmentWorkbench.v2");
   });
 
@@ -83,9 +85,18 @@ describe("segment workbench preferences", () => {
       lg: [{ i: "map", x: 9, y: 7, w: 3, h: 4 }],
     }, defaults);
 
-    expect(merged.lg.find((item) => item.i === "map")).toMatchObject({ x: 9, y: 7, w: 3, h: 4 });
+    expect(merged.lg.find((item) => item.i === "map")).toMatchObject({ x: 9, y: 7, w: 6, h: 8, minW: 6, minH: 8 });
     expect(new Set(merged.lg.map((item) => item.i))).toEqual(new Set(defaults.lg.map((item) => item.i)));
     expect(merged.md).toEqual(defaults.md);
+  });
+
+  it("raises a saved telemetry widget to the interpretation-safe minimum height", () => {
+    const defaults = defaultSegmentWorkbenchPreferences().layouts;
+    const merged = mergeSegmentLayouts({
+      lg: [{ i: "telemetry", x: 0, y: 11, w: 12, h: 7, minW: 2, minH: 4 }],
+    }, defaults);
+
+    expect(merged.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 11, minH: 11 });
   });
 
   it("does not allow the final visible widget to be hidden", () => {
