@@ -5,6 +5,7 @@ import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
 import { projectCoordinateToLineProgress } from "../domain/geometry";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
+import { buildSegmentPairwiseEvidence } from "../domain/segmentPairwiseEvidence";
 import { synchronizeAccelerationToTrajectory } from "../domain/sensorSynchronization";
 import {
   canHideWidget,
@@ -96,6 +97,7 @@ export function SegmentAnalysisWorkbench({
   const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
   const reference = workbench.analysis.records.find((record) => record.lapId === workbench.referenceLapId);
+  const pairwiseEvidence = useMemo(() => buildSegmentPairwiseEvidence(focused, reference), [focused, reference]);
   const synchronizedAcceleration = useMemo(
     () => focused ? synchronizeAccelerationToTrajectory(points, sensors, focused.trajectory) : undefined,
     [focused, points, sensors],
@@ -133,6 +135,12 @@ export function SegmentAnalysisWorkbench({
     return t("lap.workbench.customRange");
   }, [profile.sections, t, workbench.scope]);
   const coachCue = useMemo(() => buildCoachCue(scopeName, focused, reference, t), [focused, reference, scopeName, t]);
+  const gpsQualityReason = focused ? focusedGpsQualityReason(focused, t) : undefined;
+  const hasGpsQualityCaution = Boolean(focused && (
+    focused.gpsConfidence === "low"
+    || focused.gpsConfidence === "unknown"
+    || focused.flags.includes("gps-gap")
+  ));
   const partialImpact = partialCompletedSectorCount === 0
     ? t("lap.workbench.partialNoCandidates", { theoretical: theoreticalBestSeconds === undefined ? t("lap.workbench.notAvailable") : formatTime(theoreticalBestSeconds) })
     : t(includePartialLapSections ? "lap.workbench.partialIncludedImpact" : "lap.workbench.partialExcludedImpact", {
@@ -295,6 +303,10 @@ export function SegmentAnalysisWorkbench({
           <strong>{scopeName}</strong>
           <span>{t("lap.workbench.trackDefinition")}: {Math.round(totalDistanceMeters)} m · {t("lap.workbench.comparableCoverage")}: {Math.round(workbench.analysis.range.startDistanceMeters)}–{Math.round(workbench.analysis.range.endDistanceMeters)} m</span>
         </div>
+        <div className="comparison-delta" aria-label={t("lap.workbench.pairwiseDelta")}>
+          <small>{t("lap.workbench.pairwiseDelta")}</small>
+          <strong className={pairwiseDeltaTone(pairwiseEvidence?.timeDeltaSeconds)}>{formatPairwiseTime(pairwiseEvidence?.timeDeltaSeconds, t)}</strong>
+        </div>
         <div className="comparison-navigation">
           <button type="button" className="icon-button button ghost" aria-label={t("lap.workbench.previousSection")} disabled={navigationIndex <= 0} onClick={() => selectAdjacentSection(-1)}>
             <ChevronLeft size={18} aria-hidden />
@@ -374,11 +386,22 @@ export function SegmentAnalysisWorkbench({
           evidence: (
             <DashboardWidget id="evidence" title={t("lap.workbench.widget.evidence")}>
               <aside className="segment-evidence-panel" aria-label={t("lap.workbench.focusedEvidence")}>
+                <section className="segment-pairwise-evidence" aria-label={t("lap.workbench.pairwiseEvidence")}>
+                  <span className="panel-eyebrow">{t("lap.workbench.pairwiseDelta")}</span>
+                  <h3>{focused ? workbenchLapLabel(focused, t) : "—"} ↔ {reference ? workbenchLapLabel(reference, t) : "—"}</h3>
+                  <dl>
+                    <Metric label={t("lap.workbench.timeDifference")} value={formatPairwiseTime(pairwiseEvidence?.timeDeltaSeconds, t)} />
+                    <Metric label={t("lap.entrySpeed")} value={formatSigned(pairwiseEvidence?.entrySpeedDeltaKmh, "km/h")} />
+                    <Metric label={t("lap.minimumSpeed")} value={formatSigned(pairwiseEvidence?.minimumSpeedDeltaKmh, "km/h")} />
+                    <Metric label={t("lap.exitSpeed")} value={formatSigned(pairwiseEvidence?.exitSpeedDeltaKmh, "km/h")} />
+                    <Metric label={t("lap.workbench.pathDifference")} value={formatSigned(pairwiseEvidence?.drivenDistanceDeltaMeters, "m")} />
+                  </dl>
+                </section>
                 <span className="panel-eyebrow">{t("lap.workbench.focusedLap")}</span>
                 <h3>{focused ? workbenchLapLabel(focused, t) : "—"}</h3>
                 <dl>
                   <Metric label={t("lap.duration")} value={formatTime(focused?.durationSeconds)} />
-                  <Metric label={t("lap.deltaBest")} value={formatDelta(focused?.deltaBestSeconds)} />
+                  <Metric label={t("lap.workbench.sessionBestDelta")} value={formatDelta(focused?.deltaBestSeconds)} />
                   <Metric label={t("lap.workbench.path")} value={focused?.drivenDistanceMeters === undefined ? "—" : `${focused.drivenDistanceMeters.toFixed(1)} m`} />
                   <Metric label={t("lap.entrySpeed")} value={formatSpeed(focused?.entrySpeedKmh)} />
                   <Metric label={t("lap.minimumSpeed")} value={formatSpeed(focused?.minimumSpeedKmh)} />
@@ -388,9 +411,10 @@ export function SegmentAnalysisWorkbench({
                 </dl>
                 <div className={`segment-coach-card ${coachCue.actionable ? "is-actionable" : "is-caution"}`}>
                   <span className="panel-eyebrow">{t("lap.workbench.nextRun")}</span>
-                  <strong>{coachCue.evidence}</strong>
+                  <strong>{hasGpsQualityCaution ? gpsQualityReason : coachCue.evidence}</strong>
                   <p>{coachCue.action}</p>
                   {coachCue.verification ? <small>{t("lap.workbench.verifyNext")}: {coachCue.verification}</small> : null}
+                  {hasGpsQualityCaution ? <button type="button" className="button" onClick={onOpenSetup}>{t("lap.workbench.openTrackSetup")}</button> : null}
                 </div>
               </aside>
             </DashboardWidget>
@@ -473,6 +497,27 @@ function formatSpeed(speed: number | undefined): string {
   return speed === undefined ? "—" : `${speed.toFixed(1)} km/h`;
 }
 
+function formatSigned(value: number | undefined, unit: string): string {
+  if (value === undefined) return "—";
+  const normalized = Math.abs(value) < 0.0005 ? 0 : value;
+  return `${normalized > 0 ? "+" : ""}${normalized.toFixed(unit === "m" ? 1 : 1)} ${unit}`;
+}
+
+function formatPairwiseTime(seconds: number | undefined, t: T): string {
+  if (seconds === undefined) return "—";
+  const direction = seconds < -0.0005
+    ? t("lap.workbench.ahead")
+    : seconds > 0.0005
+      ? t("lap.workbench.behind")
+      : t("lap.workbench.even");
+  return `${formatDelta(seconds)} · ${direction}`;
+}
+
+function pairwiseDeltaTone(seconds: number | undefined): string | undefined {
+  if (seconds === undefined) return undefined;
+  return seconds > 0.0005 ? "delta-loss" : "delta-best";
+}
+
 function safeBaseName(name: string): string {
   return name.replace(/\.vta$/i, "").replace(/[^a-zA-Z0-9._-]+/g, "-") || "openvta";
 }
@@ -500,11 +545,18 @@ function gpsConfidenceLabel(confidence: SegmentLapRecord["gpsConfidence"], t: T)
   return t(keys[confidence]);
 }
 
+function focusedGpsQualityReason(record: SegmentLapRecord, t: T): string {
+  if (record.flags.includes("gps-gap")) return t("lap.workbench.qualityGpsGap");
+  if (record.gpsConfidence === "low") return t("lap.workbench.qualityGpsLow");
+  if (record.gpsConfidence === "unknown") return t("lap.workbench.qualityGpsUnknown");
+  return t("lap.workbench.qualityGpsUsable", { confidence: gpsConfidenceLabel(record.gpsConfidence, t) });
+}
+
 function buildCoachCue(scope: string, focused: SegmentLapRecord | undefined, reference: SegmentLapRecord | undefined, t: T) {
   if (!focused || !reference) {
     return { actionable: false, evidence: t("lap.workbench.coachUnavailable"), action: t("lap.workbench.chooseComparableLaps") };
   }
-  if (focused.gpsConfidence === "low" || focused.flags.includes("gps-gap")) {
+  if (focused.gpsConfidence === "low" || focused.gpsConfidence === "unknown" || focused.flags.includes("gps-gap")) {
     return { actionable: false, evidence: t("lap.workbench.coachGpsCaution"), action: t("lap.workbench.coachGpsAction") };
   }
   const metrics = [

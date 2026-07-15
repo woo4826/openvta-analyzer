@@ -830,6 +830,17 @@ footer.privacy-note {
   gap: var(--space-1);
 }
 
+.comparison-delta {
+  display: grid;
+  gap: 1px;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.comparison-delta small {
+  color: var(--color-text-muted);
+}
+
 .segment-range-editor {
   border: 1px solid #9ccfc8;
   border-radius: var(--radius-3);
@@ -1549,6 +1560,23 @@ footer.privacy-note {
 .segment-evidence-panel h3 {
   margin: var(--space-1) 0 var(--space-6);
   font-size: 24px;
+}
+
+.segment-pairwise-evidence {
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) var(--space-6);
+  border: 1px solid #b8d6d2;
+  border-radius: var(--radius-2);
+  padding: var(--space-5);
+  background: var(--color-teal-soft);
+}
+
+.segment-pairwise-evidence h3 {
+  margin-bottom: var(--space-4);
+  font-size: var(--text-lg);
+}
+
+.segment-pairwise-evidence dl > div {
+  border-bottom-color: rgb(15 118 110 / 18%);
 }
 
 .segment-evidence-panel dl {

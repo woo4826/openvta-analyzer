@@ -58,6 +58,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data();
     const onSelectedPointIndex = vi.fn();
+    const onOpenSetup = vi.fn();
     render(<I18nProvider><SegmentAnalysisWorkbench
       sourceName="session.Vta"
       points={fixture.points}
@@ -73,10 +74,14 @@ describe("SegmentAnalysisWorkbench", () => {
       onMapSettingsChange={vi.fn()}
       onActiveSegment={vi.fn()}
       onSaveRange={vi.fn()}
-      onOpenSetup={vi.fn()}
+      onOpenSetup={onOpenSetup}
     /></I18nProvider>);
 
     expect(screen.getByTestId("map-state")).toHaveTextContent("segment=none");
+    expect(screen.getAllByText("+2.000 s · focused behind").length).toBeGreaterThan(0);
+    expect(screen.getByText(/GPS sampling or accuracy is too weak/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Open Track & lap setup" }));
+    expect(onOpenSetup).toHaveBeenCalledOnce();
 
     await user.click(screen.getByRole("button", { name: /^Corner 1/ }));
     expect(screen.getByText(/Corner 1 · 10–90 m/)).toBeVisible();

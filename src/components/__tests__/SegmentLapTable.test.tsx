@@ -28,6 +28,9 @@ describe("SegmentLapTable", () => {
     expect(screen.getByText("Closing fragment · GPS gap")).toBeVisible();
     expect(screen.getByRole("button", { name: "Focus Opening fragment" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Focus Lap 1" })).not.toBeInTheDocument();
+
+    await user.click(screen.getAllByText("Details", { selector: "summary" }).at(-1)!);
+    expect(screen.getAllByText("Unreliable · low GPS confidence")).toHaveLength(2);
   });
 });
 
@@ -54,6 +57,8 @@ function records(): SegmentLapRecord[] {
       maximumSpeedKmh: partial ? undefined : 140,
       exitSpeedKmh: partial ? undefined : 110,
       peakLossRateSecondsPer100m: partial ? undefined : 0.2,
+      maxLateralG: ordinal === 9 ? 1.2 : 0.9,
+      maxDecelerationG: ordinal === 9 ? 1.1 : 0.8,
       gpsConfidence: ordinal === 9 ? "low" : "high",
       trajectory: [],
     };

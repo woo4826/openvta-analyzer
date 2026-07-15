@@ -75,8 +75,8 @@ export function SegmentLapTable({
                   <summary>{t("lap.workbench.details")}</summary>
                   <dl>
                     <div><dt>{t("lap.avgSpeed")}</dt><dd>{formatSpeed(record.averageSpeedKmh)}</dd></div>
-                    <div><dt>{t("lap.maxLateralG")}</dt><dd>{record.maxLateralG === undefined ? "—" : `${record.maxLateralG.toFixed(2)} g`}</dd></div>
-                    <div><dt>{t("lap.maxDecelerationG")}</dt><dd>{record.maxDecelerationG === undefined ? "—" : `${record.maxDecelerationG.toFixed(2)} g`}</dd></div>
+                    <div><dt>{t("lap.maxLateralG")}</dt><dd>{formatGpsDerivedG(record, record.maxLateralG, t)}</dd></div>
+                    <div><dt>{t("lap.maxDecelerationG")}</dt><dd>{formatGpsDerivedG(record, record.maxDecelerationG, t)}</dd></div>
                     <div><dt>{t("lap.workbench.bestEligible")}</dt><dd>{record.eligibleForBest ? t("lap.yes") : t("lap.no")}</dd></div>
                   </dl>
                 </details>
@@ -146,4 +146,11 @@ function formatSpeed(speed: number | undefined): string {
 function deltaTone(delta: number | undefined): string | undefined {
   if (delta === undefined) return undefined;
   return delta > 0.001 ? "delta-loss" : "delta-best";
+}
+
+function formatGpsDerivedG(record: SegmentLapRecord, value: number | undefined, t: T): string {
+  if (record.gpsConfidence === "low" || record.gpsConfidence === "unknown") {
+    return t("lap.workbench.unreliableGpsMetric");
+  }
+  return value === undefined ? "—" : `${value.toFixed(2)} g`;
 }
