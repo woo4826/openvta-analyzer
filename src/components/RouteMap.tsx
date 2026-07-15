@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import type { Feature, FeatureCollection, LineString, Point, Polygon } from "geojson";
+import type { Feature, FeatureCollection, LineString, Point, Polygon, Position } from "geojson";
 import { normalizeSegment } from "../domain/analysis";
 import { deriveTrackSectionGeometry, type TrackSectionGeometry } from "../domain/lapAnalysis";
 import type { ActiveSegment, AxisAlignedRegion, GpsPoint, MapSettings, SourceVisibility, TrackGate, TrackSection } from "../domain/types";
@@ -11,6 +11,24 @@ export interface LapMapOverlay {
   id: string;
   color: string;
   points: GpsPoint[];
+  width?: number;
+  opacity?: number;
+  dashArray?: number[];
+}
+
+export interface MapHeatSegment {
+  id: string;
+  coordinates: [Position, Position];
+  color: string;
+  width: number;
+  opacity: number;
+}
+
+export interface MapGhostMarker {
+  id: string;
+  label: string;
+  coordinate: Position;
+  color: string;
 }
 
 export interface TrackSectionVisual {
@@ -23,6 +41,8 @@ const EMPTY_GATES: TrackGate[] = [];
 const EMPTY_LAP_OVERLAYS: LapMapOverlay[] = [];
 const EMPTY_TRACK_SECTIONS: TrackSection[] = [];
 const EMPTY_SECTION_VISUALS: Record<string, TrackSectionVisual> = {};
+const EMPTY_HEAT_SEGMENTS: MapHeatSegment[] = [];
+const EMPTY_GHOST_MARKERS: MapGhostMarker[] = [];
 
 interface RouteMapProps {
   points: GpsPoint[];
@@ -36,6 +56,8 @@ interface RouteMapProps {
   trackSections?: TrackSection[];
   gates?: TrackGate[];
   lapOverlays?: LapMapOverlay[];
+  heatSegments?: MapHeatSegment[];
+  ghostMarkers?: MapGhostMarker[];
   sectionVisuals?: Record<string, TrackSectionVisual>;
   showRoutePoints?: boolean;
   onSectionSelect?: (sectionId: string) => void;
@@ -57,6 +79,8 @@ export function RouteMap({
   trackSections = EMPTY_TRACK_SECTIONS,
   gates = EMPTY_GATES,
   lapOverlays = EMPTY_LAP_OVERLAYS,
+  heatSegments = EMPTY_HEAT_SEGMENTS,
+  ghostMarkers = EMPTY_GHOST_MARKERS,
   sectionVisuals = EMPTY_SECTION_VISUALS,
   showRoutePoints = true,
   onSectionSelect,
@@ -100,6 +124,20 @@ export function RouteMap({
       polyline: overlay.points.map((point) => toSvgPoint(point, bounds)).join(" "),
     })) : [],
     [bounds, lapOverlays],
+  );
+  const heatPolylines = useMemo(
+    () => bounds ? heatSegments.map((segment) => ({
+      ...segment,
+      polyline: segment.coordinates.map((coordinate) => toSvgCoordinate(coordinate, bounds)).join(" "),
+    })) : [],
+    [bounds, heatSegments],
+  );
+  const fallbackGhostMarkers = useMemo(
+    () => bounds ? ghostMarkers.map((marker) => ({
+      ...marker,
+      position: toSvgCoordinateArray(marker.coordinate, bounds),
+    })) : [],
+    [bounds, ghostMarkers],
   );
   const gatePolylines = useMemo(
     () => bounds ? gates.map((gate) => ({
@@ -216,8 +254,8 @@ export function RouteMap({
     if (!mapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, sectionGeometry, sectionVisuals, showRoutePoints);
-  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, sectionGeometry, sectionVisuals, showRoutePoints]);
+    updateMapRoute(mapRef.current, points, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints);
+  }, [points, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRoutePoints]);
 
   useEffect(() => {
     if (!mapRef.current || !styleLoaded) {
@@ -371,12 +409,26 @@ export function RouteMap({
               points={overlay.polyline}
               fill="none"
               stroke={overlay.color}
-              strokeOpacity="0.9"
-              strokeWidth="7"
+              strokeOpacity={overlay.opacity ?? 0.9}
+              strokeWidth={overlay.width ?? 7}
+              strokeDasharray={overlay.dashArray?.join(" ")}
               strokeLinejoin="round"
               strokeLinecap="round"
             />
           ) : null)}
+          {heatPolylines.map((heat) => (
+            <polyline
+              key={heat.id}
+              data-testid={`loss-rate-${heat.id}`}
+              points={heat.polyline}
+              fill="none"
+              stroke={heat.color}
+              strokeOpacity={heat.opacity}
+              strokeWidth={heat.width}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ))}
           {gatePolylines.map((gate) => (
             <polyline
               key={gate.id}
@@ -419,6 +471,12 @@ export function RouteMap({
             </>
           ) : null}
           {fallbackRoutePointMarkers}
+          {fallbackGhostMarkers.map((marker) => (
+            <g key={marker.id} role="img" aria-label={marker.label}>
+              <circle cx={marker.position[0]} cy={marker.position[1]} r="12" fill="#ffffff" stroke={marker.color} strokeWidth="4" />
+              <circle cx={marker.position[0]} cy={marker.position[1]} r="5" fill={marker.color} stroke="#ffffff" strokeWidth="1.5" />
+            </g>
+          ))}
           {selected ? (
             <SelectedPointMarker point={selected} bounds={bounds} pointSize={settings.pointSize} />
           ) : null}
@@ -521,6 +579,10 @@ function toSvgCoordinate(coordinate: number[], bounds: Bounds): string {
   return toSvgPoint({ longitude: coordinate[0], latitude: coordinate[1] }, bounds);
 }
 
+function toSvgCoordinateArray(coordinate: number[], bounds: Bounds): [number, number] {
+  return toSvgPointArray({ longitude: coordinate[0], latitude: coordinate[1] }, bounds);
+}
+
 function regionToSvgRect(region: AxisAlignedRegion, bounds: Bounds) {
   const normalized = normalizeRegion(region);
   const [x1, y1] = toSvgPointArray({ latitude: normalized.maxLatitude, longitude: normalized.minLongitude }, bounds);
@@ -551,6 +613,8 @@ function updateMapRoute(
   trackCenterline: LineString | undefined,
   gates: TrackGate[],
   lapOverlays: LapMapOverlay[],
+  heatSegments: MapHeatSegment[],
+  ghostMarkers: MapGhostMarker[],
   sectionGeometry: TrackSectionGeometry[],
   sectionVisuals: Record<string, TrackSectionVisual>,
   showRoutePoints: boolean,
@@ -611,8 +675,30 @@ function updateMapRoute(
     type: "FeatureCollection",
     features: lapOverlays.filter((overlay) => overlay.points.length >= 2).map((overlay) => ({
       type: "Feature",
-      properties: { id: overlay.id, color: overlay.color },
+      properties: {
+        id: overlay.id,
+        color: overlay.color,
+        width: overlay.width ?? 6,
+        opacity: overlay.opacity ?? 0.86,
+        dashArray: overlay.dashArray ?? [],
+      },
       geometry: { type: "LineString", coordinates: lineCoordinates(overlay.points) },
+    })),
+  };
+  const heatData: FeatureCollection<LineString> = {
+    type: "FeatureCollection",
+    features: heatSegments.map((heat) => ({
+      type: "Feature",
+      properties: { id: heat.id, color: heat.color, width: heat.width, opacity: heat.opacity },
+      geometry: { type: "LineString", coordinates: heat.coordinates },
+    })),
+  };
+  const ghostData: FeatureCollection<Point> = {
+    type: "FeatureCollection",
+    features: ghostMarkers.map((marker) => ({
+      type: "Feature",
+      properties: { id: marker.id, label: marker.label, color: marker.color },
+      geometry: { type: "Point", coordinates: marker.coordinate },
     })),
   };
   const sectionData: FeatureCollection<LineString> = {
@@ -646,6 +732,8 @@ function updateMapRoute(
   setGeoJsonSource(map, "track-centerline-source", trackData);
   setGeoJsonSource(map, "track-section-source", sectionData);
   setGeoJsonSource(map, "lap-overlay-source", lapData);
+  setGeoJsonSource(map, "loss-rate-segment-source", heatData);
+  setGeoJsonSource(map, "ghost-marker-source", ghostData);
   setGeoJsonSource(map, "gate-source", gateData);
   if (!map.getSource("selected-point-source")) {
     setGeoJsonSource(map, "selected-point-source", selectedData);
@@ -751,7 +839,29 @@ function updateMapRoute(
       type: "line",
       source: "lap-overlay-source",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": ["get", "color"], "line-width": 6, "line-opacity": 0.86 },
+      paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": ["get", "opacity"] },
+    });
+  }
+  if (!map.getLayer("loss-rate-segments")) {
+    map.addLayer({
+      id: "loss-rate-segments",
+      type: "line",
+      source: "loss-rate-segment-source",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": ["get", "width"], "line-opacity": ["get", "opacity"] },
+    });
+  }
+  if (!map.getLayer("ghost-markers")) {
+    map.addLayer({
+      id: "ghost-markers",
+      type: "circle",
+      source: "ghost-marker-source",
+      paint: {
+        "circle-radius": 8,
+        "circle-color": ["get", "color"],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 3,
+      },
     });
   }
   if (!map.getLayer("timing-gates")) {

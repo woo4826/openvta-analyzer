@@ -1,4 +1,5 @@
 import { render, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GpsPoint, MapSettings } from "../../domain/types";
@@ -164,6 +165,38 @@ describe("RouteMap source updates", () => {
     await user.click(section);
     expect(onSectionSelect).toHaveBeenCalledWith("section-1");
   });
+
+  it("publishes styled lap paths, loss-rate segments, and Ghost markers", async () => {
+    render(wrappedRoute(0, false, {
+      lapOverlays: [{ id: "lap-7", color: "#ef4444", points, width: 2, opacity: 0.18, dashArray: [3, 2] }],
+      heatSegments: [{ id: "loss-1", coordinates: [[128, 38], [128.001, 38.001]], color: "#be3b3b", width: 9, opacity: 0.8 }],
+      ghostMarkers: [{ id: "focus", label: "Lap 4 focused Ghost", coordinate: [128, 38], color: "#ef4444" }],
+    }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+
+    const laps = map.sources.get("lap-overlay-source")!.setData.mock.calls.at(-1)?.[0] as { features: Array<{ properties: Record<string, unknown> }> };
+    expect(laps.features[0].properties).toMatchObject({ id: "lap-7", width: 2, opacity: 0.18 });
+    expect(map.sources.get("loss-rate-segment-source")?.setData).toHaveBeenCalled();
+    expect(map.sources.get("ghost-marker-source")?.setData).toHaveBeenCalled();
+    expect(map.layers.has("loss-rate-segments")).toBe(true);
+    expect(map.layers.has("ghost-markers")).toBe(true);
+  });
+
+  it("renders heat segments and accessible Ghosts in the coordinate fallback", async () => {
+    mapMock.MapDouble.shouldThrow = true;
+    const view = render(wrappedRoute(0, false, {
+      heatSegments: [{ id: "loss-1", coordinates: [[128, 38], [128.001, 38.001]], color: "#be3b3b", width: 9, opacity: 0.8 }],
+      ghostMarkers: [
+        { id: "focus", label: "Lap 4 focused Ghost", coordinate: [128, 38], color: "#ef4444" },
+        { id: "reference", label: "Lap 2 reference Ghost", coordinate: [128.001, 38.001], color: "#2563eb" },
+      ],
+    }));
+
+    expect(await view.findByTestId("loss-rate-loss-1")).toBeVisible();
+    expect(view.getByLabelText("Lap 4 focused Ghost")).toBeVisible();
+    expect(view.getByLabelText("Lap 2 reference Ghost")).toBeVisible();
+  });
 });
 
 function renderRoute(selectedIndex: number) {
@@ -177,6 +210,9 @@ function wrappedRoute(
     onSectionSelect?: (sectionId: string) => void;
     sectionVisuals?: Record<string, { color: string; width?: number; opacity?: number }>;
     showRoutePoints?: boolean;
+    lapOverlays?: ComponentProps<typeof RouteMap>["lapOverlays"];
+    heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
+    ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
   } = {},
 ) {
   return (
@@ -195,6 +231,9 @@ function wrappedRoute(
           endDistanceMeters: 120,
         }] : undefined}
         sectionVisuals={options.sectionVisuals}
+        lapOverlays={options.lapOverlays}
+        heatSegments={options.heatSegments}
+        ghostMarkers={options.ghostMarkers}
         showRoutePoints={options.showRoutePoints}
         onSectionSelect={options.onSectionSelect}
         onSelectedIndex={vi.fn()}
