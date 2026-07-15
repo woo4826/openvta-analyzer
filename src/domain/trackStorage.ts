@@ -1,4 +1,5 @@
 import type { TrackProfileV1 } from "./types";
+import { validateTrackProfile } from "./trackProfile";
 
 const DATABASE_NAME = "openvta-analyzer";
 const DATABASE_VERSION = 1;
@@ -20,9 +21,22 @@ export async function getTrackProfile(id: string): Promise<TrackProfileV1 | unde
 }
 
 export async function saveTrackProfile(profile: TrackProfileV1): Promise<void> {
-  memoryProfiles.set(profile.id, profile);
+  await saveTrackProfiles([profile]);
+}
+
+export async function saveTrackProfiles(profiles: TrackProfileV1[]): Promise<void> {
+  const validated: TrackProfileV1[] = [];
+  const ids = new Set<string>();
+  for (const profile of profiles) {
+    const result = validateTrackProfile(profile);
+    if (!result.profile) throw new Error(`Invalid track profile: ${result.error ?? profile.id}`);
+    if (ids.has(result.profile.id)) throw new Error(`Duplicate track profile id: ${result.profile.id}`);
+    ids.add(result.profile.id);
+    validated.push(result.profile);
+  }
+  for (const profile of validated) memoryProfiles.set(profile.id, profile);
   await withStore("readwrite", async (store) => {
-    await requestResult(store.put(profile));
+    await Promise.all(validated.map((profile) => requestResult(store.put(profile))));
   }, undefined);
 }
 
