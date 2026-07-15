@@ -11,7 +11,7 @@ import { useI18n } from "../i18n/useI18n";
 
 interface SegmentTelemetryChartProps {
   analysis: SegmentAnalysisResult;
-  overlayLapIds: string[];
+  visibleLapIds: string[];
   focusedLapId?: string;
   referenceLapId?: string;
   axis: SegmentAxis;
@@ -24,7 +24,7 @@ interface SegmentTelemetryChartProps {
 
 export function SegmentTelemetryChart({
   analysis,
-  overlayLapIds,
+  visibleLapIds,
   focusedLapId,
   referenceLapId,
   axis,
@@ -46,7 +46,7 @@ export function SegmentTelemetryChart({
   const cursorDistanceMeters = controlledCursorDistanceMeters ?? Math.max(0, scopeLength / 2);
   const option = useMemo(() => buildSegmentTelemetryOption(
     analysis,
-    overlayLapIds,
+    visibleLapIds,
     axis,
     focusedLapId,
     referenceLapId,
@@ -69,7 +69,7 @@ export function SegmentTelemetryChart({
     },
     [...visibleMetrics],
     synchronizedAcceleration,
-  ), [analysis, axis, focusedLapId, overlayLapIds, referenceLapId, synchronizedAcceleration, t, visibleMetrics]);
+  ), [analysis, axis, focusedLapId, referenceLapId, synchronizedAcceleration, t, visibleLapIds, visibleMetrics]);
   const focused = analysis.records.find((record) => record.lapId === focusedLapId)
     ?? analysis.records.find((record) => record.lapId === referenceLapId);
   const reference = analysis.records.find((record) => record.lapId === referenceLapId);

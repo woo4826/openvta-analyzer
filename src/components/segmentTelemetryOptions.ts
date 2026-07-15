@@ -53,7 +53,7 @@ const DEFAULT_LABELS: SegmentTelemetryLabels = {
 
 export function buildSegmentTelemetryOption(
   analysis: SegmentAnalysisResult,
-  overlayLapIds: string[],
+  visibleLapIds: string[],
   axis: SegmentAxis,
   focusedLapId?: string,
   referenceLapId?: string,
@@ -71,10 +71,10 @@ export function buildSegmentTelemetryOption(
   ];
   const metrics = allMetrics.filter((metric) => visibleMetrics.includes(metric.key));
   const visibleIds = unique([
-    overlayLapIds.includes(focusedLapId ?? "") ? focusedLapId : undefined,
-    overlayLapIds.includes(referenceLapId ?? "") ? referenceLapId : undefined,
-    ...overlayLapIds,
-  ]).slice(0, 5);
+    visibleLapIds.includes(focusedLapId ?? "") ? focusedLapId : undefined,
+    visibleLapIds.includes(referenceLapId ?? "") ? referenceLapId : undefined,
+    ...visibleLapIds,
+  ]);
   const records = visibleIds.flatMap((id) => {
     const record = analysis.records.find((candidate) => candidate.lapId === id);
     return record ? [record] : [];

@@ -59,7 +59,7 @@ describe("segment telemetry chart", () => {
       <I18nProvider>
         <SegmentTelemetryChart
           analysis={analysis()}
-          overlayLapIds={["lap-1", "lap-2"]}
+          visibleLapIds={["lap-1", "lap-2"]}
           focusedLapId="lap-2"
           referenceLapId="lap-1"
           axis="time"
@@ -108,6 +108,29 @@ describe("segment telemetry chart", () => {
     expect(option.legend.data).toEqual(["Focused · Lap 2"]);
   });
 
+  it("plots every requested presentation lap without the former five-lap ceiling", () => {
+    const manyLaps = analysisWithLapCount(7);
+    const visibleLapIds = manyLaps.records.map((record) => record.lapId);
+    const option = buildSegmentTelemetryOption(
+      manyLaps,
+      visibleLapIds,
+      "distance",
+      "lap-7",
+      "lap-1",
+      undefined,
+      ["speed"],
+    ) as {
+      series: Array<{ id: string }>;
+      legend: { data: string[] };
+    };
+
+    expect(option.series.map((series) => series.id)).toHaveLength(7);
+    expect(option.series.map((series) => series.id)).toEqual(expect.arrayContaining(
+      visibleLapIds.map((lapId) => `${lapId}-speed`),
+    ));
+    expect(option.legend.data).toHaveLength(7);
+  });
+
   it("bounds rendered IMU points while preserving endpoint and axis extrema", () => {
     const samples = Array.from({ length: 10_000 }, (_, index) => ({
       sensorIndex: index,
@@ -135,7 +158,7 @@ describe("segment telemetry chart", () => {
     fractional.range = { startDistanceMeters: 1000, endDistanceMeters: 1100.6 };
     render(<I18nProvider><SegmentTelemetryChart
       analysis={fractional}
-      overlayLapIds={["lap-1", "lap-2"]}
+      visibleLapIds={["lap-1", "lap-2"]}
       focusedLapId="lap-2"
       referenceLapId="lap-1"
       axis="distance"
@@ -202,4 +225,19 @@ function analysis(): SegmentAnalysisResult {
       })),
     })),
   };
+}
+
+function analysisWithLapCount(count: number): SegmentAnalysisResult {
+  const result = analysis();
+  const template = result.records[0];
+  result.records = Array.from({ length: count }, (_, index) => ({
+    ...template,
+    lapId: `lap-${index + 1}`,
+    ordinal: index + 1,
+    trajectory: template.trajectory.map((sample) => ({ ...sample })),
+  }));
+  result.referenceLapId = "lap-1";
+  result.fastestLapId = "lap-1";
+  result.shortestLapId = "lap-1";
+  return result;
 }

@@ -11,8 +11,8 @@ vi.mock("../SegmentTrajectoryMap", () => ({
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, overlayLapIds, cursorDistanceMeters, synchronizedAcceleration, onRange, onCursor }: { focusedLapId?: string; referenceLapId?: string; overlayLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; onRange: (start: number, end: number) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
-    <div data-testid="chart-state">roles={focusedLapId},{referenceLapId}:visible={overlayLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}<button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button><button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAcceleration, onRange, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; onRange: (start: number, end: number) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
+    <div data-testid="chart-state">roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}<button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button><button type="button" onClick={() => onRange(20, 60)}>Select graph range</button></div>
   ),
 }));
 vi.mock("../SegmentVariationChart", () => ({

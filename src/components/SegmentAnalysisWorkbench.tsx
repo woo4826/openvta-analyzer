@@ -382,7 +382,7 @@ export function SegmentAnalysisWorkbench({
             <DashboardWidget id="telemetry" title={t("lap.workbench.widget.telemetry")}>
               <SegmentTelemetryChart
                 analysis={workbench.analysis}
-                overlayLapIds={workbench.visibleLapIds}
+                visibleLapIds={workbench.visibleLapIds}
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
                 axis={workbench.axis}
