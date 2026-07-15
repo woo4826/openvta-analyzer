@@ -429,7 +429,7 @@ git add docs/superpowers/specs/2026-07-16-synchronized-motion-timeline-design.md
 git commit -m "docs: plan synchronized motion timeline"
 ```
 
-- [ ] **Step 2: Push `main` without force**
+- [x] **Step 2: Push `main` without force**
 
 ```bash
 git fetch origin main
@@ -438,12 +438,12 @@ git push origin main
 
 Expected: local and `origin/main` resolve to the same commit.
 
-- [ ] **Step 3: Monitor CI and Pages**
+- [x] **Step 3: Monitor CI and Pages**
 
 Use `gh run list` and `gh run view` for the pushed commit. Both `CI` and
 `Deploy Pages` must complete with `success`.
 
-- [ ] **Step 4: Smoke-test production**
+- [x] **Step 4: Smoke-test production**
 
 Open `https://woo4826.github.io/openvta-analyzer/` with Aside, load the supplied
 VTA locally, and confirm the IMU timeline and drawer-push behavior are present.
@@ -470,3 +470,8 @@ VTA locally, and confirm the IMU timeline and drawer-push behavior are present.
 - Final pre-deploy gates: TypeScript and ESLint passed; Vitest passed 271 tests;
   production build passed; desktop/mobile E2E passed 16 tests; `git diff
   --check` passed. Independent review reported no Critical or Important blocker.
+- Commit `4823c98` passed CI run `29428827148` and Deploy Pages run
+  `29428826994`. Production Aside MCP QA loaded the supplied VTA, matched Inje
+  Speedium, rendered 9,958 row-order IMU samples, moved the synchronized cursor
+  to 2,090 m, and measured an exact 426 px desktop workbench shift with an
+  unchanged right edge.
