@@ -30,7 +30,6 @@ export interface SegmentWorkbenchState {
   filter: SegmentFilter;
   focusedLapId?: string;
   referenceLapId?: string;
-  overlayLapIds: string[];
   visibleLapIds: string[];
   axis: SegmentAxis;
   analysis: SegmentAnalysisResult;
@@ -43,18 +42,14 @@ export interface SegmentWorkbenchState {
   setFilter: (filter: SegmentFilter) => void;
   setFocusedLap: (lapId: string) => void;
   setReferenceLap: (lapId: string) => void;
-  toggleOverlayLap: (lapId: string) => void;
   setAxis: (axis: SegmentAxis) => void;
 }
-
-const MAX_OVERLAY_LAPS = 5;
 
 export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbenchState {
   const [scope, setScope] = useState<AnalysisScope>({ kind: "whole-lap" });
   const [filter, setFilterState] = useState<SegmentFilter>("all");
   const [requestedFocusedLapId, setRequestedFocusedLapId] = useState<string>();
   const [requestedReferenceLapId, setRequestedReferenceLapId] = useState<string>();
-  const [requestedOverlayLapIds, setRequestedOverlayLapIds] = useState<string[]>([]);
   const [axis, setAxis] = useState<SegmentAxis>("distance");
   const effectiveScope = useMemo<AnalysisScope>(() => (
     scope.kind === "section" && !input.sections.some((section) => section.id === scope.sectionId)
@@ -100,9 +95,20 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   const latestCompleteLapId = [...analysis.records].reverse().find((record) =>
     record.coverage === "complete" && record.completion === "complete" && record.validity === "valid" && record.lapId !== referenceLapId
   )?.lapId;
-  const focusedLapId = requestedFocusedLapId && recordIds.has(requestedFocusedLapId)
+  const defaultFocusedLapId = latestCompleteLapId
+    ?? (analysis.fastestLapId !== referenceLapId ? analysis.fastestLapId : undefined)
+    ?? analysis.records.find((record) => record.lapId !== referenceLapId)?.lapId
+    ?? referenceLapId;
+  const requestedFocusIsAvailable = requestedFocusedLapId && recordIds.has(requestedFocusedLapId);
+  const focusedLapId = requestedFocusIsAvailable
+    && (analysis.records.length < 2 || requestedFocusedLapId !== referenceLapId)
     ? requestedFocusedLapId
-    : latestCompleteLapId ?? analysis.fastestLapId ?? analysis.records[0]?.lapId;
+    : defaultFocusedLapId;
+  const eligibleReferenceRecords = useMemo(() => analysis.records.filter(isEligibleReference), [analysis.records]);
+  const eligibleReferenceIds = useMemo(
+    () => new Set(eligibleReferenceRecords.map((record) => record.lapId)),
+    [eligibleReferenceRecords],
+  );
   const navigationSections = useMemo(() => input.sections.filter((section) => {
     if (filter === "corners") return section.kind !== "straight";
     if (filter === "straights") return section.kind === "straight";
@@ -131,14 +137,6 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     if (input.lapVisibility === "focus-only") return unique([focusedLapId]);
     return unique([focusedLapId, referenceLapId]);
   }, [analysis.records, focusedLapId, input.lapVisibility, referenceLapId]);
-  const overlayLapIds = useMemo(() => {
-    if (input.lapVisibility === "all") return visibleLapIds;
-    if (input.lapVisibility === "focus-only") return visibleLapIds;
-    return unique([
-      ...visibleLapIds,
-      ...requestedOverlayLapIds.filter((id) => recordIds.has(id)),
-    ]).slice(0, MAX_OVERLAY_LAPS);
-  }, [input.lapVisibility, recordIds, requestedOverlayLapIds, visibleLapIds]);
 
   const activeSegment = useMemo((): ActiveSegment | undefined => {
     const focused = analysis.records.find((record) => record.lapId === focusedLapId);
@@ -175,19 +173,39 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     });
   }, [input.sections]);
 
-  const toggleOverlayLap = useCallback((lapId: string) => {
+  const setFocusedLap = useCallback((lapId: string) => {
     if (!recordIds.has(lapId)) return;
-    setRequestedOverlayLapIds((current) => current.includes(lapId)
-      ? current.filter((id) => id !== lapId)
-      : unique([lapId, ...current]).slice(0, MAX_OVERLAY_LAPS));
-  }, [recordIds]);
+    if (analysis.records.length > 1 && lapId === referenceLapId) {
+      const nextReferenceLapId = focusedLapId
+        && focusedLapId !== lapId
+        && eligibleReferenceIds.has(focusedLapId)
+        ? focusedLapId
+        : eligibleReferenceRecords.find((record) => record.lapId !== lapId)?.lapId;
+      if (!nextReferenceLapId) return;
+      setRequestedReferenceLapId(nextReferenceLapId);
+    }
+    setRequestedFocusedLapId(lapId);
+  }, [analysis.records.length, eligibleReferenceIds, eligibleReferenceRecords, focusedLapId, recordIds, referenceLapId]);
+
+  const setReferenceLap = useCallback((lapId: string) => {
+    if (!eligibleReferenceIds.has(lapId)) {
+      setRequestedReferenceLapId(undefined);
+      return;
+    }
+    if (analysis.records.length > 1 && lapId === focusedLapId) {
+      const nextFocusedLapId = referenceLapId && referenceLapId !== lapId && recordIds.has(referenceLapId)
+        ? referenceLapId
+        : analysis.records.find((record) => record.lapId !== lapId)?.lapId;
+      if (nextFocusedLapId) setRequestedFocusedLapId(nextFocusedLapId);
+    }
+    setRequestedReferenceLapId(lapId);
+  }, [analysis.records, eligibleReferenceIds, focusedLapId, recordIds, referenceLapId]);
 
   return {
     scope: effectiveScope,
     filter,
     focusedLapId,
     referenceLapId,
-    overlayLapIds,
     visibleLapIds,
     axis,
     analysis,
@@ -198,11 +216,14 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     selectRange,
     resetScope: () => setScope({ kind: "whole-lap" }),
     setFilter,
-    setFocusedLap: setRequestedFocusedLapId,
-    setReferenceLap: setRequestedReferenceLapId,
-    toggleOverlayLap,
+    setFocusedLap,
+    setReferenceLap,
     setAxis,
   };
+}
+
+function isEligibleReference(record: SegmentAnalysisResult["records"][number]): boolean {
+  return record.completion === "complete" && record.eligibleForBest && record.trajectory.length > 1;
 }
 
 function unique(values: Array<string | undefined>): string[] {

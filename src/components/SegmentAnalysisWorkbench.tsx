@@ -335,7 +335,6 @@ export function SegmentAnalysisWorkbench({
                 selectedIndex={selectedPointIndex}
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
-                overlayLapIds={workbench.overlayLapIds}
                 cursorDistanceMeters={cursorDistanceMeters}
                 segment={workbench.activeSegment}
                 onSelectedIndex={selectMapPoint}
@@ -383,7 +382,7 @@ export function SegmentAnalysisWorkbench({
             <DashboardWidget id="telemetry" title={t("lap.workbench.widget.telemetry")}>
               <SegmentTelemetryChart
                 analysis={workbench.analysis}
-                overlayLapIds={workbench.overlayLapIds}
+                overlayLapIds={workbench.visibleLapIds}
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
                 axis={workbench.axis}

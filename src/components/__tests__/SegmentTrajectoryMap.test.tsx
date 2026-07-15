@@ -21,7 +21,7 @@ vi.mock("../RouteMap", () => ({
 import { SegmentTrajectoryMap } from "../SegmentTrajectoryMap";
 
 describe("SegmentTrajectoryMap", () => {
-  it("shows only requested laps while emphasizing focused/reference paths and two synchronized Ghosts", () => {
+  it("renders only focused and reference laps even when analysis contains more records", () => {
     render(
       <I18nProvider>
         <SegmentTrajectoryMap
@@ -33,7 +33,6 @@ describe("SegmentTrajectoryMap", () => {
           selectedIndex={0}
           focusedLapId="lap-2"
           referenceLapId="lap-1"
-          overlayLapIds={["lap-1", "lap-2"]}
           cursorDistanceMeters={50}
           onSelectedIndex={vi.fn()}
           onSectionSelect={vi.fn()}
@@ -53,7 +52,7 @@ describe("SegmentTrajectoryMap", () => {
     expect(screen.getByText("Reference lap · Lap 1")).toBeVisible();
   });
 
-  it("removes the reference path, Ghost, legend, and badges in focused-only mode", () => {
+  it("always renders both role paths, Ghosts, legend entries, and role-limited badges", () => {
     render(
       <I18nProvider>
         <SegmentTrajectoryMap
@@ -65,7 +64,6 @@ describe("SegmentTrajectoryMap", () => {
           selectedIndex={0}
           focusedLapId="lap-2"
           referenceLapId="lap-1"
-          overlayLapIds={["lap-2"]}
           cursorDistanceMeters={50}
           onSelectedIndex={vi.fn()}
           onSectionSelect={vi.fn()}
@@ -74,12 +72,12 @@ describe("SegmentTrajectoryMap", () => {
     );
 
     const map = screen.getByTestId("trajectory-route-map");
-    expect(JSON.parse(map.getAttribute("data-overlays")!)).toHaveLength(1);
-    expect(JSON.parse(map.getAttribute("data-ghosts")!)).toHaveLength(1);
+    expect(JSON.parse(map.getAttribute("data-overlays")!)).toHaveLength(2);
+    expect(JSON.parse(map.getAttribute("data-ghosts")!)).toHaveLength(2);
     expect(screen.getByText("Lap 2 focused Ghost")).toBeVisible();
-    expect(screen.queryByText("Lap 1 reference Ghost")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reference lap · Lap 1")).not.toBeInTheDocument();
-    expect(screen.queryByText("Shortest recorded path · Lap 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Lap 1 reference Ghost")).toBeVisible();
+    expect(screen.getByText("Reference lap · Lap 1")).toBeVisible();
+    expect(screen.getByText("Shortest recorded path · Lap 1")).toBeVisible();
   });
 
   it("keeps fastest and shortest path labels distinct", () => {
@@ -94,7 +92,6 @@ describe("SegmentTrajectoryMap", () => {
           selectedIndex={0}
           focusedLapId="lap-2"
           referenceLapId="lap-1"
-          overlayLapIds={["lap-1", "lap-2"]}
           onSelectedIndex={vi.fn()}
           onSectionSelect={vi.fn()}
         />
@@ -103,6 +100,32 @@ describe("SegmentTrajectoryMap", () => {
 
     expect(screen.getByText("Best time · Lap 2")).toBeVisible();
     expect(screen.getByText("Shortest recorded path · Lap 1")).toBeVisible();
+  });
+
+  it("does not show fastest or shortest badges for a lap outside the two roles", () => {
+    const result = analysis();
+    result.fastestLapId = "lap-3";
+    result.shortestLapId = "lap-3";
+
+    render(
+      <I18nProvider>
+        <SegmentTrajectoryMap
+          analysis={result}
+          points={points()}
+          centerline={{ type: "LineString", coordinates: [[128, 38], [128.002, 38]] }}
+          sections={[]}
+          settings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+          selectedIndex={0}
+          focusedLapId="lap-2"
+          referenceLapId="lap-1"
+          onSelectedIndex={vi.fn()}
+          onSectionSelect={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByText(/Best time/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Shortest recorded path/)).not.toBeInTheDocument();
   });
 
   it("does not imply loss-rate precision when the focused lap lacks full scope coverage", () => {
@@ -119,7 +142,6 @@ describe("SegmentTrajectoryMap", () => {
           selectedIndex={0}
           focusedLapId="lap-2"
           referenceLapId="lap-1"
-          overlayLapIds={["lap-1", "lap-2"]}
           onSelectedIndex={vi.fn()}
           onSectionSelect={vi.fn()}
         />

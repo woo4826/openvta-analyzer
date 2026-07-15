@@ -20,25 +20,74 @@ describe("useSegmentWorkbench", () => {
     expect(result.current.scope).toEqual({ kind: "whole-lap" });
   });
 
-  it("defaults to focused and reference laps while allowing explicit extra overlays", () => {
+  it("defaults to distinct focused and reference laps and falls back from an invalid reference", () => {
     const fixture = workbenchFixture(7);
     const { result } = renderHook(() => useSegmentWorkbench(fixture));
 
     expect(result.current.referenceLapId).toBe(result.current.analysis.fastestLapId);
     const sessionReferenceLapId = result.current.referenceLapId;
     expect(result.current.focusedLapId).toBe("lap-7");
+    expect(result.current.focusedLapId).not.toBe(result.current.referenceLapId);
     act(() => result.current.selectSection("c1"));
     expect(result.current.referenceLapId).toBe(sessionReferenceLapId);
     act(() => result.current.setFocusedLap("lap-5"));
     expect(result.current.focusedLapId).toBe("lap-5");
-    expect(result.current.overlayLapIds).toContain("lap-5");
-    expect(result.current.overlayLapIds).toContain(result.current.referenceLapId);
-    expect(result.current.overlayLapIds).toHaveLength(2);
-    act(() => result.current.toggleOverlayLap("lap-3"));
-    expect(result.current.overlayLapIds).toEqual(expect.arrayContaining(["lap-5", result.current.referenceLapId!, "lap-3"]));
 
+    act(() => result.current.setReferenceLap("lap-3"));
+    expect(result.current.referenceLapId).toBe("lap-3");
     act(() => result.current.setReferenceLap("missing"));
     expect(result.current.referenceLapId).toBe(result.current.analysis.fastestLapId);
+    expect(result.current).not.toHaveProperty("overlayLapIds");
+    expect(result.current).not.toHaveProperty("toggleOverlayLap");
+  });
+
+  it("swaps roles when either role selects the other role's lap", () => {
+    const fixture = workbenchFixture(4);
+    const { result } = renderHook(() => useSegmentWorkbench(fixture));
+    const initialFocus = result.current.focusedLapId!;
+    const initialReference = result.current.referenceLapId!;
+
+    act(() => result.current.setFocusedLap(initialReference));
+    expect(result.current.focusedLapId).toBe(initialReference);
+    expect(result.current.referenceLapId).toBe(initialFocus);
+
+    act(() => result.current.setReferenceLap(initialReference));
+    expect(result.current.focusedLapId).toBe(initialFocus);
+    expect(result.current.referenceLapId).toBe(initialReference);
+  });
+
+  it("chooses a deterministic eligible reference when the prior focus cannot become reference", () => {
+    const fixture = workbenchFixture(7);
+    const { result } = renderHook(() => useSegmentWorkbench(fixture));
+
+    act(() => result.current.setFocusedLap("lap-6"));
+    expect(result.current.focusedLapId).toBe("lap-6");
+    const priorReference = result.current.referenceLapId!;
+
+    act(() => result.current.setFocusedLap(priorReference));
+    expect(result.current.focusedLapId).toBe(priorReference);
+    expect(result.current.referenceLapId).toBe("lap-2");
+    expect(result.current.referenceLapId).not.toBe(result.current.focusedLapId);
+  });
+
+  it("keeps derived roles distinct when multiple records exist and allows one record to fill both roles", () => {
+    const multiple = renderHook(() => useSegmentWorkbench(workbenchFixture(3)));
+    expect(multiple.result.current.focusedLapId).not.toBe(multiple.result.current.referenceLapId);
+
+    const singleFixture = workbenchFixture(1);
+    const multiFixture = workbenchFixture(2);
+    const single = renderHook(
+      ({ fixture }) => useSegmentWorkbench(fixture),
+      { initialProps: { fixture: singleFixture } },
+    );
+    expect(single.result.current.focusedLapId).toBe("lap-1");
+    expect(single.result.current.referenceLapId).toBe("lap-1");
+
+    act(() => single.result.current.setFocusedLap("lap-1"));
+    single.rerender({ fixture: multiFixture });
+    expect(single.result.current.analysis.records).toHaveLength(2);
+    expect(single.result.current.focusedLapId).toBe("lap-2");
+    expect(single.result.current.referenceLapId).toBe("lap-1");
   });
 
   it("adapts the spatial scope to the legacy source-index selection without conflating the two models", () => {
@@ -68,7 +117,8 @@ describe("useSegmentWorkbench", () => {
     expect(result.current.referenceLapId).toBe(referenceLapId);
     rerender({ lapVisibility: "all" });
     expect(result.current.visibleLapIds).toHaveLength(4);
-    expect(result.current.overlayLapIds).toEqual(result.current.visibleLapIds);
+    expect(result.current.visibleLapIds).toEqual(result.current.analysis.records.map((record) => record.lapId));
+    expect(result.current.focusedLapId).not.toBe(result.current.referenceLapId);
   });
 
   it("resets a selected section synchronously when that section is removed", async () => {
