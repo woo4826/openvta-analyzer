@@ -79,7 +79,11 @@ describe("SegmentAnalysisWorkbench", () => {
     const trigger = screen.getByRole("button", { name: "Analysis controls" });
 
     await user.click(trigger);
-    expect(within(screen.getByRole("dialog", { name: "Analysis controls" })).getByRole("button", { name: "Close analysis controls" })).toHaveFocus();
+    const controls = screen.getByRole("dialog", { name: "Analysis controls" });
+    expect(within(controls).getByRole("button", { name: "Close analysis controls" })).toHaveFocus();
+    expect(controls).toHaveAttribute("aria-modal", "true");
+    expect(controls.parentElement).toBe(document.body);
+    expect(document.querySelector(".segment-controls-scrim")?.parentElement).toBe(document.body);
     expect(document.documentElement).toHaveClass("lap-analysis-controls-open");
     await user.keyboard("{Escape}");
 

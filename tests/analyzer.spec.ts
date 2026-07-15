@@ -96,8 +96,13 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const headerBeforeControls = await workbenchHeader.boundingBox();
   expect(headerBeforeControls).not.toBeNull();
   await analysisMain.getByRole("button", { name: "Analysis controls" }).click();
-  let controls = analysisMain.getByRole("dialog", { name: "Analysis controls" });
+  let controls = page.getByRole("dialog", { name: "Analysis controls" });
   const viewportWidth = page.viewportSize()?.width ?? 0;
+  const viewportHeight = page.viewportSize()?.height ?? 0;
+  const controlsBox = await controls.boundingBox();
+  expect(controlsBox).not.toBeNull();
+  expect(controlsBox!.height).toBeGreaterThan(viewportHeight * 0.8);
+  await expect(controls).toHaveAttribute("aria-modal", "true");
   if (viewportWidth > 1180) {
     await expect.poll(async () => (await workbenchHeader.boundingBox())!.x - headerBeforeControls!.x).toBeGreaterThan(400);
     await expect.poll(async () => {
@@ -107,7 +112,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   } else {
     await expect.poll(async () => Math.abs((await workbenchHeader.boundingBox())!.x - headerBeforeControls!.x)).toBeLessThan(2);
     if (viewportWidth <= 680) {
-      await expect(analysisMain.locator(".segment-controls-scrim")).toBeVisible();
+      await expect(page.locator(".segment-controls-scrim")).toBeVisible();
     }
   }
   await expect(controls.getByRole("button", { name: "Close analysis controls" })).toBeFocused();
@@ -162,7 +167,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect.poll(() => cursorDistance.textContent()).not.toBe(earlyCursor);
 
   await analysisMain.getByRole("button", { name: "Analysis controls" }).click();
-  controls = analysisMain.getByRole("dialog", { name: "Analysis controls" });
+  controls = page.getByRole("dialog", { name: "Analysis controls" });
   await controls.getByRole("button", { name: "Time", exact: true }).click();
   await expect(controls.getByRole("button", { name: "Time", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(controls.getByRole("checkbox", { name: /Include completed sectors from partial laps/ })).toBeVisible();

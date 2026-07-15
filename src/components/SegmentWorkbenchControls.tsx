@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import type {
   AnalysisScope,
@@ -76,14 +77,16 @@ export function SegmentWorkbenchControls({
         <SlidersHorizontal size={17} aria-hidden />
         {t("lap.workbench.analysisControls")}
       </button>
-      {open ? <button type="button" className="segment-controls-scrim" aria-label={t("lap.workbench.closeControls")} onClick={() => onOpenChange(false)} /> : null}
-      {open ? <aside
-        ref={panelRef}
-        id="segment-workbench-controls"
-        className="segment-controls-drawer is-open"
-        role="dialog"
-        aria-label={t("lap.workbench.analysisControls")}
-      >
+      {open ? createPortal(<>
+        <button type="button" className="segment-controls-scrim" aria-label={t("lap.workbench.closeControls")} onClick={() => onOpenChange(false)} />
+        <aside
+          ref={panelRef}
+          id="segment-workbench-controls"
+          className="segment-controls-drawer is-open"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("lap.workbench.analysisControls")}
+        >
         <header className="segment-controls-header">
           <div>
             <span className="panel-eyebrow">{t("lap.workbench.controlsEyebrow")}</span>
@@ -154,7 +157,8 @@ export function SegmentWorkbenchControls({
             </button>
           </fieldset>
         </div>
-      </aside> : null}
+        </aside>
+      </>, document.body) : null}
     </>
   );
 }
