@@ -4,7 +4,13 @@ import { Download, Flag, MapPinned, Scissors, Upload } from "lucide-react";
 import type { LapWorkspace } from "../app/useLapWorkspace";
 import { analyzeCorners, compareLapToReference, resampleLapByDistance } from "../domain/lapAnalysis";
 import { downloadText } from "../domain/export";
-import { cornerResultsCsv, lapAnalysisJson, lapResultsCsv, sectorResultsCsv } from "../domain/lapExport";
+import {
+  cornerResultsCsv,
+  lapAnalysisJson,
+  lapResultsCsv,
+  sectionResultsCsv,
+  sectorResultsCsv,
+} from "../domain/lapExport";
 import { exportTrackProfile } from "../domain/trackProfile";
 import type {
   ActiveSegment,
@@ -130,6 +136,8 @@ export function LapAnalysis({
         sectors: workspace.sectors,
         corners,
         theoreticalBestSeconds: workspace.theoreticalBestSeconds,
+        sectionResults: workspace.sectionResults,
+        automaticTheoreticalBestSeconds: workspace.automaticTheoreticalBestSeconds,
       }),
       "application/json",
     );
@@ -434,6 +442,7 @@ export function LapAnalysis({
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.laps.csv`, lapResultsCsv(laps), "text/csv")}>{t("lap.exportLaps")}</button>
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.sectors.csv`, sectorResultsCsv(workspace.sectors), "text/csv")}>{t("lap.exportSectors")}</button>
           <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.corners.csv`, cornerResultsCsv(corners), "text/csv")}>{t("lap.exportCorners")}</button>
+          <button type="button" className="button" onClick={() => downloadText(`${safeBaseName(fileName)}.analysis-sectors.csv`, sectionResultsCsv(workspace.sectionResults), "text/csv")}>Export analysis sectors</button>
           <button type="button" className="button primary" onClick={exportAllAnalysis}><Download size={16} aria-hidden />{t("lap.exportAnalysis")}</button>
         </div>
       </Panel>
