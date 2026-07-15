@@ -37,6 +37,7 @@ describe("LapAnalysis", () => {
     render(
       <I18nProvider>
         <LapAnalysis
+          recordingId="recording-1"
           fileName="session.Vta"
           points={[gps(0), gps(1)]}
           sensors={[]}
@@ -304,6 +305,7 @@ function renderLapAnalysis(workspace: LapWorkspace, points = [gps(0), gps(1)]) {
   return render(
     <I18nProvider>
       <LapAnalysis
+        recordingId="recording-1"
         fileName="session.Vta"
         points={points}
         sensors={[]}

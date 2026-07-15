@@ -41,6 +41,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const onActiveSegment = vi.fn();
     render(<I18nProvider><SegmentAnalysisWorkbench
       active={false}
+      recordingId="recording-1"
       sourceName="session.Vta"
       points={fixture.points}
       sensors={fixture.sensors}
@@ -71,6 +72,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data();
     render(<I18nProvider><SegmentAnalysisWorkbench
+      recordingId="recording-1"
       sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
@@ -96,7 +98,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data();
     const props = {
-      sourceName: "session.Vta", points: fixture.points, sensors: fixture.sensors, laps: fixture.laps, profile: fixture.profile,
+      recordingId: "recording-1", sourceName: "session.Vta", points: fixture.points, sensors: fixture.sensors, laps: fixture.laps, profile: fixture.profile,
       analysisLine: fixture.profile.centerline, includePartialLapSections: false, onIncludePartialLapSections: vi.fn(),
       mapSettings: { pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] as [number, number, number, number] }, selectedPointIndex: 0,
       onSelectedPointIndex: vi.fn(), onMapSettingsChange: vi.fn(), onActiveSegment: vi.fn(), onSaveRange: vi.fn(), onOpenSetup: vi.fn(),
@@ -117,6 +119,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data();
     const view = render(<I18nProvider><SegmentAnalysisWorkbench
+      recordingId="recording-1"
       sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
@@ -129,7 +132,8 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.getByText("Exported session.segment-analysis.csv", { selector: ".segment-export-status" })).toHaveAttribute("role", "status");
 
     view.rerender(<I18nProvider><SegmentAnalysisWorkbench
-      sourceName="next-session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
+      recordingId="recording-2"
+      sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
       onSelectedPointIndex={vi.fn()} onMapSettingsChange={vi.fn()} onActiveSegment={vi.fn()} onSaveRange={vi.fn()} onOpenSetup={vi.fn()}
@@ -147,6 +151,7 @@ describe("SegmentAnalysisWorkbench", () => {
       end: { ...fixture.laps[1].end, source: "session-end" },
     };
     render(<I18nProvider><SegmentAnalysisWorkbench
+      recordingId="recording-1"
       sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false} onIncludePartialLapSections={vi.fn()}
       mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }} selectedPointIndex={0}
@@ -162,6 +167,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const onSelectedPointIndex = vi.fn();
     const onOpenSetup = vi.fn();
     render(<I18nProvider><SegmentAnalysisWorkbench
+      recordingId="recording-1"
       sourceName="session.Vta"
       points={fixture.points}
       sensors={fixture.sensors}
@@ -209,6 +215,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const user = userEvent.setup();
     const fixture = data(3);
     render(<I18nProvider><SegmentAnalysisWorkbench
+      recordingId="recording-1"
       sourceName="session.Vta" points={fixture.points} sensors={fixture.sensors} laps={fixture.laps} profile={fixture.profile}
       analysisLine={fixture.profile.centerline} includePartialLapSections={false}
       onIncludePartialLapSections={vi.fn()} mapSettings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
@@ -247,6 +254,7 @@ describe("SegmentAnalysisWorkbench", () => {
     const fixture = data();
     const onSaveRange = vi.fn();
     render(<I18nProvider><SegmentAnalysisWorkbench
+      recordingId="recording-1"
       sourceName="session.Vta"
       points={fixture.points}
       sensors={fixture.sensors}

@@ -32,6 +32,7 @@ import { FilePickerButton, Panel, StatusBadge, Tabs } from "./ui";
 
 interface LapAnalysisProps {
   active?: boolean;
+  recordingId: string;
   fileName: string;
   points: GpsPoint[];
   sensors: SensorPoint[];
@@ -51,6 +52,7 @@ type LapAnalysisView = "insights" | "setup";
 
 export function LapAnalysis({
   active = true,
+  recordingId,
   fileName,
   points,
   sensors,
@@ -215,6 +217,7 @@ export function LapAnalysis({
         {insightsReady && workspace.profile && workspace.analysisLine ? (
           <SegmentAnalysisWorkbench
             active={active && activeView === "insights"}
+            recordingId={recordingId}
             sourceName={fileName}
             points={points}
             sensors={sensors}

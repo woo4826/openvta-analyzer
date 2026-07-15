@@ -38,6 +38,7 @@ import { DashboardWidget } from "./DashboardWidget";
 
 interface SegmentAnalysisWorkbenchProps {
   active?: boolean;
+  recordingId: string;
   sourceName: string;
   points: GpsPoint[];
   sensors: SensorPoint[];
@@ -60,6 +61,7 @@ interface SegmentAnalysisWorkbenchProps {
 
 export function SegmentAnalysisWorkbench({
   active = true,
+  recordingId,
   sourceName,
   points,
   sensors,
@@ -103,8 +105,7 @@ export function SegmentAnalysisWorkbench({
     () => focused ? synchronizeAccelerationToTrajectory(points, sensors, focused.trajectory) : undefined,
     [focused, points, sensors],
   );
-  const recordingLayerKey = `${sourceName}|${points.length}|${points[0]?.lineNumber ?? ""}|${points.at(-1)?.lineNumber ?? ""}`;
-  const recordingLayerKeyRef = useRef(recordingLayerKey);
+  const recordingIdRef = useRef(recordingId);
   const totalDistanceMeters = useMemo(
     () => Math.max(1, routeDistanceMeters(analysisLine.coordinates)),
     [analysisLine],
@@ -206,11 +207,11 @@ export function SegmentAnalysisWorkbench({
   }, [preferences]);
 
   useEffect(() => {
-    if (recordingLayerKeyRef.current === recordingLayerKey) return;
-    recordingLayerKeyRef.current = recordingLayerKey;
+    if (recordingIdRef.current === recordingId) return;
+    recordingIdRef.current = recordingId;
     setLapLayerOverrides({});
     setExportStatus("");
-  }, [recordingLayerKey]);
+  }, [recordingId]);
 
   useEffect(() => {
     if (!active) return;
