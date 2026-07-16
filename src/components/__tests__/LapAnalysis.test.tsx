@@ -240,12 +240,12 @@ describe("LapAnalysis", () => {
     renderLapAnalysis(workspace);
     await user.click(screen.getByRole("button", { name: "Select neutral section" }));
 
-    expect(screen.getByText(/straight-neutral ·/i)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: /straight-neutral/i })).toHaveAttribute("aria-pressed", "true"));
+    const selectedSectionButton = () => screen.getByRole("button", { name: /straight-neutral.*m/i });
+    await waitFor(() => expect(selectedSectionButton()).toHaveAttribute("aria-pressed", "true"));
 
     await user.click(screen.getByRole("tab", { name: "Setup" }));
     await user.click(screen.getByRole("tab", { name: "Segment Analysis Workbench" }));
-    expect(screen.getByRole("button", { name: /straight-neutral/i })).toHaveAttribute("aria-pressed", "true");
+    expect(selectedSectionButton()).toHaveAttribute("aria-pressed", "true");
   });
 
   it("uses automatic section results for the partial-lap policy summary", async () => {

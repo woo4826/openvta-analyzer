@@ -20,6 +20,19 @@ describe("useSegmentWorkbench", () => {
     expect(result.current.scope).toEqual({ kind: "whole-lap" });
   });
 
+  it("reveals a map-selected section when the active type filter would hide it", () => {
+    const fixture = workbenchFixture();
+    const { result } = renderHook(() => useSegmentWorkbench(fixture));
+
+    act(() => result.current.setFilter("corners"));
+    expect(result.current.filter).toBe("corners");
+    act(() => result.current.selectSection("s1"));
+
+    expect(result.current.scope).toEqual({ kind: "section", sectionId: "s1" });
+    expect(result.current.filter).toBe("all");
+    expect(result.current.navigationSections.map((section) => section.id)).toContain("s1");
+  });
+
   it("defaults to distinct focused and reference laps and falls back from an invalid reference", () => {
     const fixture = workbenchFixture(7);
     const { result } = renderHook(() => useSegmentWorkbench(fixture));

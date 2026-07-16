@@ -11,7 +11,7 @@ export interface ChartPanelProps {
   eyebrow?: ReactNode;
   actions?: ReactNode;
   caption?: ReactNode;
-  interactionMode?: "range" | "zoom";
+  interactionMode?: "range";
   cursorX?: number;
   resetToken?: number;
   describedBy?: string;
@@ -47,7 +47,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         type: "takeGlobalCursor",
         key: "brush",
         brushOption: {
-          brushType: interactionMode === "range" ? "lineX" : false,
+          brushType: "lineX",
           brushMode: "single",
         },
       });

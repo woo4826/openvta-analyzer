@@ -74,12 +74,15 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const referenceLapSelect = analysisMain.getByRole("combobox", { name: "Reference lap" });
   await expect(focusedLapSelect).toBeVisible();
   await expect(referenceLapSelect).toBeVisible();
-  const corner = analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ });
+  const scopeNavigator = analysisMain.locator(".segment-scope-navigator");
+  const corner = scopeNavigator.getByRole("button", { name: /^Corner 1/ });
   await expect(corner).toBeVisible();
   expect((await corner.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await corner.click();
   await expect(corner).toHaveAttribute("aria-pressed", "true");
   await expect(analysisMain.getByText(/Corner 1 · \d+–\d+ m/)).toBeVisible();
+  await expect(scopeNavigator.getByRole("combobox", { name: "Go to section" }))
+    .toHaveValue(await corner.getAttribute("data-section-id") ?? "");
   await expect(analysisMain.locator('.coordinate-layer[aria-label="Lap trajectory comparison"]')).toBeVisible();
 
   if ((page.viewportSize()?.width ?? 0) <= 680) {
@@ -103,6 +106,8 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   expect(controlsBox).not.toBeNull();
   expect(controlsBox!.height).toBeGreaterThan(viewportHeight * 0.8);
   await expect(controls).toHaveAttribute("aria-modal", "true");
+  await expect(controls.getByRole("region", { name: "Track section navigator" })).toHaveCount(0);
+  await expect(scopeNavigator.getByRole("slider", { name: "Range start" })).toBeVisible();
   if (viewportWidth > 1180) {
     await expect.poll(async () => (await workbenchHeader.boundingBox())!.x - headerBeforeControls!.x).toBeGreaterThan(400);
     await expect.poll(async () => {
@@ -125,7 +130,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     await expect(page.getByRole("dialog", { name: "Analysis controls" })).toHaveCount(0);
     await expect(page.locator("html")).not.toHaveClass(/lap-analysis-controls-open/);
     await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
-    await expect(analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(scopeNavigator.getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
   }
 
   await expect.poll(async () => analysisMain.locator(".dashboard-widget-variation canvas, .dashboard-widget-telemetry canvas").evaluateAll((canvases) =>
@@ -171,7 +176,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await analysisMain.locator(".dashboard-widget-telemetry").scrollIntoViewIfNeeded();
   if ((page.viewportSize()?.width ?? 0) > 680) {
     const comparisonBox = await analysisMain.locator(".segment-comparison-bar").boundingBox();
-    const ribbonBox = await analysisMain.locator(".segment-scope-ribbon").boundingBox();
+    const ribbonBox = await scopeNavigator.boundingBox();
     expect(comparisonBox).not.toBeNull();
     expect(ribbonBox).not.toBeNull();
     expect(comparisonBox!.y).toBeGreaterThanOrEqual(0);
@@ -209,6 +214,23 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     ).not.toBe(earlyCursor);
   }
   await expect.poll(() => focusedTrackMarker.evaluate((marker) => `${marker.getAttribute("cx")},${marker.getAttribute("cy")}`)).not.toBe(markerBeforeHover);
+  if ((page.viewportSize()?.width ?? 0) > 680) {
+    const metricCanvases = analysisMain.locator(".segment-telemetry-metric-card canvas");
+    const canvasesBeforeDrag = await Promise.all([0, 1, 2].map((index) => metricCanvases.nth(index).screenshot()));
+    const speedCanvas = analysisMain.locator(".segment-telemetry-metric-card.is-speed canvas");
+    const speedBox = await speedCanvas.boundingBox();
+    expect(speedBox).not.toBeNull();
+    await page.mouse.move(speedBox!.x + speedBox!.width * 0.32, speedBox!.y + speedBox!.height * 0.55);
+    await page.mouse.down();
+    await page.mouse.move(speedBox!.x + speedBox!.width * 0.78, speedBox!.y + speedBox!.height * 0.55, { steps: 12 });
+    await page.mouse.up();
+    const showAllTelemetry = analysisMain.getByRole("button", { name: "Show all", exact: true });
+    await expect(showAllTelemetry).toBeVisible();
+    const canvasesAfterDrag = await Promise.all([0, 1, 2].map((index) => metricCanvases.nth(index).screenshot()));
+    expect(canvasesAfterDrag.every((image, index) => !image.equals(canvasesBeforeDrag[index]))).toBe(true);
+    await showAllTelemetry.click();
+    await expect(showAllTelemetry).toHaveCount(0);
+  }
   const accelerationChart = analysisMain.getByRole("img", { name: "Measured acceleration by distance" });
   await accelerationChart.focus();
   const keyboardCursorBefore = await cursorDistance.textContent();
@@ -237,7 +259,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await twoPlusOneLayout.click();
   await analysisMain.getByRole("tab", { name: "Overview" }).click();
   await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
-  await expect(analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(scopeNavigator.getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
   await expect(focusedLapSelect).toHaveValue(focusedLapBeforeRoundTrip);
   await expect(telemetryGrid).toHaveAttribute("data-layout", "two-plus-one");
   await threeColumnLayout.click();

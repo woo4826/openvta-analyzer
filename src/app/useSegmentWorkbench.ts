@@ -137,7 +137,9 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
   }, [analysis.records, effectiveScope, focusedLapId]);
 
   const selectSection = useCallback((sectionId: string) => {
-    if (!input.sections.some((section) => section.id === sectionId)) return;
+    const selected = input.sections.find((section) => section.id === sectionId);
+    if (!selected) return;
+    setFilterState((current) => sectionMatchesFilter(selected, current) ? current : "all");
     setScope({ kind: "section", sectionId });
   }, [input.sections]);
 
@@ -156,8 +158,7 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     setScope((current) => {
       if (current.kind !== "section" || nextFilter === "all") return current;
       const selected = input.sections.find((section) => section.id === current.sectionId);
-      const compatible = nextFilter === "straights" ? selected?.kind === "straight" : selected?.kind !== "straight";
-      return compatible ? current : { kind: "whole-lap" };
+      return selected && sectionMatchesFilter(selected, nextFilter) ? current : { kind: "whole-lap" };
     });
   }, [input.sections]);
 
@@ -207,6 +208,12 @@ export function useSegmentWorkbench(input: SegmentWorkbenchInput): SegmentWorkbe
     setReferenceLap,
     setAxis,
   };
+}
+
+function sectionMatchesFilter(section: TrackSection, filter: SegmentFilter): boolean {
+  if (filter === "straights") return section.kind === "straight";
+  if (filter === "corners") return section.kind !== "straight";
+  return true;
 }
 
 function isEligibleReference(record: SegmentAnalysisResult["records"][number]): boolean {
