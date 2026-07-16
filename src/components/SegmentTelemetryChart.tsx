@@ -1,12 +1,14 @@
 import { useCallback, useId, useMemo, useState } from "react";
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import type {
+  AccelerationVectorMode,
   SegmentAnalysisResult,
   SegmentTelemetryLayout,
   SegmentTrajectorySample,
   SynchronizedAccelerationSeries,
 } from "../domain/types";
 import { ChartPanel, type CursorKeyAction } from "./ChartPanel";
+import { SegmentAccelerationVectorPanel } from "./SegmentAccelerationVectorPanel";
 import { SegmentTelemetryTrackInset } from "./SegmentTelemetryTrackInset";
 import {
   buildSegmentTelemetryMetricOption,
@@ -29,11 +31,13 @@ interface SegmentTelemetryChartProps {
   cursorDistanceMeters?: number;
   layout?: SegmentTelemetryLayout;
   onLayout?: (layout: SegmentTelemetryLayout) => void;
+  accelerationVectorMode?: AccelerationVectorMode;
+  onAccelerationVectorMode?: (mode: AccelerationVectorMode) => void;
   onCursor: (distanceMeters: number, sourceIndex: number) => void;
 }
 
 const TELEMETRY_LAYOUTS: SegmentTelemetryLayout[] = ["three-column", "two-plus-one", "three-stacked"];
-const CORE_METRICS: CoreSegmentTelemetryMetric[] = ["speed", "delta", "imu-acceleration"];
+const CORE_METRICS: CoreSegmentTelemetryMetric[] = ["speed", "delta"];
 const FULL_ZOOM_WINDOW: SegmentTelemetryZoomWindow = { start: 0, end: 100 };
 
 export function SegmentTelemetryChart({
@@ -46,6 +50,8 @@ export function SegmentTelemetryChart({
   cursorDistanceMeters: controlledCursorDistanceMeters,
   layout = "three-column",
   onLayout = () => undefined,
+  accelerationVectorMode = "gg-2d",
+  onAccelerationVectorMode = () => undefined,
   onCursor,
 }: SegmentTelemetryChartProps) {
   const { t } = useI18n();
@@ -88,6 +94,7 @@ export function SegmentTelemetryChart({
     ?? analysis.records.find((record) => record.lapId === referenceLapId);
   const reference = analysis.records.find((record) => record.lapId === referenceLapId);
   const focusedAcceleration = focusedLapId ? synchronizedAccelerationByLap?.[focusedLapId] : undefined;
+  const referenceAcceleration = referenceLapId ? synchronizedAccelerationByLap?.[referenceLapId] : undefined;
   const cursorX = axis === "distance"
     ? cursorDistanceMeters
     : nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters)?.elapsedSeconds;
@@ -101,7 +108,7 @@ export function SegmentTelemetryChart({
     metric,
     synchronizedAccelerationByLap,
     zoomWindow,
-    metric === "imu-acceleration",
+    metric === "delta",
   )])) as Record<CoreSegmentTelemetryMetric, ReturnType<typeof buildSegmentTelemetryMetricOption>>, [
     analysis,
     axis,
@@ -181,25 +188,19 @@ export function SegmentTelemetryChart({
     distance: {
       speed: "lap.workbench.chartSpeedAriaDistance",
       delta: "lap.workbench.chartDeltaAriaDistance",
-      "imu-acceleration": "lap.workbench.chartAccelerationAriaDistance",
     },
     time: {
       speed: "lap.workbench.chartSpeedAriaTime",
       delta: "lap.workbench.chartDeltaAriaTime",
-      "imu-acceleration": "lap.workbench.chartAccelerationAriaTime",
     },
   }[axis][metric] as Parameters<typeof t>[0]);
   const metricTitle = (metric: CoreSegmentTelemetryMetric) => ({
     speed: t("lap.workbench.chartSpeed"),
     delta: t("lap.workbench.chartDelta"),
-    "imu-acceleration": t("lap.workbench.chartImuAcceleration"),
   }[metric]);
   const metricUnavailable = (metric: CoreSegmentTelemetryMetric): string | undefined => {
     if (!focused?.trajectory.length) return t("lap.workbench.telemetryUnavailable");
     if (metric === "delta" && !reference?.trajectory.length) return t("lap.workbench.referenceRequired");
-    if (metric === "imu-acceleration" && !visibleLapIds.some((lapId) => synchronizedAccelerationByLap?.[lapId]?.samples.length)) {
-      return t("lap.workbench.measuredAccelerationUnavailable");
-    }
     return undefined;
   };
 
@@ -248,6 +249,16 @@ export function SegmentTelemetryChart({
             {unavailable ? <p className="segment-telemetry-unavailable" role="status">{unavailable}</p> : null}
           </div>;
         })}
+        <div className="segment-telemetry-metric-card is-acceleration-vector">
+          <SegmentAccelerationVectorPanel
+            focused={focusedAcceleration}
+            reference={referenceAcceleration}
+            cursorDistanceMeters={cursorDistanceMeters}
+            mode={accelerationVectorMode}
+            onMode={onAccelerationVectorMode}
+            describedBy={interpretationId}
+          />
+        </div>
       </div>
 
       <div className="segment-telemetry-context" id={interpretationId}>

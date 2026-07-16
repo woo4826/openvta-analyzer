@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GpsPoint, LapResult, SegmentTelemetryLayout, SensorPoint, TrackProfileV1 } from "../../domain/types";
+import type { AccelerationVectorMode, GpsPoint, LapResult, SegmentTelemetryLayout, SensorPoint, TrackProfileV1 } from "../../domain/types";
 import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPreferences";
 import { I18nProvider } from "../../i18n/I18nProvider";
 
@@ -17,12 +17,14 @@ vi.mock("../SegmentTrajectoryMap", () => ({
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAccelerationByLap = {}, layout, onLayout, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAccelerationByLap?: Record<string, { method: string; samples: unknown[] }>; layout: SegmentTelemetryLayout; onLayout: (layout: SegmentTelemetryLayout) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAccelerationByLap = {}, layout, accelerationVectorMode, onLayout, onAccelerationVectorMode, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAccelerationByLap?: Record<string, { method: string; samples: unknown[] }>; layout: SegmentTelemetryLayout; accelerationVectorMode: AccelerationVectorMode; onLayout: (layout: SegmentTelemetryLayout) => void; onAccelerationVectorMode: (mode: AccelerationVectorMode) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
     <div data-testid="chart-state">
       roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={Object.entries(synchronizedAccelerationByLap).map(([lapId, series]) => `${lapId}:${series.method}:${series.samples.length}`).join("|")}
       <span data-testid="telemetry-layout">{layout}</span>
+      <span data-testid="acceleration-vector-mode">{accelerationVectorMode}</span>
       <button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button>
       <button type="button" onClick={() => onLayout("two-plus-one")}>Choose 2+1 telemetry layout</button>
+      <button type="button" onClick={() => onAccelerationVectorMode("vector-3d")}>Choose 3D acceleration vector</button>
     </div>
   ),
 }));
@@ -254,7 +256,7 @@ describe("SegmentAnalysisWorkbench", () => {
     });
   });
 
-  it("persists the telemetry layout across recording changes", async () => {
+  it("persists the telemetry layout and acceleration-vector mode across recording changes", async () => {
     const user = userEvent.setup();
     const fixture = data();
     const props = {
@@ -277,14 +279,19 @@ describe("SegmentAnalysisWorkbench", () => {
     const view = render(<I18nProvider><SegmentAnalysisWorkbench recordingId="recording-1" {...props} /></I18nProvider>);
 
     expect(screen.getByTestId("telemetry-layout")).toHaveTextContent("three-column");
+    expect(screen.getByTestId("acceleration-vector-mode")).toHaveTextContent("gg-2d");
     await user.click(screen.getByRole("button", { name: "Choose 2+1 telemetry layout" }));
+    await user.click(screen.getByRole("button", { name: "Choose 3D acceleration vector" }));
     expect(screen.getByTestId("telemetry-layout")).toHaveTextContent("two-plus-one");
+    expect(screen.getByTestId("acceleration-vector-mode")).toHaveTextContent("vector-3d");
     expect(JSON.parse(localStorage.getItem(SEGMENT_WORKBENCH_STORAGE_KEY) ?? "{}")).toMatchObject({
       telemetryLayout: "two-plus-one",
+      accelerationVectorMode: "vector-3d",
     });
 
     view.rerender(<I18nProvider><SegmentAnalysisWorkbench recordingId="recording-2" {...props} /></I18nProvider>);
     expect(screen.getByTestId("telemetry-layout")).toHaveTextContent("two-plus-one");
+    expect(screen.getByTestId("acceleration-vector-mode")).toHaveTextContent("vector-3d");
   });
 
   it("saves a map-selected range as a named track section", async () => {

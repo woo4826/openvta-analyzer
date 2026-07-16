@@ -2,7 +2,6 @@ import type { EChartsOption, LineSeriesOption } from "echarts";
 import type {
   SegmentAnalysisResult,
   SegmentLapRecord,
-  SynchronizedAccelerationSample,
   SynchronizedAccelerationSeries,
 } from "../domain/types";
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
@@ -10,10 +9,7 @@ import type { SegmentAxis } from "../app/useSegmentWorkbench";
 export const FOCUSED_LAP_COLOR = "#dc2626";
 export const REFERENCE_LAP_COLOR = "#2563eb";
 const EXTRA_COLORS = ["#16a34a", "#7c3aed", "#ea580c"];
-const GRAVITY_MPS2 = 9.80665;
-export const MAX_RENDERED_IMU_SAMPLES = 2400;
-export type SegmentTelemetryMetric = "speed" | "imu-acceleration" | "acceleration" | "elapsed" | "delta" | "loss";
-export type CoreSegmentTelemetryMetric = "speed" | "imu-acceleration" | "delta";
+export type CoreSegmentTelemetryMetric = "speed" | "delta";
 
 export interface SegmentTelemetryZoomWindow {
   start: number;
@@ -61,10 +57,10 @@ export function buildSegmentTelemetryMetricOption(
     const record = analysis.records.find((candidate) => candidate.lapId === id);
     return record ? [record] : [];
   });
-  const metricRecords = metric === "speed" || metric === "delta" ? records : [];
+  const metricRecords = records;
   const commonDomainMaximum = segmentTelemetryDomainMaximum(records, axis, synchronizedAccelerationByLap);
-  const metricLabel = metric === "speed" ? labels.speed : metric === "delta" ? labels.delta : labels.imuAcceleration;
-  const metricUnit = metric === "speed" ? "km/h" : metric === "delta" ? "s" : "g";
+  const metricLabel = metric === "speed" ? labels.speed : labels.delta;
+  const metricUnit = metric === "speed" ? "km/h" : "s";
   const maximumDeltaSample = analysis.records
     .find((record) => record.lapId === focusedLapId)?.trajectory
     .filter((sample) => Number.isFinite(sample.deltaSeconds))
@@ -106,57 +102,7 @@ export function buildSegmentTelemetryMetricOption(
     };
   });
 
-  const accelerationLegendData: string[] = [];
-  const accelerationColors: string[] = [];
-  if (metric === "imu-acceleration") {
-    const accelerationRecords = records.filter((record) => synchronizedAccelerationByLap?.[record.lapId]?.samples.length);
-    const maximumSamplesPerLap = Math.max(80, Math.floor(MAX_RENDERED_IMU_SAMPLES / Math.max(1, accelerationRecords.length)));
-    const axes = [
-      { id: "x", name: labels.imuAxisX, value: "accelXG" as const, lineType: "solid" as const },
-      { id: "y", name: labels.imuAxisY, value: "accelYG" as const, lineType: "dashed" as const },
-      { id: "z", name: labels.imuAxisZ, value: "accelZG" as const, lineType: "dotted" as const },
-    ];
-    accelerationRecords.forEach((record, recordIndex) => {
-      const synchronizedAcceleration = synchronizedAccelerationByLap?.[record.lapId];
-      if (!synchronizedAcceleration?.samples.length) return;
-      const renderedAcceleration = downsampleAcceleration(synchronizedAcceleration.samples, maximumSamplesPerLap);
-      const color = lapColor(record.lapId, recordIndex, focusedLapId, referenceLapId);
-      const lapName = lapSeriesName(record, focusedLapId, referenceLapId, labels);
-      axes.forEach((imuAxis, axisIndex) => {
-        const name = `${lapName} · ${imuAxis.name}`;
-        accelerationLegendData.push(name);
-        accelerationColors.push(color);
-        series.push({
-          id: `${record.lapId}-imu-acceleration-${imuAxis.id}`,
-          name,
-          type: "line",
-          showSymbol: false,
-          symbolSize: 4,
-          connectNulls: false,
-          lineStyle: {
-            color,
-            width: record.lapId === focusedLapId ? 2 : record.lapId === referenceLapId ? 1.7 : 1.25,
-            opacity: record.lapId === focusedLapId || record.lapId === referenceLapId ? 0.95 : 0.65,
-            type: imuAxis.lineType,
-          },
-          itemStyle: { color },
-          data: renderedAcceleration.map((sample) => [
-            axis === "distance" ? sample.distanceMeters : sample.elapsedSeconds,
-            sample[imuAxis.value],
-            sample.sourceIndex,
-          ]),
-          markLine: recordIndex === 0 && axisIndex === 0
-            ? { silent: true, symbol: "none", data: [{ yAxis: 0, label: { show: false }, lineStyle: { color: "#94a3b8", width: 1 } }] }
-            : undefined,
-          emphasis: { focus: "series" },
-        });
-      });
-    });
-  }
-
-  const legendData = metric === "imu-acceleration"
-    ? accelerationLegendData
-    : metricRecords.map((record) => lapSeriesName(record, focusedLapId, referenceLapId, labels));
+  const legendData = metricRecords.map((record) => lapSeriesName(record, focusedLapId, referenceLapId, labels));
   const dataZoom = [
     {
       type: "inside" as const,
@@ -179,9 +125,7 @@ export function buildSegmentTelemetryMetricOption(
 
   return {
     animation: false,
-    color: metric === "imu-acceleration"
-      ? accelerationColors
-      : metricRecords.map((record, index) => lapColor(record.lapId, index, focusedLapId, referenceLapId)),
+    color: metricRecords.map((record, index) => lapColor(record.lapId, index, focusedLapId, referenceLapId)),
     grid: { left: 92, right: 24, top: 42, bottom: showZoomSlider ? 54 : 42, containLabel: false },
     xAxis: {
       type: "value",
@@ -233,60 +177,14 @@ export function segmentTelemetryDomainMaximum(
   );
 }
 
-export function downsampleAcceleration(
-  samples: SynchronizedAccelerationSample[],
-  maximumSamples = MAX_RENDERED_IMU_SAMPLES,
-): SynchronizedAccelerationSample[] {
-  if (samples.length <= maximumSamples || maximumSamples < 8) return samples;
-
-  const interiorCount = samples.length - 2;
-  const bucketCount = Math.max(1, Math.floor((maximumSamples - 2) / 6));
-  const bucketSize = Math.ceil(interiorCount / bucketCount);
-  const selectedIndexes = new Set<number>([0, samples.length - 1]);
-  const axes: Array<keyof Pick<SynchronizedAccelerationSample, "accelXG" | "accelYG" | "accelZG">> = [
-    "accelXG",
-    "accelYG",
-    "accelZG",
-  ];
-
-  for (let start = 1; start < samples.length - 1; start += bucketSize) {
-    const end = Math.min(samples.length - 1, start + bucketSize);
-    for (const axis of axes) {
-      let minimumIndex = start;
-      let maximumIndex = start;
-      for (let index = start + 1; index < end; index += 1) {
-        if (samples[index][axis] < samples[minimumIndex][axis]) minimumIndex = index;
-        if (samples[index][axis] > samples[maximumIndex][axis]) maximumIndex = index;
-      }
-      selectedIndexes.add(minimumIndex);
-      selectedIndexes.add(maximumIndex);
-    }
-  }
-
-  selectedIndexes.delete(samples.length - 1);
-  return [...selectedIndexes]
-    .sort((left, right) => left - right)
-    .slice(0, maximumSamples - 1)
-    .map((index) => samples[index])
-    .concat(samples.at(-1)!);
-}
-
 function metricData(
   record: SegmentLapRecord,
-  metric: SegmentTelemetryMetric,
+  metric: CoreSegmentTelemetryMetric,
   axis: SegmentAxis,
 ): Array<[number, number | null, number]> {
-  return record.trajectory.map((sample, index) => {
+  return record.trajectory.map((sample) => {
     const x = axis === "distance" ? sample.distanceMeters : sample.elapsedSeconds;
-    const value = metric === "speed"
-      ? sample.speedKmh
-      : metric === "acceleration"
-        ? longitudinalAccelerationG(record, index)
-        : metric === "elapsed"
-        ? sample.elapsedSeconds
-        : metric === "delta"
-          ? sample.deltaSeconds
-          : sample.lossRateSecondsPer100m ?? null;
+    const value = metric === "speed" ? sample.speedKmh : sample.deltaSeconds;
     return [x, value, sample.sourceIndex];
   });
 }
@@ -306,15 +204,6 @@ function lapSeriesName(
   if (record.lapId === focusedLapId) return `${labels.focusedLap} · ${labels.lap} ${record.ordinal}`;
   if (record.lapId === referenceLapId) return `${labels.referenceLap} · ${labels.lap} ${record.ordinal}`;
   return `${labels.lap} ${record.ordinal}`;
-}
-
-function longitudinalAccelerationG(record: SegmentLapRecord, index: number): number | null {
-  if (index === 0) return null;
-  const previous = record.trajectory[index - 1];
-  const sample = record.trajectory[index];
-  const elapsed = sample.elapsedSeconds - previous.elapsedSeconds;
-  if (elapsed <= 0) return null;
-  return ((sample.speedKmh - previous.speedKmh) / 3.6) / elapsed / GRAVITY_MPS2;
 }
 
 function unique(values: Array<string | undefined>): string[] {

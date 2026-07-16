@@ -6,8 +6,6 @@ import type { SegmentAnalysisResult, SynchronizedAccelerationSeries } from "../.
 import { I18nProvider } from "../../i18n/I18nProvider";
 import {
   buildSegmentTelemetryMetricOption,
-  downsampleAcceleration,
-  MAX_RENDERED_IMU_SAMPLES,
   type SegmentTelemetryLabels,
 } from "../segmentTelemetryOptions";
 
@@ -17,6 +15,9 @@ const chartPanelSpy = vi.hoisted(() => ({
   onCursorKeyReferences: [] as Array<((action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void) | undefined>,
   onZoomReferences: [] as Array<((window: { start: number; end: number }) => void) | undefined>,
   onBrushReferences: [] as Array<((start: number, end: number) => void) | undefined>,
+}));
+const vectorPanelSpy = vi.hoisted(() => ({
+  props: [] as Array<{ cursorDistanceMeters: number; mode: string; focused?: SynchronizedAccelerationSeries; reference?: SynchronizedAccelerationSeries }>,
 }));
 vi.mock("../ChartPanel", () => ({
   ChartPanel: ({ title, ariaLabel, option, cursorX, interactionMode, onPoint, onHoverDomain, onCursorKey, onZoomWindow, onBrushRange, describedBy, actions, caption }: { title: string; ariaLabel?: string; option: EChartsOption; cursorX?: number; interactionMode?: string; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; onCursorKey?: (action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void; onZoomWindow?: (window: { start: number; end: number }) => void; onBrushRange?: (start: number, end: number) => void; describedBy?: string; actions?: unknown; caption?: unknown }) => {
@@ -37,6 +38,22 @@ vi.mock("../ChartPanel", () => ({
     </section>;
   },
 }));
+vi.mock("../SegmentAccelerationVectorPanel", () => ({
+  SegmentAccelerationVectorPanel: ({ focused, reference, cursorDistanceMeters, mode, onMode }: {
+    focused?: SynchronizedAccelerationSeries;
+    reference?: SynchronizedAccelerationSeries;
+    cursorDistanceMeters: number;
+    mode: string;
+    onMode: (mode: "gg-2d" | "vector-3d") => void;
+  }) => {
+    vectorPanelSpy.props.push({ focused, reference, cursorDistanceMeters, mode });
+    return <section data-testid="acceleration-vector-panel" data-cursor-distance={cursorDistanceMeters} data-mode={mode}>
+      <span>{focused?.samples.length ? "Acceleration vector" : "Measured acceleration unavailable"}</span>
+      <span>{reference?.samples.length ? "Reference acceleration" : "Reference acceleration unavailable"}</span>
+      <button type="button" onClick={() => onMode("vector-3d")}>Choose 3D acceleration</button>
+    </section>;
+  },
+}));
 
 import { SegmentTelemetryChart } from "../SegmentTelemetryChart";
 
@@ -47,8 +64,9 @@ describe("segment telemetry chart", () => {
     chartPanelSpy.onCursorKeyReferences.length = 0;
     chartPanelSpy.onZoomReferences.length = 0;
     chartPanelSpy.onBrushReferences.length = 0;
+    vectorPanelSpy.props.length = 0;
   });
-  it("builds isolated speed, Delta-T, and measured-acceleration chart options", () => {
+  it("builds isolated speed and Delta-T chart options", () => {
     const zoom = { start: 10, end: 80 };
     const speed = buildSegmentTelemetryMetricOption(
       analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
@@ -60,33 +78,21 @@ describe("segment telemetry chart", () => {
     };
     const delta = buildSegmentTelemetryMetricOption(
       analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
-      labels(), "delta", undefined, zoom, false,
-    ) as { series: Array<{ id: string }> };
-    const measuredAcceleration = buildSegmentTelemetryMetricOption(
-      analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
-      labels(), "imu-acceleration", accelerationByLap(), zoom, true,
-    ) as {
-      series: Array<{ id: string }>;
-      dataZoom: Array<Record<string, unknown>>;
-    };
-
+      labels(), "delta", undefined, zoom, true,
+    ) as { series: Array<{ id: string }>; dataZoom: Array<Record<string, unknown>> };
     expect(speed.grid).not.toBeInstanceOf(Array);
     expect(speed.series.map((series) => series.id)).toEqual(["lap-2-speed", "lap-1-speed"]);
     expect(delta.series.map((series) => series.id)).toEqual(["lap-2-delta", "lap-1-delta"]);
-    expect(measuredAcceleration.series.map((series) => series.id)).toEqual([
-      "lap-2-imu-acceleration-x", "lap-2-imu-acceleration-y", "lap-2-imu-acceleration-z",
-      "lap-1-imu-acceleration-x", "lap-1-imu-acceleration-y", "lap-1-imu-acceleration-z",
-    ]);
     expect(speed.dataZoom).toEqual([
       expect.objectContaining({ type: "inside", start: 10, end: 80 }),
     ]);
-    expect(measuredAcceleration.dataZoom).toEqual([
+    expect(delta.dataZoom).toEqual([
       expect.objectContaining({ type: "inside", start: 10, end: 80 }),
       expect.objectContaining({ type: "slider", start: 10, end: 80 }),
     ]);
   });
 
-  it("shares elapsed-time hover, click, keyboard, zoom, and cursor state across three charts", () => {
+  it("shares elapsed-time hover, click, keyboard, zoom, and cursor state across both graphs and the vector panel", () => {
     const onCursor = vi.fn();
     render(
       <I18nProvider>
@@ -106,22 +112,17 @@ describe("segment telemetry chart", () => {
     );
 
     const charts = screen.getAllByTestId("segment-chart");
-    expect(charts).toHaveLength(3);
+    expect(charts).toHaveLength(2);
     expect(screen.getByRole("img", { name: "Speed comparison by time" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Delta-T by time" })).toBeVisible();
-    expect(screen.getByRole("img", { name: "Measured acceleration by time" })).toBeVisible();
-    expect(charts.map((chart) => chart.getAttribute("data-cursor-x"))).toEqual(["2", "2", "2"]);
+    expect(screen.getByTestId("acceleration-vector-panel")).toHaveAttribute("data-cursor-distance", "50");
+    expect(charts.map((chart) => chart.getAttribute("data-cursor-x"))).toEqual(["2", "2"]);
 
     const speedOption = chartOption("Speed");
     const deltaOption = chartOption("Delta-T");
-    const accelerationOption = chartOption("Measured acceleration");
     expect(speedOption.xAxis).toMatchObject({ min: 0, max: 4 });
     expect(speedOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-speed", "lap-1-speed"]);
     expect(deltaOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-delta", "lap-1-delta"]);
-    expect(accelerationOption.series.map((series: { id: string }) => series.id)).toEqual([
-      "lap-2-imu-acceleration-x", "lap-2-imu-acceleration-y", "lap-2-imu-acceleration-z",
-      "lap-1-imu-acceleration-x", "lap-1-imu-acceleration-y", "lap-1-imu-acceleration-z",
-    ]);
     const speed = speedOption.series.find((series: { id: string }) => series.id === "lap-2-speed")!;
     expect(speed.data[1][0]).toBe(2);
     expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
@@ -131,7 +132,7 @@ describe("segment telemetry chart", () => {
     expect(screen.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
     expect(screen.getByText("Focused lap", { selector: "dt" })).toBeInTheDocument();
 
-    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+    for (const title of ["Speed", "Delta-T"]) {
       fireEvent.click(screen.getByRole("button", { name: `Hover ${title}` }));
       expect(onCursor).toHaveBeenLastCalledWith(50, 21);
       fireEvent.click(screen.getByRole("button", { name: `Point ${title}` }));
@@ -140,8 +141,8 @@ describe("segment telemetry chart", () => {
       expect(onCursor).toHaveBeenLastCalledWith(100, 22);
     }
 
-    fireEvent.click(screen.getByRole("button", { name: "Zoom Measured acceleration" }));
-    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+    fireEvent.click(screen.getByRole("button", { name: "Zoom Delta-T" }));
+    for (const title of ["Speed", "Delta-T"]) {
       expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "inside", start: 25, end: 70 }),
       ]));
@@ -150,17 +151,21 @@ describe("segment telemetry chart", () => {
 
   it("offers every controlled telemetry layout", () => {
     const onLayout = vi.fn();
+    const onAccelerationVectorMode = vi.fn();
     render(<I18nProvider><SegmentTelemetryChart
       analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
       focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
       synchronizedAccelerationByLap={accelerationByLap()} layout="three-column"
+      accelerationVectorMode="gg-2d" onAccelerationVectorMode={onAccelerationVectorMode}
       onLayout={onLayout} onCursor={vi.fn()}
     /></I18nProvider>);
 
     expect(screen.getByRole("button", { name: "3-column dashboard" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "2+1" }));
     fireEvent.click(screen.getByRole("button", { name: "3 stacked" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose 3D acceleration" }));
     expect(onLayout.mock.calls.map(([layout]) => layout)).toEqual(["two-plus-one", "three-stacked"]);
+    expect(onAccelerationVectorMode).toHaveBeenCalledWith("vector-3d");
     expect(document.querySelector(".segment-telemetry-grid")).toHaveAttribute("data-layout", "three-column");
   });
 
@@ -173,20 +178,20 @@ describe("segment telemetry chart", () => {
     /></I18nProvider>);
 
     expect(screen.getAllByTestId("segment-chart").map((chart) => chart.getAttribute("data-interaction-mode")))
-      .toEqual(["range", "range", "range"]);
+      .toEqual(["range", "range"]);
     expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Brush Speed" }));
-    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+    for (const title of ["Speed", "Delta-T"]) {
       expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "inside", start: 25, end: 75 }),
       ]));
     }
     expect(screen.getAllByTestId("segment-chart").map((chart) => chart.getAttribute("data-cursor-x")))
-      .toEqual(["50", "50", "50"]);
+      .toEqual(["50", "50"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Show all" }));
-    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+    for (const title of ["Speed", "Delta-T"]) {
       expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "inside", start: 0, end: 100 }),
       ]));
@@ -219,7 +224,7 @@ describe("segment telemetry chart", () => {
       layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
     /></I18nProvider>);
 
-    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+    for (const title of ["Speed", "Delta-T"]) {
       expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "inside", start: 0, end: 100 }),
       ]));
@@ -238,7 +243,7 @@ describe("segment telemetry chart", () => {
       layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
     /></I18nProvider>);
     expect(screen.getByText("Measured acceleration unavailable")).toBeVisible();
-    expect(screen.getAllByTestId("segment-chart")).toHaveLength(3);
+    expect(screen.getAllByTestId("segment-chart")).toHaveLength(2);
     first.unmount();
 
     render(<I18nProvider><SegmentTelemetryChart
@@ -247,7 +252,8 @@ describe("segment telemetry chart", () => {
       layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
     /></I18nProvider>);
     expect(screen.getByText("Select a reference lap to calculate Delta-T")).toBeVisible();
-    expect(screen.getAllByTestId("segment-chart")).toHaveLength(3);
+    expect(screen.getAllByTestId("segment-chart")).toHaveLength(2);
+    expect(screen.getByText("Reference acceleration unavailable")).toBeVisible();
   });
 
   it("does not emit a cursor when the focused trajectory is empty", () => {
@@ -266,7 +272,7 @@ describe("segment telemetry chart", () => {
     fireEvent.click(screen.getByRole("button", { name: "Point Speed" }));
     fireEvent.click(screen.getByRole("button", { name: "Next Speed" }));
     expect(onCursor).not.toHaveBeenCalled();
-    expect(screen.getAllByText("Telemetry unavailable for this scope")).toHaveLength(3);
+    expect(screen.getAllByText("Telemetry unavailable for this scope")).toHaveLength(2);
   });
 
   it("keeps the reference calculation but removes its plotted series in focused-only mode", () => {
@@ -308,52 +314,6 @@ describe("segment telemetry chart", () => {
     expect(option.legend.data).toHaveLength(7);
   });
 
-  it("caps the combined rendered IMU sample budget across every visible lap", () => {
-    const manyLaps = analysisWithLapCount(8);
-    const visibleLapIds = manyLaps.records.map((record) => record.lapId);
-    const accelerationByVisibleLap = Object.fromEntries(visibleLapIds.map((lapId) => [
-      lapId,
-      accelerationWithSampleCount(10_000),
-    ]));
-    const option = buildSegmentTelemetryMetricOption(
-      manyLaps,
-      visibleLapIds,
-      "distance",
-      "lap-8",
-      "lap-1",
-      labels(),
-      "imu-acceleration",
-      accelerationByVisibleLap,
-      { start: 0, end: 100 },
-      true,
-    ) as { series: Array<{ id: string; data: unknown[] }> };
-
-    expect(option.series).toHaveLength(24);
-    expect(option.series.reduce((total, series) => total + series.data.length, 0))
-      .toBeLessThanOrEqual(MAX_RENDERED_IMU_SAMPLES * 3);
-  });
-
-  it("bounds rendered IMU points while preserving endpoint and axis extrema", () => {
-    const samples = Array.from({ length: 10_000 }, (_, index) => ({
-      sensorIndex: index,
-      sourceIndex: index,
-      distanceMeters: index,
-      elapsedSeconds: index / 100,
-      accelXG: index === 4_321 ? 12 : Math.sin(index / 10),
-      accelYG: index === 6_543 ? -11 : Math.cos(index / 10),
-      accelZG: index === 7_654 ? 14 : 1,
-    }));
-
-    const rendered = downsampleAcceleration(samples);
-
-    expect(rendered.length).toBeLessThanOrEqual(MAX_RENDERED_IMU_SAMPLES);
-    expect(rendered[0]).toBe(samples[0]);
-    expect(rendered.at(-1)).toBe(samples.at(-1));
-    expect(rendered).toContain(samples[4_321]);
-    expect(rendered).toContain(samples[6_543]);
-    expect(rendered).toContain(samples[7_654]);
-  });
-
   it("removes the duplicate keyboard range editor from the telemetry widget", () => {
     const fractional = analysis();
     fractional.range = { startDistanceMeters: 1000, endDistanceMeters: 1100.6 };
@@ -384,21 +344,6 @@ function acceleration(method: SynchronizedAccelerationSeries["method"] = "line-o
       accelXG: index * 0.1,
       accelYG: index * -0.2,
       accelZG: 1 + index * 0.05,
-    })),
-  };
-}
-
-function accelerationWithSampleCount(count: number): SynchronizedAccelerationSeries {
-  return {
-    method: "sensor-clock",
-    samples: Array.from({ length: count }, (_, index) => ({
-      sensorIndex: index,
-      sourceIndex: index,
-      distanceMeters: index,
-      elapsedSeconds: index / 100,
-      accelXG: Math.sin(index / 10),
-      accelYG: Math.cos(index / 10),
-      accelZG: 1 + Math.sin(index / 20),
     })),
   };
 }

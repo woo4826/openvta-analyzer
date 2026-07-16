@@ -462,6 +462,11 @@ export function SegmentAnalysisWorkbench({
                 cursorDistanceMeters={cursorDistanceMeters}
                 layout={preferences.telemetryLayout}
                 onLayout={(telemetryLayout) => updatePreferences((current) => ({ ...current, telemetryLayout }))}
+                accelerationVectorMode={preferences.accelerationVectorMode}
+                onAccelerationVectorMode={(accelerationVectorMode) => updatePreferences((current) => ({
+                  ...current,
+                  accelerationVectorMode,
+                }))}
                 onCursor={selectTelemetryCursor}
               />
             </DashboardWidget>
