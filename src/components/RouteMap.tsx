@@ -51,6 +51,9 @@ const EMPTY_SECTION_VISUALS: Record<string, TrackSectionVisual> = {};
 const EMPTY_HEAT_SEGMENTS: MapHeatSegment[] = [];
 const EMPTY_GHOST_MARKERS: MapGhostMarker[] = [];
 const EMPTY_LINE: LineString = { type: "LineString", coordinates: [] };
+// Low-rate GPS paths can visibly deviate from a preset centerline. Keep taps near
+// the driven path usable while still ignoring clicks well outside the circuit.
+const MAP_SECTION_CLICK_TOLERANCE_METERS = 100;
 
 interface RouteMapProps {
   points: GpsPoint[];
@@ -268,13 +271,13 @@ export function RouteMap({
         map.on("mouseleave", "route-points", () => {
           map.getCanvas().style.cursor = "";
         });
-        map.on("click", "track-sections", (event) => {
+        map.on("click", (event) => {
           const selection = resolveMapSectionSelection(
             [event.lngLat.lng, event.lngLat.lat],
             sectionCenterlineRef.current,
             trackSectionsRef.current,
           );
-          if (selection) {
+          if (selection && (selection.offsetMeters ?? Number.POSITIVE_INFINITY) <= MAP_SECTION_CLICK_TOLERANCE_METERS) {
             onSectionSelectRef.current?.(selection.sectionId, selection);
           }
         });

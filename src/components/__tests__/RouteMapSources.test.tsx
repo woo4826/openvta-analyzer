@@ -17,6 +17,7 @@ const mapMock = vi.hoisted(() => {
     sources = new Map<string, SourceDouble>();
     layers = new Set<string>();
     layerHandlers = new Map<string, (event: unknown) => void>();
+    globalHandlers = new Map<string, (event: unknown) => void>();
     layerDefinitions = new Map<string, { id: string; filter?: unknown; paint?: Record<string, unknown> }>();
     jumpTo = vi.fn();
     easeTo = vi.fn();
@@ -32,6 +33,9 @@ const mapMock = vi.hoisted(() => {
     on(event: string, layerOrHandler: string | (() => void), handler?: (event: unknown) => void) {
       if (event === "load" && typeof layerOrHandler === "function") {
         queueMicrotask(layerOrHandler);
+      }
+      if (event !== "load" && typeof layerOrHandler === "function") {
+        this.globalHandlers.set(event, layerOrHandler);
       }
       if (typeof layerOrHandler === "string" && handler) {
         this.layerHandlers.set(`${event}:${layerOrHandler}`, handler);
@@ -213,9 +217,9 @@ describe("RouteMap source updates", () => {
     render(wrappedRoute(0, true, { onSectionSelect, sectionCenterline, trackSections }));
     await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
     const map = mapMock.MapDouble.instances[0];
-    await waitFor(() => expect(map.layerHandlers.has("click:track-sections")).toBe(true));
+    await waitFor(() => expect(map.globalHandlers.has("click")).toBe(true));
 
-    act(() => map.layerHandlers.get("click:track-sections")?.({
+    act(() => map.globalHandlers.get("click")?.({
       lngLat: { lng: 0.00075, lat: 0.0001 },
       features: [{ properties: { id: "wrong" } }],
     }));
@@ -225,6 +229,12 @@ describe("RouteMap source updates", () => {
       distanceMeters: expect.any(Number),
       coordinate: [0.00075, 0.0001],
     }));
+
+    act(() => map.globalHandlers.get("click")?.({
+      lngLat: { lng: 0.5, lat: 0.5 },
+      features: [{ properties: { id: "wrong" } }],
+    }));
+    expect(onSectionSelect).toHaveBeenCalledTimes(1);
   });
 
   it("can hide dense route points so loss-colored sections remain readable", async () => {

@@ -23,6 +23,7 @@ describe("mapSectionSelection", () => {
     expect(resolveMapSectionSelection([0.00075, 0.0001], line, sections)).toMatchObject({
       sectionId: "return",
       distanceMeters: expect.any(Number),
+      offsetMeters: expect.any(Number),
       coordinate: [0.00075, 0.0001],
     });
   });

@@ -11,6 +11,7 @@ const DISTANCE_EPSILON_METERS = 0.001;
 export interface MapSectionSelection {
   sectionId: string;
   distanceMeters: number;
+  offsetMeters?: number;
   coordinate?: Position;
 }
 
@@ -36,7 +37,12 @@ export function resolveMapSectionSelection(
   const distanceMeters = Math.min(lineLengthMeters, Math.max(0, projection.distanceMeters));
   const section = resolveSectionAtDistance(distanceMeters, sections);
   return section
-    ? { sectionId: section.id, distanceMeters, coordinate: [...coordinate] }
+    ? {
+        sectionId: section.id,
+        distanceMeters,
+        offsetMeters: projection.offsetMeters,
+        coordinate: [...coordinate],
+      }
     : undefined;
 }
 
