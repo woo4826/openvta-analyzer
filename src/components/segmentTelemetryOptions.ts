@@ -63,11 +63,7 @@ export function buildSegmentTelemetryMetricOption(
   const metricRecords = metric === "delta"
     ? records.filter((record) => record.lapId === focusedLapId)
     : metric === "speed" ? records : [];
-  const commonDomainMaximum = Math.max(
-    0,
-    ...records.flatMap((record) => record.trajectory.map((sample) => axis === "distance" ? sample.distanceMeters : sample.elapsedSeconds)),
-    ...(synchronizedAcceleration?.samples.map((sample) => axis === "distance" ? sample.distanceMeters : sample.elapsedSeconds) ?? []),
-  );
+  const commonDomainMaximum = segmentTelemetryDomainMaximum(records, axis, synchronizedAcceleration);
   const metricLabel = metric === "speed" ? labels.speed : metric === "delta" ? labels.delta : labels.imuAcceleration;
   const metricUnit = metric === "speed" ? "km/h" : metric === "delta" ? "s" : "g";
   const maximumDeltaSample = analysis.records
@@ -145,7 +141,15 @@ export function buildSegmentTelemetryMetricOption(
     ? synchronizedAcceleration?.samples.length ? [labels.imuAxisX, labels.imuAxisY, labels.imuAxisZ] : []
     : metricRecords.map((record) => lapSeriesName(record, focusedLapId, referenceLapId, labels));
   const dataZoom = [
-    { type: "inside" as const, filterMode: "none" as const, start: zoomWindow.start, end: zoomWindow.end },
+    {
+      type: "inside" as const,
+      filterMode: "none" as const,
+      start: zoomWindow.start,
+      end: zoomWindow.end,
+      zoomOnMouseWheel: true,
+      moveOnMouseMove: false,
+      moveOnMouseWheel: false,
+    },
     ...(showZoomSlider ? [{
       type: "slider" as const,
       filterMode: "none" as const,
@@ -189,8 +193,26 @@ export function buildSegmentTelemetryMetricOption(
       axisPointer: { type: "cross" },
       valueFormatter: (value: unknown) => typeof value === "number" ? value.toFixed(3) : String(value ?? "—"),
     },
+    brush: {
+      xAxisIndex: "all",
+      brushMode: "single",
+      transformable: false,
+      brushStyle: { borderWidth: 1, color: "rgba(15, 118, 110, 0.16)", borderColor: "#0f766e" },
+    },
     dataZoom,
   };
+}
+
+export function segmentTelemetryDomainMaximum(
+  records: SegmentLapRecord[],
+  axis: SegmentAxis,
+  synchronizedAcceleration?: SynchronizedAccelerationSeries,
+): number {
+  return Math.max(
+    0,
+    ...records.flatMap((record) => record.trajectory.map((sample) => axis === "distance" ? sample.distanceMeters : sample.elapsedSeconds)),
+    ...(synchronizedAcceleration?.samples.map((sample) => axis === "distance" ? sample.distanceMeters : sample.elapsedSeconds) ?? []),
+  );
 }
 
 export function downsampleAcceleration(

@@ -125,6 +125,22 @@ describe("ChartPanel controlled reset", () => {
     ]);
   });
 
+  it("emits a horizontal brush range and clears the finished selection", () => {
+    const onBrushRange = vi.fn();
+    render(<ChartPanel
+      title="Speed"
+      option={{ series: [{ type: "line", data: [[0, 1], [100, 2]] }] }}
+      interactionMode="range"
+      onBrushRange={onBrushRange}
+    />);
+    const brushHandler = chartDouble.on.mock.calls.find(([event]) => event === "brushSelected")?.[1] as ((payload: unknown) => void) | undefined;
+
+    brushHandler?.({ batch: [{ areas: [{ coordRange: [75, 25] }] }] });
+
+    expect(onBrushRange).toHaveBeenCalledWith(25, 75);
+    expect(chartDouble.dispatchAction).toHaveBeenCalledWith({ type: "brush", areas: [] });
+  });
+
   it("supports keyboard cursor traversal without hiding the chart semantics", async () => {
     const user = userEvent.setup();
     const onCursorKey = vi.fn();

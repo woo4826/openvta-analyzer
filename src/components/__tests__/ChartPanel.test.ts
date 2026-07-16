@@ -1,6 +1,6 @@
 import type { EChartsOption } from "echarts";
 import { describe, expect, it } from "vitest";
-import { brushDomainRange, brushSegmentFromOption, chartPointDomain, chartPointIndex } from "../chartInteraction";
+import { brushDomainRange, brushSegmentFromOption, chartPointDomain, chartPointIndex, domainRangeToZoomWindow } from "../chartInteraction";
 
 describe("ChartPanel source index events", () => {
   it("prefers the third chart coordinate as the GPS source index", () => {
@@ -26,5 +26,13 @@ describe("ChartPanel source index events", () => {
     expect(brushDomainRange({
       batch: [{ areas: [{ coordRange: [82.5, 21.25] }] }],
     })).toEqual({ start: 21.25, end: 82.5 });
+  });
+
+  it("normalizes a useful brush range and rejects invalid or accidental drags", () => {
+    expect(domainRangeToZoomWindow(75, 25, 100)).toEqual({ start: 25, end: 75 });
+    expect(domainRangeToZoomWindow(-20, 120, 100)).toEqual({ start: 0, end: 100 });
+    expect(domainRangeToZoomWindow(20, 20.1, 100)).toBeUndefined();
+    expect(domainRangeToZoomWindow(Number.NaN, 50, 100)).toBeUndefined();
+    expect(domainRangeToZoomWindow(20, 50, 0)).toBeUndefined();
   });
 });

@@ -76,6 +76,23 @@ export function brushDomainRange(
   return { start: Math.min(...values), end: Math.max(...values) };
 }
 
+export function domainRangeToZoomWindow(
+  left: number,
+  right: number,
+  domainMaximum: number,
+  minimumSpanPercent = 0.25,
+): { start: number; end: number } | undefined {
+  if (![left, right, domainMaximum].every(Number.isFinite) || domainMaximum <= 0) return undefined;
+  const startDomain = clamp(Math.min(left, right), 0, domainMaximum);
+  const endDomain = clamp(Math.max(left, right), 0, domainMaximum);
+  const spanPercent = (endDomain - startDomain) / domainMaximum * 100;
+  if (spanPercent < minimumSpanPercent) return undefined;
+  return {
+    start: startDomain / domainMaximum * 100,
+    end: endDomain / domainMaximum * 100,
+  };
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -128,4 +145,8 @@ function isNumericPair(value: unknown): value is [number, number] {
 function toSegment(values: number[]): { startIndex: number; endIndex: number } {
   const rounded = values.map((value) => Math.round(value));
   return { startIndex: Math.min(...rounded), endIndex: Math.max(...rounded) };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
 }

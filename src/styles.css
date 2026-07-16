@@ -1629,6 +1629,21 @@ footer.privacy-note {
   margin: 2px 0 0;
 }
 
+.segment-telemetry-toolbar p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.segment-telemetry-toolbar-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 .segment-telemetry-layout-control {
   min-width: 0;
   display: flex;

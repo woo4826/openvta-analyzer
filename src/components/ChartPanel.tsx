@@ -102,13 +102,17 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
         return;
       }
       const range = brushDomainRange(params);
+      let handled = false;
       if (range) {
         onBrushRange?.(range.start, range.end);
+        handled = Boolean(onBrushRange);
       }
       const segment = brushSegmentFromOption(params, option);
       if (segment) {
         onBrushSegment?.(segment.startIndex, segment.endIndex);
+        handled ||= Boolean(onBrushSegment);
       }
+      if (handled) chart.dispatchAction({ type: "brush", areas: [] });
     };
 
     window.addEventListener("resize", resize);

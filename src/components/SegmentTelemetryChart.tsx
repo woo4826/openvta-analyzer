@@ -10,11 +10,13 @@ import { ChartPanel, type CursorKeyAction } from "./ChartPanel";
 import { SegmentTelemetryTrackInset } from "./SegmentTelemetryTrackInset";
 import {
   buildSegmentTelemetryMetricOption,
+  segmentTelemetryDomainMaximum,
   type CoreSegmentTelemetryMetric,
   type SegmentTelemetryLabels,
   type SegmentTelemetryZoomWindow,
 } from "./segmentTelemetryOptions";
 import { useI18n } from "../i18n/useI18n";
+import { domainRangeToZoomWindow } from "./chartInteraction";
 
 interface SegmentTelemetryChartProps {
   analysis: SegmentAnalysisResult;
@@ -93,6 +95,14 @@ export function SegmentTelemetryChart({
     visibleLapIds,
     zoomWindow,
   ]);
+  const visibleRecords = useMemo(
+    () => analysis.records.filter((record) => visibleLapIds.includes(record.lapId)),
+    [analysis.records, visibleLapIds],
+  );
+  const commonDomainMaximum = useMemo(
+    () => segmentTelemetryDomainMaximum(visibleRecords, axis, synchronizedAcceleration),
+    [axis, synchronizedAcceleration, visibleRecords],
+  );
 
   useEffect(() => {
     setZoomWindow((current) => current.start === 0 && current.end === 100 ? current : { start: 0, end: 100 });
@@ -119,6 +129,12 @@ export function SegmentTelemetryChart({
   const updateZoomWindow = useCallback((next: SegmentTelemetryZoomWindow) => {
     setZoomWindow((current) => current.start === next.start && current.end === next.end ? current : next);
   }, []);
+  const zoomToBrushRange = useCallback((start: number, end: number) => {
+    const next = domainRangeToZoomWindow(start, end, commonDomainMaximum);
+    if (next) updateZoomWindow(next);
+  }, [commonDomainMaximum, updateZoomWindow]);
+  const resetZoom = useCallback(() => updateZoomWindow({ start: 0, end: 100 }), [updateZoomWindow]);
+  const isZoomed = zoomWindow.start > 0.001 || zoomWindow.end < 99.999;
   const selectCursorKey = useCallback((action: CursorKeyAction) => {
     const trajectory = focused?.trajectory ?? [];
     if (!trajectory.length) return;
@@ -176,7 +192,10 @@ export function SegmentTelemetryChart({
         <div>
           <span className="panel-eyebrow">{axis === "distance" ? t("lap.workbench.distanceAxis") : t("lap.workbench.timeAxis")}</span>
           <h3>{t("lap.workbench.chartTitle")}</h3>
+          <p>{t("lap.workbench.dragZoomHelp")}</p>
         </div>
+        <div className="segment-telemetry-toolbar-actions">
+        {isZoomed ? <button type="button" className="button" onClick={resetZoom}>{t("lap.workbench.showAll")}</button> : null}
         <div className="segment-telemetry-layout-control" role="group" aria-label={t("lap.workbench.telemetryLayout")}>
           {TELEMETRY_LAYOUTS.map((candidate) => <button
             type="button"
@@ -187,6 +206,7 @@ export function SegmentTelemetryChart({
             <span className={`segment-layout-glyph is-${candidate}`} aria-hidden="true"><i /><i /><i /></span>
             <span>{layoutLabel(candidate)}</span>
           </button>)}
+        </div>
         </div>
       </header>
 
@@ -199,12 +219,14 @@ export function SegmentTelemetryChart({
               ariaLabel={metricAriaLabel(metric)}
               className="segment-telemetry-metric"
               option={options[metric]}
+              interactionMode="range"
               cursorX={cursorX}
               describedBy={interpretationId}
               onCursorKey={selectCursorKey}
               onPoint={selectPoint}
               onHoverDomain={selectDomain}
               onZoomWindow={updateZoomWindow}
+              onBrushRange={zoomToBrushRange}
             />
             {unavailable ? <p className="segment-telemetry-unavailable" role="status">{unavailable}</p> : null}
           </div>;

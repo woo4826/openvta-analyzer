@@ -16,21 +16,24 @@ const chartPanelSpy = vi.hoisted(() => ({
   onHoverReferences: [] as Array<((domainValue: number) => void) | undefined>,
   onCursorKeyReferences: [] as Array<((action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void) | undefined>,
   onZoomReferences: [] as Array<((window: { start: number; end: number }) => void) | undefined>,
+  onBrushReferences: [] as Array<((start: number, end: number) => void) | undefined>,
 }));
 vi.mock("../ChartPanel", () => ({
-  ChartPanel: ({ title, ariaLabel, option, cursorX, onPoint, onHoverDomain, onCursorKey, onZoomWindow, describedBy, actions, caption }: { title: string; ariaLabel?: string; option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; onCursorKey?: (action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void; onZoomWindow?: (window: { start: number; end: number }) => void; describedBy?: string; actions?: unknown; caption?: unknown }) => {
+  ChartPanel: ({ title, ariaLabel, option, cursorX, interactionMode, onPoint, onHoverDomain, onCursorKey, onZoomWindow, onBrushRange, describedBy, actions, caption }: { title: string; ariaLabel?: string; option: EChartsOption; cursorX?: number; interactionMode?: string; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; onCursorKey?: (action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void; onZoomWindow?: (window: { start: number; end: number }) => void; onBrushRange?: (start: number, end: number) => void; describedBy?: string; actions?: unknown; caption?: unknown }) => {
     chartPanelSpy.onPointReferences.push(onPoint);
     chartPanelSpy.onHoverReferences.push(onHoverDomain);
     chartPanelSpy.onCursorKeyReferences.push(onCursorKey);
     chartPanelSpy.onZoomReferences.push(onZoomWindow);
+    chartPanelSpy.onBrushReferences.push(onBrushRange);
     return <section>
-      <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX} aria-describedby={describedBy} role="img" aria-label={ariaLabel ?? title} />
+      <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX} data-interaction-mode={interactionMode} aria-describedby={describedBy} role="img" aria-label={ariaLabel ?? title} />
       {actions as ReactNode}
       {caption as ReactNode}
         <button type="button" onClick={() => onPoint?.(21, 2)}>Point {title}</button>
         <button type="button" onClick={() => onHoverDomain?.(2)}>Hover {title}</button>
         <button type="button" onClick={() => onCursorKey?.("next")}>Next {title}</button>
         <button type="button" onClick={() => onZoomWindow?.({ start: 25, end: 70 })}>Zoom {title}</button>
+        <button type="button" onClick={() => onBrushRange?.(25, 75)}>Brush {title}</button>
     </section>;
   },
 }));
@@ -43,6 +46,7 @@ describe("segment telemetry chart", () => {
     chartPanelSpy.onHoverReferences.length = 0;
     chartPanelSpy.onCursorKeyReferences.length = 0;
     chartPanelSpy.onZoomReferences.length = 0;
+    chartPanelSpy.onBrushReferences.length = 0;
   });
   it("builds isolated speed, Delta-T, and measured-acceleration chart options", () => {
     const zoom = { start: 10, end: 80 };
@@ -156,6 +160,36 @@ describe("segment telemetry chart", () => {
     fireEvent.click(screen.getByRole("button", { name: "3 stacked" }));
     expect(onLayout.mock.calls.map(([layout]) => layout)).toEqual(["two-plus-one", "three-stacked"]);
     expect(document.querySelector(".segment-telemetry-grid")).toHaveAttribute("data-layout", "three-column");
+  });
+
+  it("drag-zooms every chart through one shared window and exposes a full-view reset", () => {
+    render(<I18nProvider><SegmentTelemetryChart
+      analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
+      synchronizedAcceleration={acceleration()} cursorDistanceMeters={50}
+      layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
+    /></I18nProvider>);
+
+    expect(screen.getAllByTestId("segment-chart").map((chart) => chart.getAttribute("data-interaction-mode")))
+      .toEqual(["range", "range", "range"]);
+    expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Brush Speed" }));
+    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+      expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "inside", start: 25, end: 75 }),
+      ]));
+    }
+    expect(screen.getAllByTestId("segment-chart").map((chart) => chart.getAttribute("data-cursor-x")))
+      .toEqual(["50", "50", "50"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+      expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "inside", start: 0, end: 100 }),
+      ]));
+    }
+    expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
   });
 
   it("keeps metric cards stable when acceleration or reference evidence is unavailable", () => {
