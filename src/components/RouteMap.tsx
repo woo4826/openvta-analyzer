@@ -7,6 +7,11 @@ import type { ActiveSegment, AxisAlignedRegion, GpsPoint, MapSettings, SourceVis
 import { useI18n } from "../i18n/useI18n";
 import { MapControls } from "./MapControls";
 import type { LapMapLineStyle } from "../domain/lapMapLayers";
+import {
+  resolveMapSectionSelection,
+  sectionMidpointSelection,
+  type MapSectionSelection,
+} from "./mapSectionSelection";
 
 export interface LapMapOverlay {
   id: string;
@@ -45,6 +50,7 @@ const EMPTY_TRACK_SECTIONS: TrackSection[] = [];
 const EMPTY_SECTION_VISUALS: Record<string, TrackSectionVisual> = {};
 const EMPTY_HEAT_SEGMENTS: MapHeatSegment[] = [];
 const EMPTY_GHOST_MARKERS: MapGhostMarker[] = [];
+const EMPTY_LINE: LineString = { type: "LineString", coordinates: [] };
 
 interface RouteMapProps {
   points: GpsPoint[];
@@ -68,7 +74,7 @@ interface RouteMapProps {
   fitPoints?: GpsPoint[];
   followSelectedPoint?: boolean;
   mapAriaLabel?: string;
-  onSectionSelect?: (sectionId: string) => void;
+  onSectionSelect?: (sectionId: string, selection?: MapSectionSelection) => void;
   onSelectedIndex: (index: number) => void;
   onSegmentChange?: (segment?: ActiveSegment) => void;
   onRegionChange?: (region?: AxisAlignedRegion) => void;
@@ -111,6 +117,11 @@ export function RouteMap({
   const focusFrameRef = useRef<number>();
   const onSectionSelectRef = useRef(onSectionSelect);
   onSectionSelectRef.current = onSectionSelect;
+  const effectiveSectionCenterline = sectionCenterline ?? trackCenterline ?? EMPTY_LINE;
+  const sectionCenterlineRef = useRef(effectiveSectionCenterline);
+  sectionCenterlineRef.current = effectiveSectionCenterline;
+  const trackSectionsRef = useRef(trackSections);
+  trackSectionsRef.current = trackSections;
   const routeFitPoints = fitPoints?.length ? fitPoints : interactionPoints?.length ? interactionPoints : points;
   const routeFitPointsRef = useRef(routeFitPoints);
   routeFitPointsRef.current = routeFitPoints;
@@ -137,8 +148,8 @@ export function RouteMap({
     [bounds, trackCenterline],
   );
   const sectionGeometry = useMemo(
-    () => deriveTrackSectionGeometry(sectionCenterline ?? trackCenterline ?? { type: "LineString", coordinates: [] }, trackSections),
-    [sectionCenterline, trackCenterline, trackSections],
+    () => deriveTrackSectionGeometry(effectiveSectionCenterline, trackSections),
+    [effectiveSectionCenterline, trackSections],
   );
   const sectionPolylines = useMemo(
     () => bounds ? sectionGeometry.map((section) => ({
@@ -258,8 +269,14 @@ export function RouteMap({
           map.getCanvas().style.cursor = "";
         });
         map.on("click", "track-sections", (event) => {
-          const sectionId = event.features?.[0]?.properties?.id;
-          if (typeof sectionId === "string") onSectionSelectRef.current?.(sectionId);
+          const selection = resolveMapSectionSelection(
+            [event.lngLat.lng, event.lngLat.lat],
+            sectionCenterlineRef.current,
+            trackSectionsRef.current,
+          );
+          if (selection) {
+            onSectionSelectRef.current?.(selection.sectionId, selection);
+          }
         });
         map.on("mouseenter", "track-sections", () => {
           if (onSectionSelectRef.current) map.getCanvas().style.cursor = "pointer";
@@ -375,6 +392,12 @@ export function RouteMap({
     });
   }
 
+  function selectFallbackSection(sectionId: string) {
+    const section = trackSections.find((candidate) => candidate.id === sectionId);
+    if (!section) return;
+    onSectionSelect?.(sectionId, sectionMidpointSelection(section));
+  }
+
   if (!points.length || !bounds) {
     return <div className="map-shell empty-state">{t("map.noGpsData")}</div>;
   }
@@ -433,11 +456,11 @@ export function RouteMap({
               role={onSectionSelect ? "button" : undefined}
               tabIndex={onSectionSelect ? 0 : undefined}
               aria-label={onSectionSelect ? section.name : undefined}
-              onClick={() => onSectionSelect?.(section.id)}
+              onClick={() => selectFallbackSection(section.id)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  onSectionSelect?.(section.id);
+                  selectFallbackSection(section.id);
                 }
               }}
               style={onSectionSelect ? { cursor: "pointer" } : undefined}

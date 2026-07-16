@@ -16,6 +16,7 @@ const mapMock = vi.hoisted(() => {
     static shouldThrow = false;
     sources = new Map<string, SourceDouble>();
     layers = new Set<string>();
+    layerHandlers = new Map<string, (event: unknown) => void>();
     layerDefinitions = new Map<string, { id: string; filter?: unknown; paint?: Record<string, unknown> }>();
     jumpTo = vi.fn();
     easeTo = vi.fn();
@@ -28,11 +29,13 @@ const mapMock = vi.hoisted(() => {
       MapDouble.instances.push(this);
     }
 
-    on(event: string, layerOrHandler: string | (() => void), handler?: () => void) {
+    on(event: string, layerOrHandler: string | (() => void), handler?: (event: unknown) => void) {
       if (event === "load" && typeof layerOrHandler === "function") {
         queueMicrotask(layerOrHandler);
       }
-      void handler;
+      if (typeof layerOrHandler === "string" && handler) {
+        this.layerHandlers.set(`${event}:${layerOrHandler}`, handler);
+      }
       return this;
     }
 
@@ -196,6 +199,34 @@ describe("RouteMap source updates", () => {
     expect(map.layers.has("track-sections")).toBe(true);
   });
 
+  it("resolves a section click from geographic progress instead of the first rendered feature", async () => {
+    const onSectionSelect = vi.fn();
+    const sectionCenterline = {
+      type: "LineString" as const,
+      coordinates: [[0, 0], [0.001, 0], [0.001, 0.0001], [0, 0.0001]],
+    };
+    const trackSections = [
+      { id: "out", name: "Out", kind: "straight" as const, startDistanceMeters: 0, endDistanceMeters: 111 },
+      { id: "turn", name: "Turn", kind: "corner-right" as const, startDistanceMeters: 111, endDistanceMeters: 122 },
+      { id: "return", name: "Return", kind: "straight" as const, startDistanceMeters: 122, endDistanceMeters: 233 },
+    ];
+    render(wrappedRoute(0, true, { onSectionSelect, sectionCenterline, trackSections }));
+    await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.layerHandlers.has("click:track-sections")).toBe(true));
+
+    act(() => map.layerHandlers.get("click:track-sections")?.({
+      lngLat: { lng: 0.00075, lat: 0.0001 },
+      features: [{ properties: { id: "wrong" } }],
+    }));
+
+    expect(onSectionSelect).toHaveBeenCalledWith("return", expect.objectContaining({
+      sectionId: "return",
+      distanceMeters: expect.any(Number),
+      coordinate: [0.00075, 0.0001],
+    }));
+  });
+
   it("can hide dense route points so loss-colored sections remain readable", async () => {
     render(wrappedRoute(0, true, { showRoutePoints: false }));
     await waitFor(() => expect(mapMock.MapDouble.instances).toHaveLength(1));
@@ -306,7 +337,10 @@ describe("RouteMap source updates", () => {
     expect(section).toHaveAttribute("stroke-opacity", "0.75");
 
     await user.click(section);
-    expect(onSectionSelect).toHaveBeenCalledWith("section-1");
+    expect(onSectionSelect).toHaveBeenCalledWith("section-1", {
+      sectionId: "section-1",
+      distanceMeters: 60,
+    });
   });
 
   it("publishes styled lap paths through separate solid, dashed, and dotted MapLibre layers", async () => {
@@ -375,7 +409,7 @@ function wrappedRoute(
   selectedIndex: number,
   includeSections = false,
   options: {
-    onSectionSelect?: (sectionId: string) => void;
+    onSectionSelect?: ComponentProps<typeof RouteMap>["onSectionSelect"];
     sectionVisuals?: Record<string, { color: string; width?: number; opacity?: number }>;
     showRoutePoints?: boolean;
     interactiveRoutePoints?: boolean;
@@ -390,6 +424,8 @@ function wrappedRoute(
     heatSegments?: ComponentProps<typeof RouteMap>["heatSegments"];
     ghostMarkers?: ComponentProps<typeof RouteMap>["ghostMarkers"];
     followSelectedPoint?: boolean;
+    sectionCenterline?: ComponentProps<typeof RouteMap>["sectionCenterline"];
+    trackSections?: ComponentProps<typeof RouteMap>["trackSections"];
   } = {},
 ) {
   return (
@@ -401,13 +437,14 @@ function wrappedRoute(
         settings={settings}
         segment={options.segment}
         trackCenterline={includeSections ? { type: "LineString", coordinates: [[128, 38], [128.001, 38.001]] } : undefined}
-        trackSections={includeSections ? [{
+        sectionCenterline={options.sectionCenterline}
+        trackSections={options.trackSections ?? (includeSections ? [{
           id: "section-1",
           name: "Corner 1",
           kind: "corner-right",
           startDistanceMeters: 0,
           endDistanceMeters: 120,
-        }] : undefined}
+        }] : undefined)}
         sectionVisuals={options.sectionVisuals}
         lapOverlays={options.lapOverlays}
         heatSegments={options.heatSegments}
