@@ -6,7 +6,10 @@ import { downloadText } from "../domain/export";
 import { projectCoordinateToLineProgress, routeDistanceMeters } from "../domain/geometry";
 import { segmentAnalysisCsv, segmentAnalysisJson } from "../domain/lapExport";
 import { buildSegmentPairwiseEvidence } from "../domain/segmentPairwiseEvidence";
-import { synchronizeAccelerationToTrajectory } from "../domain/sensorSynchronization";
+import {
+  prepareAccelerationSynchronization,
+  synchronizeAccelerationWithContext,
+} from "../domain/sensorSynchronization";
 import {
   canHideWidget,
   defaultSegmentWorkbenchPreferences,
@@ -101,10 +104,17 @@ export function SegmentAnalysisWorkbench({
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
   const reference = workbench.analysis.records.find((record) => record.lapId === workbench.referenceLapId);
   const pairwiseEvidence = useMemo(() => buildSegmentPairwiseEvidence(focused, reference), [focused, reference]);
-  const synchronizedAcceleration = useMemo(
-    () => focused ? synchronizeAccelerationToTrajectory(points, sensors, focused.trajectory) : undefined,
-    [focused, points, sensors],
+  const accelerationSynchronizationContext = useMemo(
+    () => prepareAccelerationSynchronization(points, sensors),
+    [points, sensors],
   );
+  const synchronizedAccelerationByLap = useMemo(() => Object.fromEntries(
+    workbench.analysis.records.flatMap((record) => {
+      if (!accelerationSynchronizationContext || !workbench.visibleLapIds.includes(record.lapId) || record.trajectory.length < 2) return [];
+      const series = synchronizeAccelerationWithContext(accelerationSynchronizationContext, record.trajectory);
+      return series ? [[record.lapId, series]] : [];
+    }),
+  ), [accelerationSynchronizationContext, workbench.analysis.records, workbench.visibleLapIds]);
   const recordingIdRef = useRef(recordingId);
   const totalDistanceMeters = useMemo(
     () => Math.max(1, routeDistanceMeters(analysisLine.coordinates)),
@@ -448,7 +458,7 @@ export function SegmentAnalysisWorkbench({
                 focusedLapId={workbench.focusedLapId}
                 referenceLapId={workbench.referenceLapId}
                 axis={workbench.axis}
-                synchronizedAcceleration={synchronizedAcceleration}
+                synchronizedAccelerationByLap={synchronizedAccelerationByLap}
                 cursorDistanceMeters={cursorDistanceMeters}
                 layout={preferences.telemetryLayout}
                 onLayout={(telemetryLayout) => updatePreferences((current) => ({ ...current, telemetryLayout }))}

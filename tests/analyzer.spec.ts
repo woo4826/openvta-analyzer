@@ -169,7 +169,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.telemetryLayout)).toBe("three-column");
   }
   await expect(analysisMain.getByText(/Focused − Reference; a negative value/)).toBeVisible();
-  await expect(analysisMain.getByText(/raw focused-lap device axes/)).toBeVisible();
+  await expect(analysisMain.getByText(/raw device axes for each selected lap/)).toBeVisible();
   await expect(analysisMain.locator(".segment-comparison-bar .sr-only")).toHaveCSS("clip-path", "inset(50%)");
   await expect(analysisMain.locator(".segment-comparison-bar .sr-only")).toHaveCSS("width", "1px");
   await expect(analysisMain.locator(".segment-telemetry-readout")).toContainText(/Timestamp · [1-9]\d* samples/);
@@ -228,8 +228,13 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     await expect(showAllTelemetry).toBeVisible();
     const canvasesAfterDrag = await Promise.all([0, 1, 2].map((index) => metricCanvases.nth(index).screenshot()));
     expect(canvasesAfterDrag.every((image, index) => !image.equals(canvasesBeforeDrag[index]))).toBe(true);
-    await showAllTelemetry.click();
+    const sectionChooser = scopeNavigator.getByRole("combobox", { name: "Go to section" });
+    const cornerId = await corner.getAttribute("data-section-id") ?? "";
+    await sectionChooser.selectOption("");
+    await expect(scopeNavigator.getByText("Whole lap", { exact: true }).first()).toBeVisible();
     await expect(showAllTelemetry).toHaveCount(0);
+    await sectionChooser.selectOption(cornerId);
+    await expect(corner).toHaveAttribute("aria-pressed", "true");
   }
   const accelerationChart = analysisMain.getByRole("img", { name: "Measured acceleration by distance" });
   await accelerationChart.focus();
@@ -252,7 +257,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const timeDeltaBox = await timeDeltaChart.boundingBox();
   expect(timeDeltaBox).not.toBeNull();
   const timeCursorBefore = await cursorDistance.textContent();
-  await page.mouse.move(timeDeltaBox!.x + timeDeltaBox!.width * 0.34, timeDeltaBox!.y + timeDeltaBox!.height * 0.58);
+  await page.mouse.move(timeDeltaBox!.x + timeDeltaBox!.width - 36, timeDeltaBox!.y + timeDeltaBox!.height * 0.58);
   await expect.poll(() => cursorDistance.textContent()).not.toBe(timeCursorBefore);
 
   const focusedLapBeforeRoundTrip = await focusedLapSelect.inputValue();

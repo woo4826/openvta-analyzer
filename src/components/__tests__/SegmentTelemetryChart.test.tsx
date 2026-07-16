@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EChartsOption } from "echarts";
 import type { ReactNode } from "react";
@@ -64,7 +64,7 @@ describe("segment telemetry chart", () => {
     ) as { series: Array<{ id: string }> };
     const measuredAcceleration = buildSegmentTelemetryMetricOption(
       analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
-      labels(), "imu-acceleration", acceleration(), zoom, true,
+      labels(), "imu-acceleration", accelerationByLap(), zoom, true,
     ) as {
       series: Array<{ id: string }>;
       dataZoom: Array<Record<string, unknown>>;
@@ -72,9 +72,10 @@ describe("segment telemetry chart", () => {
 
     expect(speed.grid).not.toBeInstanceOf(Array);
     expect(speed.series.map((series) => series.id)).toEqual(["lap-2-speed", "lap-1-speed"]);
-    expect(delta.series.map((series) => series.id)).toEqual(["lap-2-delta"]);
+    expect(delta.series.map((series) => series.id)).toEqual(["lap-2-delta", "lap-1-delta"]);
     expect(measuredAcceleration.series.map((series) => series.id)).toEqual([
-      "imu-acceleration-x", "imu-acceleration-y", "imu-acceleration-z",
+      "lap-2-imu-acceleration-x", "lap-2-imu-acceleration-y", "lap-2-imu-acceleration-z",
+      "lap-1-imu-acceleration-x", "lap-1-imu-acceleration-y", "lap-1-imu-acceleration-z",
     ]);
     expect(speed.dataZoom).toEqual([
       expect.objectContaining({ type: "inside", start: 10, end: 80 }),
@@ -95,7 +96,7 @@ describe("segment telemetry chart", () => {
           focusedLapId="lap-2"
           referenceLapId="lap-1"
           axis="time"
-          synchronizedAcceleration={acceleration("sensor-clock")}
+          synchronizedAccelerationByLap={accelerationByLap("sensor-clock")}
           cursorDistanceMeters={50}
           layout="three-column"
           onLayout={vi.fn()}
@@ -116,15 +117,16 @@ describe("segment telemetry chart", () => {
     const accelerationOption = chartOption("Measured acceleration");
     expect(speedOption.xAxis).toMatchObject({ min: 0, max: 4 });
     expect(speedOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-speed", "lap-1-speed"]);
-    expect(deltaOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-delta"]);
+    expect(deltaOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-delta", "lap-1-delta"]);
     expect(accelerationOption.series.map((series: { id: string }) => series.id)).toEqual([
-      "imu-acceleration-x", "imu-acceleration-y", "imu-acceleration-z",
+      "lap-2-imu-acceleration-x", "lap-2-imu-acceleration-y", "lap-2-imu-acceleration-z",
+      "lap-1-imu-acceleration-x", "lap-1-imu-acceleration-y", "lap-1-imu-acceleration-z",
     ]);
     const speed = speedOption.series.find((series: { id: string }) => series.id === "lap-2-speed")!;
     expect(speed.data[1][0]).toBe(2);
     expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
     expect(screen.getByText(/Focused − Reference/)).toBeVisible();
-    expect(screen.getByText(/raw focused-lap device axes/)).toBeVisible();
+    expect(screen.getByText(/raw device axes for each selected lap/)).toBeVisible();
     expect(screen.getByText(/Device X \+0\.10 g.*Device Y -0\.20 g.*Device Z \+1\.05 g/)).toBeVisible();
     expect(screen.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
     expect(screen.getByText("Focused lap", { selector: "dt" })).toBeInTheDocument();
@@ -151,7 +153,7 @@ describe("segment telemetry chart", () => {
     render(<I18nProvider><SegmentTelemetryChart
       analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
       focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
-      synchronizedAcceleration={acceleration()} layout="three-column"
+      synchronizedAccelerationByLap={accelerationByLap()} layout="three-column"
       onLayout={onLayout} onCursor={vi.fn()}
     /></I18nProvider>);
 
@@ -166,7 +168,7 @@ describe("segment telemetry chart", () => {
     render(<I18nProvider><SegmentTelemetryChart
       analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
       focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
-      synchronizedAcceleration={acceleration()} cursorDistanceMeters={50}
+      synchronizedAccelerationByLap={accelerationByLap()} cursorDistanceMeters={50}
       layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
     /></I18nProvider>);
 
@@ -192,6 +194,43 @@ describe("segment telemetry chart", () => {
     expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
   });
 
+  it("resets zoom atomically when the analysis scope changes and ignores a late prior-scope zoom event", () => {
+    const initial = analysis();
+    const view = render(<I18nProvider><SegmentTelemetryChart
+      analysis={initial} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
+      synchronizedAccelerationByLap={accelerationByLap()} cursorDistanceMeters={50}
+      layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
+    /></I18nProvider>);
+    const priorScopeZoomHandler = chartPanelSpy.onZoomReferences[0];
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom Speed" }));
+    expect(chartOption("Speed").dataZoom).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "inside", start: 25, end: 70 }),
+    ]));
+
+    const changed = analysis();
+    changed.scope = { kind: "section", sectionId: "c2" };
+    changed.range = { startDistanceMeters: 1100, endDistanceMeters: 1300 };
+    view.rerender(<I18nProvider><SegmentTelemetryChart
+      analysis={changed} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
+      synchronizedAccelerationByLap={accelerationByLap()} cursorDistanceMeters={50}
+      layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
+    /></I18nProvider>);
+
+    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+      expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "inside", start: 0, end: 100 }),
+      ]));
+    }
+
+    act(() => priorScopeZoomHandler?.({ start: 40, end: 60 }));
+    expect(chartOption("Speed").dataZoom).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "inside", start: 0, end: 100 }),
+    ]));
+  });
+
   it("keeps metric cards stable when acceleration or reference evidence is unavailable", () => {
     const first = render(<I18nProvider><SegmentTelemetryChart
       analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
@@ -204,7 +243,7 @@ describe("segment telemetry chart", () => {
 
     render(<I18nProvider><SegmentTelemetryChart
       analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
-      focusedLapId="lap-2" axis="distance" synchronizedAcceleration={acceleration()}
+      focusedLapId="lap-2" axis="distance" synchronizedAccelerationByLap={accelerationByLap()}
       layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
     /></I18nProvider>);
     expect(screen.getByText("Select a reference lap to calculate Delta-T")).toBeVisible();
@@ -219,7 +258,7 @@ describe("segment telemetry chart", () => {
     render(<I18nProvider><SegmentTelemetryChart
       analysis={empty} visibleLapIds={["lap-1", "lap-2"]}
       focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
-      synchronizedAcceleration={acceleration()} layout="three-column"
+      synchronizedAccelerationByLap={accelerationByLap()} layout="three-column"
       onLayout={vi.fn()} onCursor={onCursor}
     /></I18nProvider>);
 
@@ -267,6 +306,31 @@ describe("segment telemetry chart", () => {
       visibleLapIds.map((lapId) => `${lapId}-speed`),
     ));
     expect(option.legend.data).toHaveLength(7);
+  });
+
+  it("caps the combined rendered IMU sample budget across every visible lap", () => {
+    const manyLaps = analysisWithLapCount(8);
+    const visibleLapIds = manyLaps.records.map((record) => record.lapId);
+    const accelerationByVisibleLap = Object.fromEntries(visibleLapIds.map((lapId) => [
+      lapId,
+      accelerationWithSampleCount(10_000),
+    ]));
+    const option = buildSegmentTelemetryMetricOption(
+      manyLaps,
+      visibleLapIds,
+      "distance",
+      "lap-8",
+      "lap-1",
+      labels(),
+      "imu-acceleration",
+      accelerationByVisibleLap,
+      { start: 0, end: 100 },
+      true,
+    ) as { series: Array<{ id: string; data: unknown[] }> };
+
+    expect(option.series).toHaveLength(24);
+    expect(option.series.reduce((total, series) => total + series.data.length, 0))
+      .toBeLessThanOrEqual(MAX_RENDERED_IMU_SAMPLES * 3);
   });
 
   it("bounds rendered IMU points while preserving endpoint and axis extrema", () => {
@@ -321,6 +385,28 @@ function acceleration(method: SynchronizedAccelerationSeries["method"] = "line-o
       accelYG: index * -0.2,
       accelZG: 1 + index * 0.05,
     })),
+  };
+}
+
+function accelerationWithSampleCount(count: number): SynchronizedAccelerationSeries {
+  return {
+    method: "sensor-clock",
+    samples: Array.from({ length: count }, (_, index) => ({
+      sensorIndex: index,
+      sourceIndex: index,
+      distanceMeters: index,
+      elapsedSeconds: index / 100,
+      accelXG: Math.sin(index / 10),
+      accelYG: Math.cos(index / 10),
+      accelZG: 1 + Math.sin(index / 20),
+    })),
+  };
+}
+
+function accelerationByLap(focusedMethod: SynchronizedAccelerationSeries["method"] = "line-order"): Record<string, SynchronizedAccelerationSeries> {
+  return {
+    "lap-1": acceleration("timestamp"),
+    "lap-2": acceleration(focusedMethod),
   };
 }
 

@@ -22,20 +22,54 @@ interface MappedAccelerationSample extends SynchronizedAccelerationSample {
   sensorElapsedSeconds: number;
 }
 
+interface PreparedSensorSample {
+  sensor: SensorPoint;
+  key: number;
+}
+
+export interface AccelerationSynchronizationContext {
+  points: GpsPoint[];
+  sensorElapsedByPoint: Array<number | undefined>;
+  sensorsByMethod: Record<SensorSynchronizationMethod, PreparedSensorSample[]>;
+}
+
 export function synchronizeAccelerationToTrajectory(
   points: GpsPoint[],
   sensors: SensorPoint[],
   trajectory: SegmentTrajectorySample[],
 ): SynchronizedAccelerationSeries | undefined {
-  if (!points.length || !sensors.length || trajectory.length < 2) return undefined;
-  const sensorElapsedByPoint = inferSensorElapsedByPoint(points, sensors);
-  const anchors = trajectoryAnchors(points, trajectory, sensorElapsedByPoint);
+  const context = prepareAccelerationSynchronization(points, sensors);
+  return context ? synchronizeAccelerationWithContext(context, trajectory) : undefined;
+}
+
+export function prepareAccelerationSynchronization(
+  points: GpsPoint[],
+  sensors: SensorPoint[],
+): AccelerationSynchronizationContext | undefined {
+  if (!points.length || !sensors.length) return undefined;
+  return {
+    points,
+    sensorElapsedByPoint: inferSensorElapsedByPoint(points, sensors),
+    sensorsByMethod: {
+      timestamp: prepareSensors(sensors, "timestamp"),
+      "sensor-clock": prepareSensors(sensors, "sensor-clock"),
+      "line-order": prepareSensors(sensors, "line-order"),
+    },
+  };
+}
+
+export function synchronizeAccelerationWithContext(
+  context: AccelerationSynchronizationContext,
+  trajectory: SegmentTrajectorySample[],
+): SynchronizedAccelerationSeries | undefined {
+  if (trajectory.length < 2) return undefined;
+  const anchors = trajectoryAnchors(context.points, trajectory, context.sensorElapsedByPoint);
   if (anchors.length < 2) return undefined;
 
-  const method = synchronizationMethod(anchors, sensors);
+  const method = synchronizationMethod(anchors, context.sensorsByMethod);
   const keyedAnchors = monotonicAnchors(anchors, method);
   if (keyedAnchors.length < 2) return undefined;
-  const mapped = mapSensors(sensors, keyedAnchors, method);
+  const mapped = mapSensors(context.sensorsByMethod[method], keyedAnchors, method);
   const samples = coalesceSamples(mapped);
   return samples.length ? { method, samples } : undefined;
 }
@@ -115,10 +149,10 @@ function inferSensorElapsedByPoint(points: GpsPoint[], sensors: SensorPoint[]): 
 
 function synchronizationMethod(
   anchors: TrajectoryAnchor[],
-  sensors: SensorPoint[],
+  sensorsByMethod: AccelerationSynchronizationContext["sensorsByMethod"],
 ): SensorSynchronizationMethod {
   const gpsHasTimestamps = anchors.every((anchor) => anchor.timestampNanos !== undefined);
-  const sensorsHaveTimestamps = sensors.some((sensor) => finiteNumber(sensor.timestampNanos) !== undefined);
+  const sensorsHaveTimestamps = sensorsByMethod.timestamp.length > 0;
   if (gpsHasTimestamps && sensorsHaveTimestamps) return "timestamp";
   return monotonicAnchors(anchors, "sensor-clock").length >= 2 ? "sensor-clock" : "line-order";
 }
@@ -139,7 +173,7 @@ function monotonicAnchors(
 }
 
 function mapSensors(
-  sensors: SensorPoint[],
+  sensors: PreparedSensorSample[],
   anchors: TrajectoryAnchor[],
   method: SensorSynchronizationMethod,
 ): MappedAccelerationSample[] {
@@ -147,13 +181,11 @@ function mapSensors(
   const lastKey = anchorKey(anchors.at(-1)!, method)!;
   const result: MappedAccelerationSample[] = [];
   let anchorIndex = 0;
-  let previousSensorKey = Number.NEGATIVE_INFINITY;
+  const firstSensorIndex = lowerBoundSensorKey(sensors, firstKey);
 
-  for (const sensor of sensors) {
-    const key = sensorKey(sensor, method);
-    if (key === undefined || key < previousSensorKey) continue;
-    previousSensorKey = key;
-    if (key < firstKey || key > lastKey) continue;
+  for (let sensorIndex = firstSensorIndex; sensorIndex < sensors.length; sensorIndex += 1) {
+    const { sensor, key } = sensors[sensorIndex];
+    if (key > lastKey) break;
     while (
       anchorIndex < anchors.length - 2 &&
       key > anchorKey(anchors[anchorIndex + 1], method)!
@@ -178,6 +210,32 @@ function mapSensors(
     });
   }
   return result;
+}
+
+function prepareSensors(
+  sensors: SensorPoint[],
+  method: SensorSynchronizationMethod,
+): PreparedSensorSample[] {
+  const result: PreparedSensorSample[] = [];
+  let previousKey = Number.NEGATIVE_INFINITY;
+  for (const sensor of sensors) {
+    const key = sensorKey(sensor, method);
+    if (key === undefined || key < previousKey) continue;
+    previousKey = key;
+    result.push({ sensor, key });
+  }
+  return result;
+}
+
+function lowerBoundSensorKey(sensors: PreparedSensorSample[], target: number): number {
+  let low = 0;
+  let high = sensors.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (sensors[middle].key < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
 }
 
 function coalesceSamples(samples: MappedAccelerationSample[]): SynchronizedAccelerationSample[] {

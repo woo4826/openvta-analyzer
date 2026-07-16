@@ -1,8 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { synchronizeAccelerationToTrajectory } from "../sensorSynchronization";
+import {
+  prepareAccelerationSynchronization,
+  synchronizeAccelerationToTrajectory,
+  synchronizeAccelerationWithContext,
+} from "../sensorSynchronization";
 import { GRAVITY_MPS2, type GpsPoint, type SegmentTrajectorySample, type SensorPoint } from "../types";
 
 describe("sensor synchronization", () => {
+  it("reuses one prepared GPS/sensor context across multiple lap trajectories", () => {
+    const points = pointsWithNanos();
+    const sensors = [sensor({ lineNumber: 15, timestampNanos: 5_000_000_000, elapsedSeconds: 5 })];
+    const context = prepareAccelerationSynchronization(points, sensors);
+
+    expect(context).toBeDefined();
+    expect(synchronizeAccelerationWithContext(context!, trajectory())).toEqual(
+      synchronizeAccelerationToTrajectory(points, sensors, trajectory()),
+    );
+    expect(synchronizeAccelerationWithContext(context!, [
+      trajectorySample({ sourceIndex: 0, distanceMeters: 0, elapsedSeconds: 0 }),
+      trajectorySample({ sourceIndex: 2, distanceMeters: 200, elapsedSeconds: 20 }),
+    ])?.samples[0]).toMatchObject({ distanceMeters: 100, elapsedSeconds: 10 });
+  });
+
   it("interpolates sensors by monotonic timestamp when both streams provide nanos", () => {
     const result = synchronizeAccelerationToTrajectory(
       pointsWithNanos(),

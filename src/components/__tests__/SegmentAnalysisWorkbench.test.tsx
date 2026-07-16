@@ -17,9 +17,9 @@ vi.mock("../SegmentTrajectoryMap", () => ({
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAcceleration, layout, onLayout, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; layout: SegmentTelemetryLayout; onLayout: (layout: SegmentTelemetryLayout) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAccelerationByLap = {}, layout, onLayout, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAccelerationByLap?: Record<string, { method: string; samples: unknown[] }>; layout: SegmentTelemetryLayout; onLayout: (layout: SegmentTelemetryLayout) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
     <div data-testid="chart-state">
-      roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}
+      roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={Object.entries(synchronizedAccelerationByLap).map(([lapId, series]) => `${lapId}:${series.method}:${series.samples.length}`).join("|")}
       <span data-testid="telemetry-layout">{layout}</span>
       <button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button>
       <button type="button" onClick={() => onLayout("two-plus-one")}>Choose 2+1 telemetry layout</button>
@@ -206,7 +206,7 @@ describe("SegmentAnalysisWorkbench", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Focused lap" }), "lap-2");
     expect(screen.getByTestId("map-state")).toHaveTextContent("roles=lap-2,lap-1");
     expect(screen.getByTestId("chart-state")).toHaveTextContent("roles=lap-2,lap-1");
-    expect(screen.getByTestId("chart-state")).toHaveTextContent("sync=timestamp:1");
+    expect(screen.getByTestId("chart-state")).toHaveTextContent("lap-2:timestamp:1");
     await user.click(screen.getByRole("button", { name: "Select graph point" }));
     expect(onSelectedPointIndex).toHaveBeenCalledWith(4);
     expect(screen.getByTestId("map-state")).toHaveTextContent("cursor=56");

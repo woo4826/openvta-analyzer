@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import type {
   SegmentAnalysisResult,
@@ -11,6 +11,7 @@ import { SegmentTelemetryTrackInset } from "./SegmentTelemetryTrackInset";
 import {
   buildSegmentTelemetryMetricOption,
   segmentTelemetryDomainMaximum,
+  type SegmentAccelerationSeriesByLap,
   type CoreSegmentTelemetryMetric,
   type SegmentTelemetryLabels,
   type SegmentTelemetryZoomWindow,
@@ -24,7 +25,7 @@ interface SegmentTelemetryChartProps {
   focusedLapId?: string;
   referenceLapId?: string;
   axis: SegmentAxis;
-  synchronizedAcceleration?: SynchronizedAccelerationSeries;
+  synchronizedAccelerationByLap?: SegmentAccelerationSeriesByLap;
   cursorDistanceMeters?: number;
   layout?: SegmentTelemetryLayout;
   onLayout?: (layout: SegmentTelemetryLayout) => void;
@@ -33,6 +34,7 @@ interface SegmentTelemetryChartProps {
 
 const TELEMETRY_LAYOUTS: SegmentTelemetryLayout[] = ["three-column", "two-plus-one", "three-stacked"];
 const CORE_METRICS: CoreSegmentTelemetryMetric[] = ["speed", "delta", "imu-acceleration"];
+const FULL_ZOOM_WINDOW: SegmentTelemetryZoomWindow = { start: 0, end: 100 };
 
 export function SegmentTelemetryChart({
   analysis,
@@ -40,7 +42,7 @@ export function SegmentTelemetryChart({
   focusedLapId,
   referenceLapId,
   axis,
-  synchronizedAcceleration,
+  synchronizedAccelerationByLap,
   cursorDistanceMeters: controlledCursorDistanceMeters,
   layout = "three-column",
   onLayout = () => undefined,
@@ -48,7 +50,21 @@ export function SegmentTelemetryChart({
 }: SegmentTelemetryChartProps) {
   const { t } = useI18n();
   const interpretationId = useId();
-  const [zoomWindow, setZoomWindow] = useState<SegmentTelemetryZoomWindow>({ start: 0, end: 100 });
+  const telemetryContextKey = [
+    analysis.scope.kind,
+    analysis.scope.kind === "section" ? analysis.scope.sectionId : analysis.scope.kind === "range" ? analysis.scope.source : "whole",
+    analysis.range.startDistanceMeters,
+    analysis.range.endDistanceMeters,
+    axis,
+    focusedLapId,
+    referenceLapId,
+    visibleLapIds.join(","),
+  ].join("|");
+  const [zoomState, setZoomState] = useState<{ contextKey: string; window: SegmentTelemetryZoomWindow }>(() => ({
+    contextKey: telemetryContextKey,
+    window: FULL_ZOOM_WINDOW,
+  }));
+  const zoomWindow = zoomState.contextKey === telemetryContextKey ? zoomState.window : FULL_ZOOM_WINDOW;
   const scopeLength = analysis.range.endDistanceMeters - analysis.range.startDistanceMeters;
   const cursorDistanceMeters = controlledCursorDistanceMeters ?? Math.max(0, scopeLength / 2);
   const labels = useMemo<SegmentTelemetryLabels>(() => ({
@@ -71,6 +87,7 @@ export function SegmentTelemetryChart({
   const focused = analysis.records.find((record) => record.lapId === focusedLapId)
     ?? analysis.records.find((record) => record.lapId === referenceLapId);
   const reference = analysis.records.find((record) => record.lapId === referenceLapId);
+  const focusedAcceleration = focusedLapId ? synchronizedAccelerationByLap?.[focusedLapId] : undefined;
   const cursorX = axis === "distance"
     ? cursorDistanceMeters
     : nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters)?.elapsedSeconds;
@@ -82,7 +99,7 @@ export function SegmentTelemetryChart({
     referenceLapId,
     labels,
     metric,
-    synchronizedAcceleration,
+    synchronizedAccelerationByLap,
     zoomWindow,
     metric === "imu-acceleration",
   )])) as Record<CoreSegmentTelemetryMetric, ReturnType<typeof buildSegmentTelemetryMetricOption>>, [
@@ -91,7 +108,7 @@ export function SegmentTelemetryChart({
     focusedLapId,
     labels,
     referenceLapId,
-    synchronizedAcceleration,
+    synchronizedAccelerationByLap,
     visibleLapIds,
     zoomWindow,
   ]);
@@ -100,13 +117,9 @@ export function SegmentTelemetryChart({
     [analysis.records, visibleLapIds],
   );
   const commonDomainMaximum = useMemo(
-    () => segmentTelemetryDomainMaximum(visibleRecords, axis, synchronizedAcceleration),
-    [axis, synchronizedAcceleration, visibleRecords],
+    () => segmentTelemetryDomainMaximum(visibleRecords, axis, synchronizedAccelerationByLap),
+    [axis, synchronizedAccelerationByLap, visibleRecords],
   );
-
-  useEffect(() => {
-    setZoomWindow((current) => current.start === 0 && current.end === 100 ? current : { start: 0, end: 100 });
-  }, [analysis.range.endDistanceMeters, analysis.range.startDistanceMeters, axis, focusedLapId]);
 
   const selectPoint = useCallback((sourceIndex: number, domainValue?: number) => {
     const trajectory = focused?.trajectory ?? [];
@@ -125,15 +138,19 @@ export function SegmentTelemetryChart({
   }, [selectPoint]);
   const focusedSample = nearestDistanceSample(focused?.trajectory ?? [], cursorDistanceMeters);
   const referenceSample = nearestDistanceSample(reference?.trajectory ?? [], cursorDistanceMeters);
-  const accelerationSample = nearestAccelerationSample(synchronizedAcceleration, cursorDistanceMeters);
+  const accelerationSample = nearestAccelerationSample(focusedAcceleration, cursorDistanceMeters);
   const updateZoomWindow = useCallback((next: SegmentTelemetryZoomWindow) => {
-    setZoomWindow((current) => current.start === next.start && current.end === next.end ? current : next);
-  }, []);
+    setZoomState((current) => current.contextKey === telemetryContextKey
+      && current.window.start === next.start
+      && current.window.end === next.end
+      ? current
+      : { contextKey: telemetryContextKey, window: next });
+  }, [telemetryContextKey]);
   const zoomToBrushRange = useCallback((start: number, end: number) => {
     const next = domainRangeToZoomWindow(start, end, commonDomainMaximum);
     if (next) updateZoomWindow(next);
   }, [commonDomainMaximum, updateZoomWindow]);
-  const resetZoom = useCallback(() => updateZoomWindow({ start: 0, end: 100 }), [updateZoomWindow]);
+  const resetZoom = useCallback(() => updateZoomWindow(FULL_ZOOM_WINDOW), [updateZoomWindow]);
   const isZoomed = zoomWindow.start > 0.001 || zoomWindow.end < 99.999;
   const selectCursorKey = useCallback((action: CursorKeyAction) => {
     const trajectory = focused?.trajectory ?? [];
@@ -180,7 +197,7 @@ export function SegmentTelemetryChart({
   const metricUnavailable = (metric: CoreSegmentTelemetryMetric): string | undefined => {
     if (!focused?.trajectory.length) return t("lap.workbench.telemetryUnavailable");
     if (metric === "delta" && !reference?.trajectory.length) return t("lap.workbench.referenceRequired");
-    if (metric === "imu-acceleration" && !synchronizedAcceleration?.samples.length) {
+    if (metric === "imu-acceleration" && !visibleLapIds.some((lapId) => synchronizedAccelerationByLap?.[lapId]?.samples.length)) {
       return t("lap.workbench.measuredAccelerationUnavailable");
     }
     return undefined;
@@ -244,7 +261,7 @@ export function SegmentTelemetryChart({
             <div><dt>{t("lap.workbench.focusedLap")}</dt><dd>{formatSample(focusedSample)}</dd></div>
             <div><dt>{t("lap.workbench.referenceLap")}</dt><dd>{formatSample(referenceSample)}</dd></div>
             <div><dt>{t("lap.workbench.currentMeasuredAcceleration")}</dt><dd>{formatAccelerationSample(accelerationSample)}</dd></div>
-            <div><dt>{t("lap.workbench.imuSync")}</dt><dd>{synchronizationLabel(synchronizedAcceleration, t)}</dd></div>
+            <div><dt>{t("lap.workbench.imuSync")}</dt><dd>{synchronizationLabel(focusedAcceleration, t)}</dd></div>
           </dl>
         </div>
       </div>
