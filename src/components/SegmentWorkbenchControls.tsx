@@ -2,22 +2,16 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import type {
-  AnalysisScope,
   SegmentLapVisibility,
   SegmentWidgetId,
-  TrackSection,
 } from "../domain/types";
 import { SEGMENT_WIDGET_IDS, canHideWidget } from "../domain/segmentWorkbenchPreferences";
 import type { SegmentAxis } from "../app/useSegmentWorkbench";
 import { useI18n } from "../i18n/useI18n";
-import { SegmentRangeNavigator } from "./SegmentRangeNavigator";
 import { useContainedPanelFocus } from "./useContainedPanelFocus";
 
 interface SegmentWorkbenchControlsProps {
   open: boolean;
-  scope: AnalysisScope;
-  sections: TrackSection[];
-  totalDistanceMeters: number;
   lapVisibility: SegmentLapVisibility;
   axis: SegmentAxis;
   includePartialLapSections: boolean;
@@ -29,17 +23,12 @@ interface SegmentWorkbenchControlsProps {
   onAxis: (axis: SegmentAxis) => void;
   onIncludePartialLapSections: (include: boolean) => void;
   onSnapToSections: (snap: boolean) => void;
-  onWholeLap: () => void;
-  onRange: (startDistanceMeters: number, endDistanceMeters: number) => void;
   onWidgetVisibility: (widgetId: SegmentWidgetId, visible: boolean) => void;
   onResetLayout: () => void;
 }
 
 export function SegmentWorkbenchControls({
   open,
-  scope,
-  sections,
-  totalDistanceMeters,
   lapVisibility,
   axis,
   includePartialLapSections,
@@ -51,8 +40,6 @@ export function SegmentWorkbenchControls({
   onAxis,
   onIncludePartialLapSections,
   onSnapToSections,
-  onWholeLap,
-  onRange,
   onWidgetVisibility,
   onResetLayout,
 }: SegmentWorkbenchControlsProps) {
@@ -110,15 +97,6 @@ export function SegmentWorkbenchControls({
               <small>{lapVisibility === "focus-only" ? t("lap.workbench.referenceStillCalculates") : t("lap.workbench.visibleLapsHelp")}</small>
             </label>
           </fieldset>
-
-          <SegmentRangeNavigator
-            scope={scope}
-            sections={sections}
-            totalDistanceMeters={totalDistanceMeters}
-            snapToSections={snapToSections}
-            onWholeLap={onWholeLap}
-            onRange={onRange}
-          />
 
           <fieldset className="segment-control-group">
             <legend>{t("lap.workbench.chartSettings")}</legend>

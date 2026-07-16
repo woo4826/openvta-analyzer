@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LineString } from "geojson";
-import { ChevronLeft, ChevronRight, Download, Save, Settings2 } from "lucide-react";
+import { Download, Save, Settings2 } from "lucide-react";
 import { useSegmentWorkbench } from "../app/useSegmentWorkbench";
 import { downloadText } from "../domain/export";
 import { projectCoordinateToLineProgress, routeDistanceMeters } from "../domain/geometry";
@@ -32,7 +32,7 @@ import { SegmentTelemetryChart } from "./SegmentTelemetryChart";
 import { SegmentTrajectoryMap } from "./SegmentTrajectoryMap";
 import { SegmentVariationChart } from "./SegmentVariationChart";
 import { SegmentWorkbenchControls } from "./SegmentWorkbenchControls";
-import { SegmentScopeRibbon } from "./SegmentScopeRibbon";
+import { SegmentScopeNavigator } from "./SegmentScopeNavigator";
 import { SegmentDashboard } from "./SegmentDashboard";
 import { DashboardWidget } from "./DashboardWidget";
 
@@ -156,15 +156,6 @@ export function SegmentAnalysisWorkbench({
       });
   const focusOptions = workbench.analysis.records.filter((record) => record.trajectory.length > 1);
   const referenceOptions = workbench.analysis.records.filter((record) => record.completion === "complete" && record.eligibleForBest && record.trajectory.length > 1);
-  const selectedSectionId = workbench.scope.kind === "section" ? workbench.scope.sectionId : undefined;
-  const navigationIndex = selectedSectionId
-    ? workbench.navigationSections.findIndex((section) => section.id === selectedSectionId)
-    : -1;
-  const selectAdjacentSection = (direction: -1 | 1) => {
-    const nextIndex = navigationIndex < 0 && direction === 1 ? 0 : navigationIndex + direction;
-    const nextSection = workbench.navigationSections[nextIndex];
-    if (nextSection) workbench.selectSection(nextSection.id);
-  };
   const exportCsv = () => {
     const fileName = `${safeBaseName(sourceName)}.segment-analysis.csv`;
     downloadText(fileName, segmentAnalysisCsv(workbench.analysis), "text/csv");
@@ -336,19 +327,8 @@ export function SegmentAnalysisWorkbench({
           <small>{t("lap.workbench.pairwiseDelta")}</small>
           <strong className={pairwiseDeltaTone(pairwiseEvidence?.timeDeltaSeconds)}>{formatPairwiseTime(pairwiseEvidence?.timeDeltaSeconds, t)}</strong>
         </div>
-        <div className="comparison-navigation">
-          <button type="button" className="icon-button button ghost" aria-label={t("lap.workbench.previousSection")} disabled={navigationIndex <= 0} onClick={() => selectAdjacentSection(-1)}>
-            <ChevronLeft size={18} aria-hidden />
-          </button>
-          <button type="button" className="icon-button button ghost" aria-label={t("lap.workbench.nextSection")} disabled={workbench.navigationSections.length === 0 || navigationIndex >= workbench.navigationSections.length - 1} onClick={() => selectAdjacentSection(1)}>
-            <ChevronRight size={18} aria-hidden />
-          </button>
-        </div>
         <SegmentWorkbenchControls
           open={controlsOpen}
-          scope={workbench.scope}
-          sections={profile.sections}
-          totalDistanceMeters={totalDistanceMeters}
           lapVisibility={preferences.lapVisibility}
           axis={workbench.axis}
           includePartialLapSections={includePartialLapSections}
@@ -360,8 +340,6 @@ export function SegmentAnalysisWorkbench({
           onAxis={workbench.setAxis}
           onIncludePartialLapSections={onIncludePartialLapSections}
           onSnapToSections={(snapToSections) => updatePreferences((current) => ({ ...current, snapToSections }))}
-          onWholeLap={workbench.resetScope}
-          onRange={(start, end) => workbench.selectRange(start, end, "manual")}
           onWidgetVisibility={(widgetId, visible) => updatePreferences((current) => {
             if (!visible && !canHideWidget(current.visibleWidgets, widgetId)) return current;
             return { ...current, visibleWidgets: { ...current.visibleWidgets, [widgetId]: visible } };
@@ -374,13 +352,16 @@ export function SegmentAnalysisWorkbench({
         <span className="sr-only" role="status" aria-live="polite">{focused ? workbenchLapLabel(focused, t) : "—"} {t("lap.workbench.focusVs")} {reference ? workbenchLapLabel(reference, t) : "—"} · {scopeName}</span>
       </div>
 
-      <SegmentScopeRibbon
+      <SegmentScopeNavigator
         scope={workbench.scope}
         filter={workbench.filter}
-        sections={workbench.navigationSections}
+        sections={profile.sections}
+        totalDistanceMeters={totalDistanceMeters}
+        snapToSections={preferences.snapToSections}
         onWholeLap={workbench.resetScope}
         onFilter={workbench.setFilter}
         onSection={workbench.selectSection}
+        onRange={(start, end) => workbench.selectRange(start, end, "manual")}
       />
       </div>
 
