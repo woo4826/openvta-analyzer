@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import type { LineString } from "geojson";
+import { useCallback, useMemo } from "react";
+import type { LineString, Position } from "geojson";
 import type {
   ActiveSegment,
   AxisAlignedRegion,
@@ -21,6 +21,11 @@ import {
 } from "./RouteMap";
 import { useI18n } from "../i18n/useI18n";
 import { SegmentLapLayerControls } from "./SegmentLapLayerControls";
+import { haversineMeters } from "../domain/geometry";
+import {
+  sectionMidpointSelection,
+  type MapSectionSelection,
+} from "./mapSectionSelection";
 
 const EMPTY_LAYER_OVERRIDES: LapMapLayerOverrides = {};
 
@@ -104,6 +109,23 @@ export function SegmentTrajectoryMap({
     width: 18,
     opacity: 0,
   }])), [sections]);
+  const selectSectionFromMap = useCallback((sectionId: string, selection?: MapSectionSelection) => {
+    const section = sections.find((candidate) => candidate.id === sectionId);
+    const fallbackDistanceMeters = section
+      ? sectionMidpointSelection(section).distanceMeters
+      : analysis.range.startDistanceMeters;
+    const sample = selection?.coordinate
+      ? nearestCoordinateSample(focusedRecord, selection.coordinate)
+      : nearestSample(
+          focusedRecord,
+          Math.max(
+            0,
+            (selection?.distanceMeters ?? fallbackDistanceMeters) - analysis.range.startDistanceMeters,
+          ),
+        );
+    if (sample) onSelectedIndex(sample.sourceIndex);
+    onSectionSelect(sectionId);
+  }, [analysis.range.startDistanceMeters, focusedRecord, onSectionSelect, onSelectedIndex, sections]);
 
   const ghostMarkers = useMemo((): MapGhostMarker[] => {
     const scopeLength = analysis.range.endDistanceMeters - analysis.range.startDistanceMeters;
@@ -171,7 +193,7 @@ export function SegmentTrajectoryMap({
         fitPoints={focusedInteractionPoints}
         followSelectedPoint={false}
         mapAriaLabel={t("lap.workbench.trajectoryComparison")}
-        onSectionSelect={onSectionSelect}
+        onSectionSelect={selectSectionFromMap}
         onSelectedIndex={onSelectedIndex}
         onSegmentChange={onSegmentChange}
         onRegionChange={onRegionChange}
@@ -203,12 +225,23 @@ function toGpsPoint(
   };
 }
 
-function nearestSample(record: SegmentLapRecord, distanceMeters: number) {
+function nearestSample(record: SegmentLapRecord | undefined, distanceMeters: number) {
+  if (!record) return undefined;
   return record.trajectory.reduce((nearest, sample) =>
     !nearest || Math.abs(sample.distanceMeters - distanceMeters) < Math.abs(nearest.distanceMeters - distanceMeters)
       ? sample
       : nearest,
   undefined as SegmentLapRecord["trajectory"][number] | undefined);
+}
+
+function nearestCoordinateSample(record: SegmentLapRecord | undefined, coordinate: Position) {
+  if (!record) return undefined;
+  return record.trajectory.reduce((nearest, sample) => {
+    if (!nearest) return sample;
+    const sampleDistance = haversineMeters([sample.longitude, sample.latitude], coordinate);
+    const nearestDistance = haversineMeters([nearest.longitude, nearest.latitude], coordinate);
+    return sampleDistance < nearestDistance ? sample : nearest;
+  }, undefined as SegmentLapRecord["trajectory"][number] | undefined);
 }
 
 function uniqueRecords(records: Array<SegmentLapRecord | undefined>): SegmentLapRecord[] {

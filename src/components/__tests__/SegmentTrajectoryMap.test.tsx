@@ -23,6 +23,15 @@ vi.mock("../RouteMap", () => ({
       aria-label={props.mapAriaLabel}
     >
       {props.ghostMarkers?.map((ghost) => <span key={ghost.id}>{ghost.label}</span>)}
+      <button type="button" onClick={() => props.onSectionSelect?.("c1", {
+        sectionId: "c1",
+        distanceMeters: 180,
+        coordinate: [128.0019, 38.00004],
+      })}>Select section by coordinate</button>
+      <button type="button" onClick={() => props.onSectionSelect?.("c1", {
+        sectionId: "c1",
+        distanceMeters: 150,
+      })}>Select section by distance</button>
     </div>
   ),
 }));
@@ -157,6 +166,60 @@ describe("SegmentTrajectoryMap", () => {
     );
 
     expect(screen.getByTestId("trajectory-route-map")).not.toHaveAttribute("data-heat");
+  });
+
+  it("moves the shared cursor to the clicked coordinate on the focused lap", async () => {
+    const user = userEvent.setup();
+    const onSelectedIndex = vi.fn();
+    const onSectionSelect = vi.fn();
+    render(
+      <I18nProvider>
+        <SegmentTrajectoryMap
+          analysis={analysis()}
+          points={points()}
+          centerline={{ type: "LineString", coordinates: [[128, 38], [128.002, 38]] }}
+          sections={[{ id: "c1", name: "Corner 1", kind: "corner-right", startDistanceMeters: 100, endDistanceMeters: 200 }]}
+          settings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+          selectedIndex={0}
+          focusedLapId="lap-2"
+          referenceLapId="lap-1"
+          onSelectedIndex={onSelectedIndex}
+          onSectionSelect={onSectionSelect}
+        />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Select section by coordinate" }));
+
+    expect(onSelectedIndex).toHaveBeenCalledWith(2);
+    expect(onSectionSelect).toHaveBeenCalledWith("c1");
+  });
+
+  it("converts absolute section distance into the current scope before moving the cursor", async () => {
+    const user = userEvent.setup();
+    const result = analysis();
+    result.range = { startDistanceMeters: 100, endDistanceMeters: 200 };
+    const onSelectedIndex = vi.fn();
+    render(
+      <I18nProvider>
+        <SegmentTrajectoryMap
+          analysis={result}
+          points={points()}
+          centerline={{ type: "LineString", coordinates: [[128, 38], [128.002, 38]] }}
+          sections={[{ id: "c1", name: "Corner 1", kind: "corner-right", startDistanceMeters: 100, endDistanceMeters: 200 }]}
+          settings={{ pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] }}
+          selectedIndex={0}
+          focusedLapId="lap-2"
+          referenceLapId="lap-1"
+          onSelectedIndex={onSelectedIndex}
+          onSectionSelect={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Select section by distance" }));
+
+    expect(onSelectedIndex).toHaveBeenCalledWith(1);
   });
 });
 
