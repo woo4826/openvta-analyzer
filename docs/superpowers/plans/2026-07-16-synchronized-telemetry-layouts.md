@@ -613,6 +613,8 @@ gh run list --commit "$(git rev-parse HEAD)" --json databaseId,workflowName,stat
 Watch both CI and Deploy Pages with `gh run watch <id> --exit-status` until both
 exit 0.
 
+Deployment audit note: the first push (`22585fb`) deployed Pages successfully, but CI exposed a deterministic test race under `CI=1`: the test read the first hover value before the chart's intentional `requestAnimationFrame` throttle flushed, so a second move replaced the pending domain. The browser assertion now waits for the first hover update before issuing the second. The CI-shaped import scenario passed 6/6 repeated desktop/mobile runs and the full 16-scenario browser suite locally before repush.
+
 - [ ] **Step 4: Run production Aside verification**
 
 Open a cache-busted `https://woo4826.github.io/openvta-analyzer/`, load the

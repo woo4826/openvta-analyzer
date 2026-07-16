@@ -195,7 +195,12 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     const telemetryBox = await telemetryCanvas.boundingBox();
     expect(telemetryBox).not.toBeNull();
     await page.mouse.move(2, 2);
+    const cursorBeforeEarlyHover = await cursorDistance.textContent();
     await page.mouse.move(telemetryBox!.x + 112, telemetryBox!.y + telemetryBox!.height * 0.58);
+    await expect.poll(
+      () => cursorDistance.textContent(),
+      { message: `${metric} chart first hover should move the shared cursor` },
+    ).not.toBe(cursorBeforeEarlyHover);
     const earlyCursor = await cursorDistance.textContent();
     await page.mouse.move(telemetryBox!.x + telemetryBox!.width - 36, telemetryBox!.y + telemetryBox!.height * 0.58);
     await expect.poll(
