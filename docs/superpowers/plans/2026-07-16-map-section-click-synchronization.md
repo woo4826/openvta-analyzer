@@ -411,7 +411,7 @@ git commit -m "test: verify map section click synchronization"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-16-map-section-click-synchronization.md`
 
-- [ ] **Step 1: Push main**
+- [x] **Step 1: Push main**
 
 Run:
 
@@ -422,18 +422,30 @@ git push origin main
 
 Expected: clean `main` advances on `origin/main`.
 
-- [ ] **Step 2: Monitor CI and Pages**
+- [x] **Step 2: Monitor CI and Pages**
 
 Run `gh run list --commit <sha>` and `gh run watch <run-id> --exit-status` for CI and Deploy Pages.
 
 Expected: both workflows finish successfully for the pushed SHA.
 
-- [ ] **Step 3: Smoke-test production with Aside**
+- [x] **Step 3: Smoke-test production with Aside**
 
 Open `https://woo4826.github.io/openvta-analyzer/?v=<sha>`, import the supplied VTA, and repeat the whole-lap close-branch click, cursor synchronization, Workbench/Setup round trip, mobile representative flow, and console/page error check.
 
 Expected: production reproduces local behavior with zero selection mismatch and zero browser errors.
 
-- [ ] **Step 4: Record deployment evidence and finalize documentation**
+- [x] **Step 4: Record deployment evidence and finalize documentation**
 
 Add final SHA, CI/Pages run IDs, deployed URL, clicked sections/ranges, cursor results, state round-trip result, and browser error count to this plan. Commit and push the documentation update, monitor the final workflows, and verify the worktree is clean.
+
+#### Deployment evidence — 2026-07-16 KST
+
+- Verified implementation SHA: `2d239a13eb867265a16c7cc1419b2c093bdc4eb4`.
+- CI run `29479803479`: SUCCESS, including typecheck, lint, unit tests, build, and browser tests.
+- Deploy Pages run `29479803435`: SUCCESS (build and deploy jobs).
+- Production URL: `https://woo4826.github.io/openvta-analyzer/?v=2d239a1`.
+- Production supplied-file proof: `VTA24082025_101142_CC00.Vta` loaded with 1,589 GPS fixes and 158,289 sensor rows; built-in `Inje Speedium` matched; whole-lap range was 0–3915 m.
+- Production map proof: physical click selected `Straight 2 · 243–273 m` with cursor 10 m; separated close-branch click selected `Corner 13 · 3393–3518 m` with cursor 55 m.
+- Production state proof: map `inje-c13` → Setup editor `inje-c13` → Setup `inje-c7` → Workbench `Corner 7 · 2143–2283 m`.
+- Production Aside page errors: 0. Production Aside console errors: 0.
+- Mobile proof is the successful Playwright `mobile` project in both the fresh local 16-test gate and CI; Aside's attached production tab did not expose viewport emulation.
