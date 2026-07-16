@@ -587,7 +587,7 @@ in this plan. Commit the evidence.
 
 Pre-deployment candidate: `9800ce94e7106b7ff85d8544f8bbbd4b03c7cdc4` on `codex/synchronized-telemetry-layouts`, based on main `176769dc346a9783a3b7c99844c1fcd21452be8f`. The worktree and complete range passed whitespace checks. The final review also added a legacy-v2 compact-layout migration test so older saved y positions cannot overlap the expanded telemetry widget.
 
-- [ ] **Step 2: Fast-forward main and verify the merged tree**
+- [x] **Step 2: Fast-forward main and verify the merged tree**
 
 ```bash
 git checkout main
@@ -600,6 +600,8 @@ pnpm test:e2e
 ```
 
 Expected: merge succeeds without conflicts and all checks pass on `main`.
+
+Merged-tree evidence: `main` fast-forwarded cleanly to `da3aae40528cd7bfc4ef9c0ba47a4e06b064e1ea`; TypeScript, ESLint, 57 Vitest files / 314 tests, production build, 16 Playwright desktop/mobile scenarios, whitespace checks, and clean-worktree checks all passed after the merge.
 
 - [ ] **Step 3: Push and monitor both workflows**
 
