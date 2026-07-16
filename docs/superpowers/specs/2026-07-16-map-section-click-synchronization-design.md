@@ -43,8 +43,9 @@ This can improve close-branch clicks but cannot repair the 1,961.7 m coordinate-
 ### Section geometry and hit testing
 
 - The segment workbench passes `analysisLine` to `SegmentTrajectoryMap` as the section centerline.
-- `RouteMap` converts the MapLibre `event.lngLat` click to a GeoJSON coordinate.
+- `RouteMap` converts a generic MapLibre `event.lngLat` click to a GeoJSON coordinate instead of depending on delegated hit-testing of a transparent section layer.
 - A pure resolver projects that coordinate onto the section centerline with `projectCoordinateToLineProgress`.
+- The resolver also reports geographic offset from the analysis line. Clicks more than 100 m away are ignored; this covers the observed 4–75 m preset-to-1 Hz GPS deviation in the supplied Inje recording while rejecting clear off-track clicks.
 - The section whose `[startDistanceMeters, endDistanceMeters]` contains the projected distance wins.
 - At an exact shared boundary, prefer the section beginning at that boundary, except at the total line length where the final section wins.
 - If a profile has gaps or slightly truncated end distances, choose the section with the smallest distance-to-range error. This keeps imported imperfect profiles usable.
@@ -59,6 +60,7 @@ interface MapSectionSelection {
   sectionId: string;
   coordinate?: Position;
   distanceMeters: number;
+  offsetMeters?: number;
 }
 ```
 
@@ -116,6 +118,7 @@ The SVG section polyline has no MapLibre `lngLat`. Its click uses the midpoint o
 - Ignore clicks when the centerline or section list is empty.
 - Reject non-finite click coordinates and projection results.
 - Clamp click distance to the usable line length.
+- Ignore MapLibre clicks whose projected offset is greater than 100 m.
 - If no focused-lap sample exists, still select the section without moving the cursor.
 - Preserve existing direct route-point selection outside section clicks.
 - Preserve keyboard section selection and the SVG fallback's accessible buttons.
@@ -128,7 +131,7 @@ The SVG section polyline has no MapLibre `lngLat`. Its click uses the midpoint o
 - Resolver chooses the section containing projected click distance even when a wrong feature appears first.
 - Resolver distinguishes two close parallel branches by coordinate distance.
 - Boundary, gap, truncated final section, invalid coordinate, and empty input cases.
-- MapLibre handler emits the resolver result and click distance, not `features[0]`.
+- Generic MapLibre handler emits the resolver result and click distance, not `features[0]`; a far off-track click emits nothing.
 - SVG fallback emits section midpoint distance.
 - `SegmentTrajectoryMap` moves the selected source index to the sample nearest the click distance.
 - Workbench uses `analysisLine` for map section geometry.
@@ -150,4 +153,3 @@ Using `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta`:
 ### Release gate
 
 Run typecheck, lint, all Vitest tests, production build, all Playwright tests, and `git diff --check`. Push `main`, monitor both CI and Pages to success, then repeat the supplied-file map click flow on the production URL with Aside.
-
