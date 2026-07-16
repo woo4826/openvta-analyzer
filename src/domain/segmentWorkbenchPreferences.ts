@@ -1,5 +1,6 @@
 import type {
   SegmentLapVisibility,
+  SegmentTelemetryLayout,
   SegmentWidgetId,
   SegmentWidgetLayout,
   SegmentWorkbenchPreferences,
@@ -18,6 +19,7 @@ export const SEGMENT_WIDGET_IDS: SegmentWidgetId[] = [
 ];
 
 const lapVisibilities: SegmentLapVisibility[] = ["all", "focus-reference", "focus-only"];
+const telemetryLayouts: SegmentTelemetryLayout[] = ["three-column", "two-plus-one", "three-stacked"];
 
 const defaultLayouts: Record<string, SegmentWidgetLayout[]> = {
   lg: [
@@ -43,6 +45,7 @@ export function defaultSegmentWorkbenchPreferences(): SegmentWorkbenchPreference
     version: 2,
     drawerOpen: false,
     lapVisibility: "focus-reference",
+    telemetryLayout: "three-column",
     snapToSections: true,
     visibleWidgets: Object.fromEntries(SEGMENT_WIDGET_IDS.map((id) => [id, true])) as Record<SegmentWidgetId, boolean>,
     layouts: cloneLayouts(defaultLayouts),
@@ -70,6 +73,9 @@ export function loadSegmentWorkbenchPreferences(
       version: 2,
       drawerOpen: value.drawerOpen,
       lapVisibility: value.lapVisibility as SegmentLapVisibility,
+      telemetryLayout: telemetryLayouts.includes(value.telemetryLayout as SegmentTelemetryLayout)
+        ? value.telemetryLayout as SegmentTelemetryLayout
+        : defaults.telemetryLayout,
       snapToSections: value.snapToSections,
       visibleWidgets: normalizeVisibleWidgets(value.visibleWidgets),
       layouts: mergeSegmentLayouts(value.layouts, defaults.layouts),

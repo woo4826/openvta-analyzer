@@ -16,6 +16,7 @@ describe("segment workbench preferences", () => {
       version: 2,
       drawerOpen: false,
       lapVisibility: "focus-reference",
+      telemetryLayout: "three-column",
       snapToSections: true,
       visibleWidgets: {
         map: true,
@@ -46,6 +47,7 @@ describe("segment workbench preferences", () => {
     const preferences = defaultSegmentWorkbenchPreferences();
     preferences.drawerOpen = true;
     preferences.lapVisibility = "focus-only";
+    preferences.telemetryLayout = "two-plus-one";
     preferences.snapToSections = false;
     preferences.visibleWidgets.evidence = false;
     preferences.layouts.lg[0] = { ...preferences.layouts.lg[0], x: 4, y: 3 };
@@ -54,6 +56,17 @@ describe("segment workbench preferences", () => {
 
     expect(store.has(SEGMENT_WORKBENCH_STORAGE_KEY)).toBe(true);
     expect(loadSegmentWorkbenchPreferences(storage)).toEqual(preferences);
+  });
+
+  it("falls back to the three-column dashboard for an invalid saved telemetry layout", () => {
+    const store = new Map<string, string>();
+    const storage = memoryStorage(store);
+    store.set(SEGMENT_WORKBENCH_STORAGE_KEY, JSON.stringify({
+      ...defaultSegmentWorkbenchPreferences(),
+      telemetryLayout: "diagonal",
+    }));
+
+    expect(loadSegmentWorkbenchPreferences(storage).telemetryLayout).toBe("three-column");
   });
 
   it("falls back safely for malformed JSON and invalid preference values", () => {
