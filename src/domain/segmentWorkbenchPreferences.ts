@@ -103,7 +103,7 @@ export function mergeSegmentLayouts(
   return Object.fromEntries(Object.entries(defaults).map(([breakpoint, fallback]) => {
     const existing = saved[breakpoint] ?? [];
     const existingById = new Map(existing.map((item) => [item.i, item]));
-    return [breakpoint, fallback.map((item) => {
+    const merged = fallback.map((item) => {
       const merged = { ...item, ...existingById.get(item.i), i: item.i };
       return {
         ...merged,
@@ -112,8 +112,18 @@ export function mergeSegmentLayouts(
         w: Math.max(merged.w, item.minW ?? 1),
         h: Math.max(merged.h, item.minH ?? 1),
       };
-    })];
+    });
+    return [breakpoint, breakpoint === "sm" || breakpoint === "xs" ? reflowCompactLayout(merged) : merged];
   }));
+}
+
+function reflowCompactLayout(layout: SegmentWidgetLayout[]): SegmentWidgetLayout[] {
+  let y = 0;
+  return layout.map((item) => {
+    const next = { ...item, x: 0, y, w: 1 };
+    y += next.h;
+    return next;
+  });
 }
 
 export function canHideWidget(

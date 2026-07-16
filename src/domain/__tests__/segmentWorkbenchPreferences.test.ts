@@ -112,6 +112,24 @@ describe("segment workbench preferences", () => {
     expect(merged.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 11, minH: 11 });
   });
 
+  it("reflows legacy compact positions after increasing telemetry height", () => {
+    const defaults = defaultSegmentWorkbenchPreferences().layouts;
+    const merged = mergeSegmentLayouts({
+      sm: [
+        { i: "map", x: 0, y: 0, w: 1, h: 9 },
+        { i: "telemetry", x: 0, y: 9, w: 1, h: 15 },
+        { i: "evidence", x: 0, y: 24, w: 1, h: 7 },
+        { i: "variation", x: 0, y: 31, w: 1, h: 7 },
+        { i: "laps", x: 0, y: 38, w: 1, h: 7 },
+      ],
+    }, defaults);
+
+    expect(merged.sm.find((item) => item.i === "telemetry")).toMatchObject({ y: 9, h: 32 });
+    expect(merged.sm.find((item) => item.i === "evidence")).toMatchObject({ y: 41 });
+    expect(merged.sm.find((item) => item.i === "variation")).toMatchObject({ y: 48 });
+    expect(merged.sm.find((item) => item.i === "laps")).toMatchObject({ y: 55 });
+  });
+
   it("does not allow the final visible widget to be hidden", () => {
     const all = defaultSegmentWorkbenchPreferences().visibleWidgets;
     expect(canHideWidget(all, "map")).toBe(true);
