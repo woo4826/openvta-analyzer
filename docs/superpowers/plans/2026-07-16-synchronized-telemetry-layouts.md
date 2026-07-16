@@ -603,7 +603,7 @@ Expected: merge succeeds without conflicts and all checks pass on `main`.
 
 Merged-tree evidence: `main` fast-forwarded cleanly to `da3aae40528cd7bfc4ef9c0ba47a4e06b064e1ea`; TypeScript, ESLint, 57 Vitest files / 314 tests, production build, 16 Playwright desktop/mobile scenarios, whitespace checks, and clean-worktree checks all passed after the merge.
 
-- [ ] **Step 3: Push and monitor both workflows**
+- [x] **Step 3: Push and monitor both workflows**
 
 ```bash
 git push origin main
@@ -615,15 +615,26 @@ exit 0.
 
 Deployment audit note: the first push (`22585fb`) deployed Pages successfully, but CI exposed a deterministic test race under `CI=1`: the test read the first hover value before the chart's intentional `requestAnimationFrame` throttle flushed, so a second move replaced the pending domain. The browser assertion now waits for the first hover update before issuing the second. The CI-shaped import scenario passed 6/6 repeated desktop/mobile runs and the full 16-scenario browser suite locally before repush.
 
-- [ ] **Step 4: Run production Aside verification**
+- [x] **Step 4: Run production Aside verification**
 
 Open a cache-busted `https://woo4826.github.io/openvta-analyzer/`, load the
 supplied VTA, and repeat: default three-column, 2+1, stacked, reload persistence,
 Corner 6 hover from every chart, shared readout and map/inset position, time
 axis, and narrow viewport stacking.
 
-- [ ] **Step 5: Record final workflow and production evidence**
+- [x] **Step 5: Record final workflow and production evidence**
 
 Mark every plan checkbox complete, add CI/Pages run URLs and production
 measurements, commit and push the documentation update, monitor its final Pages
 run, and confirm `main`, `origin/main`, and the worktree are clean and aligned.
+
+### Production evidence — 2026-07-16 KST
+
+- Deployed feature/test commit: `200a25186c9dddc9ada0b3466382b081489aa37e`.
+- Final feature [CI run 29469735376](https://github.com/woo4826/openvta-analyzer/actions/runs/29469735376): success, including typecheck, lint, 314 unit tests, build, and desktop/mobile browser tests.
+- Final feature [Deploy Pages run 29469735366](https://github.com/woo4826/openvta-analyzer/actions/runs/29469735366): success; production served `assets/index-D0J6RvnG.js` at the cache-busted URL.
+- Production recording proof: `VTA24082025_101142_CC00.Vta` loaded 1,589 GPS rows and 158,289 sensor rows; Inje Speedium matched automatically and three localized telemetry charts rendered.
+- Production layouts: three-column, 2+1, and stacked produced the expected geometry; 2+1 survived a full page reload and VTA re-import, then QA restored the default three-column choice.
+- Production Corner 6 proof: Speed, Delta-T, and Device X/Y/Z hover each moved the shared distance from 23 m to 326 m and the inset focused marker from `(12.76, 97.72)` to `(201.22, 61.75)`.
+- Production interaction proof: measured-acceleration wheel zoom changed all three canvases; time-axis Delta-T hover moved 15 m to 340 m; keyboard Home and ArrowRight moved 0 m to 5 m.
+- Production narrow-container proof: at the `xs` breakpoint all three cards stacked at x 44 px with width 358 px, retained the saved semantic layout value, and left 424 px below the context content inside the telemetry widget.
