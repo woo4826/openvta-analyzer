@@ -17,26 +17,26 @@
 - Create: `src/components/__tests__/SegmentScopeNavigator.test.tsx`
 - Modify: `src/app/__tests__/useSegmentWorkbench.test.tsx`
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
 
 Add a controlled harness that starts at whole lap on a 4028 m track, selects a
 stored section from both the proportional strip and select, commits a custom
 range through the two Radix thumbs, resets to whole lap, and asserts that the
 summary text and slider values always reflect the same controlled scope.
 
-- [ ] **Step 2: Run the navigator test and confirm failure**
+- [x] **Step 2: Run the navigator test and confirm failure**
 
 Run: `pnpm test src/components/__tests__/SegmentScopeNavigator.test.tsx`
 
 Expected: FAIL because `SegmentScopeNavigator` does not exist.
 
-- [ ] **Step 3: Add a missing-section hook regression**
+- [x] **Step 3: Add a missing-section hook regression**
 
 Extend the existing hook test to prove selection remains valid for generated
 profiles with no sections and that custom ranges clamp through domain analysis
 without introducing a stored section.
 
-- [ ] **Step 4: Run hook tests**
+- [x] **Step 4: Run hook tests**
 
 Run: `pnpm test src/app/__tests__/useSegmentWorkbench.test.tsx`
 
@@ -56,7 +56,7 @@ a real scope-state defect.
 - Modify: `src/styles.css`
 - Modify: `src/i18n/lapLocales.ts`
 
-- [ ] **Step 1: Build the controlled navigator**
+- [x] **Step 1: Build the controlled navigator**
 
 Implement props for `scope`, `filter`, `sections`, `totalDistanceMeters`,
 `snapToSections`, `onFilter`, `onWholeLap`, `onSection`, and `onRange`. Derive
@@ -64,32 +64,32 @@ the committed range from the controlled scope and keep only the transient slider
 draft locally. Render exact proportional section buttons, a precise select,
 range thumbs, current scope summary, and whole-lap action.
 
-- [ ] **Step 2: Replace both old presentations**
+- [x] **Step 2: Replace both old presentations**
 
 Render the new navigator in the sticky workbench stack. Remove
 `SegmentRangeNavigator` and its range props from the Analysis controls drawer.
 Keep lap visibility, graph axis, range snapping, partial-lap policy, widget
 visibility, and layout reset in the drawer.
 
-- [ ] **Step 3: Consolidate navigation controls**
+- [x] **Step 3: Consolidate navigation controls**
 
 Move previous/next section actions into the navigator and remove the duplicate
 comparison-bar arrows. Ensure filters never leave an incompatible selected
 section active.
 
-- [ ] **Step 4: Add responsive and focus styles**
+- [x] **Step 4: Add responsive and focus styles**
 
 Use an overflow-safe proportional strip, visible selected/focus states, compact
 labels only when space allows, and a precise select fallback for short sections.
 Keep the range thumbs keyboard-operable and preserve the sticky-stack behavior.
 
-- [ ] **Step 5: Run focused scope tests**
+- [x] **Step 5: Run focused scope tests**
 
 Run: `pnpm test src/components/__tests__/SegmentScopeNavigator.test.tsx src/app/__tests__/useSegmentWorkbench.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unified scope UI**
+- [x] **Step 6: Commit the unified scope UI**
 
 ```bash
 git add src/components src/app/__tests__/useSegmentWorkbench.test.tsx src/styles.css src/i18n/lapLocales.ts
@@ -109,44 +109,44 @@ git commit -m "feat: unify lap analysis scope controls"
 - Modify: `src/i18n/lapLocales.ts`
 - Modify: `src/styles.css`
 
-- [ ] **Step 1: Write failing brush-to-zoom tests**
+- [x] **Step 1: Write failing brush-to-zoom tests**
 
 Capture every mocked `ChartPanel` `onBrushRange` callback. Trigger a distance
 range from Speed and a time range from Delta-T, then assert all three options
 receive the same normalized data-zoom start/end. Assert a too-small or invalid
 range does not alter zoom.
 
-- [ ] **Step 2: Write the reset-action test**
+- [x] **Step 2: Write the reset-action test**
 
 After a brush zoom, assert the toolbar exposes `Show all`, invokes a full-window
 reset, removes itself when the window reaches 0–100, and keeps the shared cursor
 unchanged.
 
-- [ ] **Step 3: Implement domain normalization**
+- [x] **Step 3: Implement domain normalization**
 
 Export one pure common-domain calculation from `segmentTelemetryOptions.ts` and
 one pure domain-range-to-window helper. Clamp inputs, order reversed drags, and
 reject selections smaller than the useful domain threshold.
 
-- [ ] **Step 4: Enable and clear horizontal brushes**
+- [x] **Step 4: Enable and clear horizontal brushes**
 
 Pass `interactionMode="range"` and `onBrushRange` to all three panels. Clear the
 finished brush after emitting its range so consecutive drags work. Avoid a
 dataZoom feedback loop by retaining equality checks in the controlled window.
 
-- [ ] **Step 5: Add zoom help and reset UI**
+- [x] **Step 5: Add zoom help and reset UI**
 
 Add localized drag guidance and a conditional `Show all` action in the shared
 telemetry toolbar. Keep wheel, pinch, slider, hover, click, keyboard, and map
 cursor synchronization intact.
 
-- [ ] **Step 6: Run focused telemetry tests**
+- [x] **Step 6: Run focused telemetry tests**
 
 Run: `pnpm test src/components/__tests__/ChartPanel.test.ts src/components/__tests__/ChartPanelComponent.test.tsx src/components/__tests__/SegmentTelemetryChart.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit drag zoom**
+- [x] **Step 7: Commit drag zoom**
 
 ```bash
 git add src/components src/i18n/lapLocales.ts src/styles.css
@@ -162,23 +162,23 @@ git commit -m "fix: restore synchronized telemetry drag zoom"
 - Inspect/modify as required: `src/app/useSegmentWorkbench.ts`
 - Test: matching files under `src/components/__tests__/` and `src/app/__tests__/`
 
-- [ ] **Step 1: Trace all interaction ownership paths**
+- [x] **Step 1: Trace all interaction ownership paths**
 
 Review scope, focus/reference roles, cursor, zoom, map segment, filter, drawer,
 and recording-change state for duplicated sources, stale closures, uncontrolled
 resets, missing bounds, and event feedback loops.
 
-- [ ] **Step 2: Add one failing regression test per confirmed defect**
+- [x] **Step 2: Add one failing regression test per confirmed defect**
 
 Do not change speculative code. For each reproducible defect, add the smallest
 test that demonstrates the incorrect state transition or rendered output.
 
-- [ ] **Step 3: Apply minimal repairs and rerun focused tests**
+- [x] **Step 3: Apply minimal repairs and rerun focused tests**
 
 Run the owning test file after every repair. Preserve zero-backend behavior,
 export contracts, local profile storage, and focused/reference semantics.
 
-- [ ] **Step 4: Commit confirmed adjacent repairs**
+- [x] **Step 4: Commit confirmed adjacent repairs**
 
 ```bash
 git add src
@@ -192,13 +192,13 @@ Skip the commit if the review finds no additional confirmed defect.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-16-unified-segment-scope-and-drag-zoom.md`
 
-- [ ] **Step 1: Run repository verification**
+- [x] **Step 1: Run repository verification**
 
 Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e`
 
 Expected: all commands exit 0.
 
-- [ ] **Step 2: Run Aside browser QA with the real recording**
+- [x] **Step 2: Run Aside browser QA with the real recording**
 
 Load `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta`. Verify whole lap,
 Corner 6, Straight 12, and a custom slider range update the one navigator,
@@ -207,13 +207,13 @@ chart and confirm all canvases zoom together; use `전체 보기` and confirm al
 return to the full domain. Confirm no console errors and no horizontal overflow
 at desktop and narrow widths.
 
-- [ ] **Step 3: Record evidence in this plan**
+- [x] **Step 3: Record evidence in this plan**
 
 Append exact test totals, parsed GPS/sensor counts, selected ranges, drag-zoom
 windows, responsive viewport results, commit hash, workflow URLs, and deployed
 URL.
 
-- [ ] **Step 4: Commit documentation and push main**
+- [x] **Step 4: Commit documentation and push main**
 
 ```bash
 git add docs/superpowers/plans/2026-07-16-unified-segment-scope-and-drag-zoom.md
@@ -221,10 +221,43 @@ git commit -m "docs: record unified scope verification"
 git push origin main
 ```
 
-- [ ] **Step 5: Confirm GitHub Pages deployment**
+- [x] **Step 5: Confirm GitHub Pages deployment**
 
 Wait for the pushed commit's CI and Pages workflows to succeed, open the
 deployed application with a cache-busting query parameter, repeat the critical
 section-selection and drag-zoom smoke path, and report the workflow and app
 links.
 
+## Verification evidence
+
+- Final local verification on 2026-07-16: `pnpm typecheck`, `pnpm lint`,
+  `pnpm test`, `pnpm build`, and `pnpm test:e2e` all exited 0. Vitest passed 56
+  files / 317 tests; the desktop and mobile browser suite passed 16 / 16.
+- Supplied recording: `VTA24082025_101142_CC00.Vta` parsed 1,589 GPS points and
+  158,289 sensor rows, matched the Inje Speedium preset, produced seven complete
+  laps plus a closing fragment, and retained the zero-backend browser workflow.
+- Unified scope evidence: whole lap `0–3915 m`, Corner 6 slider values
+  `1702.5–2042.5 m`, Straight 12 `3672.5–3697.5 m`, and a manual custom range
+  `0–3697.5 m` all updated the single navigator and downstream evidence.
+- Telemetry evidence: horizontal drags on Speed, Delta-T, and measured
+  acceleration exposed one shared `Show all` action and changed all three
+  canvases. Changing scope while zoomed removed that action and restored the new
+  section's full domain; Corner 6 rendered `0–340 m` after a whole-lap zoom.
+- Multi-lap follow-up: Delta-T now plots every visible lap against the selected
+  reference, and measured acceleration synchronizes X/Y/Z series per visible
+  lap. Production QA showed both focused/reference series by default and seven
+  Corner 6 lap rows in `All laps` mode without unavailable-data notices.
+- Performance follow-up: GPS/sensor synchronization preparation is reused once
+  per recording, sensor rows are range-indexed with binary search, and the IMU
+  render budget is shared across visible laps while preserving sampled extrema.
+  Aside-observed all-lap section transitions decreased from about 0.95 s to
+  approximately 0.64–0.67 s on the same local recording and browser session.
+- Confirmed implementation commits: `bf920d4`, `462acf1`, `5859c01`, `7427c08`,
+  and follow-up fix `2e76116`.
+- GitHub Actions: [CI run 29474041218](https://github.com/woo4826/openvta-analyzer/actions/runs/29474041218)
+  and [Pages run 29474041212](https://github.com/woo4826/openvta-analyzer/actions/runs/29474041212)
+  both completed successfully for `2e76116`.
+- Production QA: `https://woo4826.github.io/openvta-analyzer/?v=2e76116` loaded
+  the supplied recording, displayed multi-lap Delta-T/IMU evidence, reset zoom
+  on Corner 6 and Straight 12 transitions, and emitted no console errors during
+  the critical smoke path.
