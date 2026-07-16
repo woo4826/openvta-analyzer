@@ -35,7 +35,7 @@
 - Modify: `src/domain/segmentWorkbenchPreferences.ts`
 - Test: `src/domain/__tests__/segmentWorkbenchPreferences.test.ts`
 
-- [ ] **Step 1: Write failing preference tests**
+- [x] **Step 1: Write failing preference tests**
 
 Add assertions that the default is 2D, `vector-3d` round-trips, an older v2 object without the field migrates to 2D, and an invalid value falls back to 2D:
 
@@ -47,13 +47,13 @@ expect(loadSegmentWorkbenchPreferences(storageWithoutMode).accelerationVectorMod
 expect(loadSegmentWorkbenchPreferences(storageWithInvalidMode).accelerationVectorMode).toBe("gg-2d");
 ```
 
-- [ ] **Step 2: Verify the tests fail**
+- [x] **Step 2: Verify the tests fail**
 
 Run: `pnpm test -- src/domain/__tests__/segmentWorkbenchPreferences.test.ts`
 
 Expected: failure because `accelerationVectorMode` does not exist.
 
-- [ ] **Step 3: Add the type, default, and loader validation**
+- [x] **Step 3: Add the type, default, and loader validation**
 
 Add:
 
@@ -74,13 +74,13 @@ export interface SegmentWorkbenchPreferences {
 
 Use `const accelerationVectorModes = ["gg-2d", "vector-3d"]` in the loader, default to `gg-2d`, and normalize a missing/invalid saved field without rejecting the entire v2 preference object.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run: `pnpm test -- src/domain/__tests__/segmentWorkbenchPreferences.test.ts`
 
 Expected: all preference tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/domain/types.ts src/domain/segmentWorkbenchPreferences.ts src/domain/__tests__/segmentWorkbenchPreferences.test.ts
@@ -93,7 +93,7 @@ git commit -m "feat: persist acceleration vector mode"
 - Create: `src/components/accelerationVectorOptions.ts`
 - Create: `src/components/__tests__/accelerationVectorOptions.test.ts`
 
-- [ ] **Step 1: Write failing nearest-sample and option tests**
+- [x] **Step 1: Write failing nearest-sample and option tests**
 
 Test the exact public contract:
 
@@ -119,13 +119,13 @@ expect(seriesIds(option3d)).toEqual(expect.arrayContaining([
 
 Also assert the scale rounds to 0.5 G, the trail never exceeds 25 points, and a missing reference omits its vector/point series.
 
-- [ ] **Step 2: Verify the tests fail**
+- [x] **Step 2: Verify the tests fail**
 
 Run: `pnpm test -- src/components/__tests__/accelerationVectorOptions.test.ts`
 
 Expected: module-not-found failure.
 
-- [ ] **Step 3: Implement binary search, local trail, and scale**
+- [x] **Step 3: Implement binary search, local trail, and scale**
 
 Create these interfaces and functions:
 
@@ -148,7 +148,7 @@ export function accelerationVectorScale(snapshot: AccelerationVectorSnapshot): n
 
 Use a lower-bound binary search on `distanceMeters`, choose the closer adjacent sample, slice the focused samples ending at that index, and calculate `Math.ceil(Math.max(1.5, maxAbs) * 2) / 2`.
 
-- [ ] **Step 4: Implement the ECharts option builders**
+- [x] **Step 4: Implement the ECharts option builders**
 
 Export:
 
@@ -166,13 +166,13 @@ export function buildAcceleration3dOption(
 
 Generate 0.5 G ring paths up to the symmetric scale, XY trail/vector/points for 2D, and a transparent parametric 1 G sphere plus XYZ trail/vector/points for 3D. Use a filled circle for focused and outlined diamond for reference. Set `animation: false`, equal min/max on every axis, and `silent: true` on structural series.
 
-- [ ] **Step 5: Run the helper tests**
+- [x] **Step 5: Run the helper tests**
 
 Run: `pnpm test -- src/components/__tests__/accelerationVectorOptions.test.ts`
 
 Expected: all helper tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/accelerationVectorOptions.ts src/components/__tests__/accelerationVectorOptions.test.ts
@@ -190,13 +190,13 @@ git commit -m "feat: build acceleration vector chart options"
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 
-- [ ] **Step 1: Add ECharts-GL**
+- [x] **Step 1: Add ECharts-GL**
 
 Run: `pnpm add echarts-gl@^2.1.0`
 
 Expected: `package.json` and lockfile contain `echarts-gl`.
 
-- [ ] **Step 2: Write failing panel tests**
+- [x] **Step 2: Write failing panel tests**
 
 Mock `ChartPanel`, render the component with focused/reference fixtures, and assert:
 
@@ -210,17 +210,17 @@ expect(onMode).toHaveBeenCalledWith("vector-3d");
 
 Add missing-focused and missing-reference cases. In the missing-focused case the panel must show `Measured acceleration unavailable`; in the missing-reference case it must retain the focused point and report `Reference acceleration unavailable`.
 
-- [ ] **Step 3: Verify the panel tests fail**
+- [x] **Step 3: Verify the panel tests fail**
 
 Run: `pnpm test -- src/components/__tests__/SegmentAccelerationVectorPanel.test.tsx`
 
 Expected: module-not-found failure.
 
-- [ ] **Step 4: Add localized labels**
+- [x] **Step 4: Add localized labels**
 
 Add English and Korean keys for the mode group, 2D/3D labels, titles, ARIA summaries, planar magnitude, local trail, 3D loading/failure, return-to-2D, and missing reference. Update `dragZoomHelp` to say Speed and Delta-T share zoom, because the vector panel is not brushable.
 
-- [ ] **Step 5: Implement the panel and lazy loader**
+- [x] **Step 5: Implement the panel and lazy loader**
 
 Use this public interface:
 
@@ -237,11 +237,11 @@ interface SegmentAccelerationVectorPanelProps {
 
 Build the snapshot with `useMemo`. For 2D, render `ChartPanel` immediately. For 3D, run `import("echarts-gl")` in an effect, mount `ChartPanel` only after registration, catch import/WebGL failure, and always render the textual X/Y/Z/magnitude readout. Declare `module "echarts-gl"` in `src/types/echarts-gl.d.ts`.
 
-- [ ] **Step 6: Style square and responsive views**
+- [x] **Step 6: Style square and responsive views**
 
 Add dedicated styles so the vector canvas remains square and centered, the mode buttons have 44 px targets and visible pressed state, values use a four-column responsive grid, and loading/error content fits both three-column and stacked layouts without overflow.
 
-- [ ] **Step 7: Run panel tests, typecheck, and build**
+- [x] **Step 7: Run panel tests, typecheck, and build**
 
 Run:
 
@@ -253,7 +253,7 @@ pnpm build
 
 Expected: all commands pass and Vite emits a separate ECharts-GL chunk.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml src/types/echarts-gl.d.ts src/i18n/lapLocales.ts src/styles.css src/components/SegmentAccelerationVectorPanel.tsx src/components/__tests__/SegmentAccelerationVectorPanel.test.tsx
@@ -269,7 +269,7 @@ git commit -m "feat: add two and three dimensional acceleration panel"
 - Modify: `src/components/__tests__/SegmentTelemetryChart.test.tsx`
 - Modify: `src/components/__tests__/SegmentAnalysisWorkbench.test.tsx`
 
-- [ ] **Step 1: Rewrite failing telemetry expectations**
+- [x] **Step 1: Rewrite failing telemetry expectations**
 
 Update the chart mock and assertions so only Speed and Delta-T are domain charts, the third grid item is the vector panel, hover/keyboard on either time-series chart updates the shared distance, and the Delta-T chart owns the visible zoom slider:
 
@@ -287,7 +287,7 @@ expect(chartOption("Delta-T").dataZoom).toEqual(expect.arrayContaining([
 
 In the workbench test mock, expose `accelerationVectorMode` and `onAccelerationVectorMode`, then assert 3D selection is persisted.
 
-- [ ] **Step 2: Verify the integration tests fail**
+- [x] **Step 2: Verify the integration tests fail**
 
 Run:
 
@@ -297,7 +297,7 @@ pnpm test -- src/components/__tests__/SegmentTelemetryChart.test.tsx src/compone
 
 Expected: failures because the existing third line chart and props remain.
 
-- [ ] **Step 3: Replace the third chart and simplify option construction**
+- [x] **Step 3: Replace the third chart and simplify option construction**
 
 Change the telemetry metric list to:
 
@@ -322,7 +322,7 @@ Build only these two options, give Delta-T the shared zoom slider, and append:
 
 Remove measured-acceleration series generation and downsampling from `segmentTelemetryOptions.ts`; retain Speed/Delta sign semantics and common scope domain.
 
-- [ ] **Step 4: Bind the saved preference in the workbench**
+- [x] **Step 4: Bind the saved preference in the workbench**
 
 Pass:
 
@@ -334,7 +334,7 @@ onAccelerationVectorMode={(accelerationVectorMode) =>
 
 Update the test mock type and add a button that selects `vector-3d`.
 
-- [ ] **Step 5: Run integration and preference tests**
+- [x] **Step 5: Run integration and preference tests**
 
 Run:
 
@@ -344,7 +344,7 @@ pnpm test -- src/components/__tests__/SegmentTelemetryChart.test.tsx src/compone
 
 Expected: all tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/SegmentTelemetryChart.tsx src/components/segmentTelemetryOptions.ts src/components/SegmentAnalysisWorkbench.tsx src/components/__tests__/SegmentTelemetryChart.test.tsx src/components/__tests__/SegmentAnalysisWorkbench.test.tsx
@@ -360,7 +360,7 @@ git commit -m "feat: synchronize cursor acceleration vector"
 - Review and harden: `src/styles.css`
 - Modify: `docs/superpowers/plans/2026-07-16-cursor-acceleration-vector.md`
 
-- [ ] **Step 1: Run the complete local quality gate**
+- [x] **Step 1: Run the complete local quality gate**
 
 Run:
 
@@ -375,13 +375,13 @@ git diff --check
 
 Expected: zero TypeScript/ESLint errors, all Vitest and browser tests pass, production build succeeds, and the diff has no whitespace errors.
 
-- [ ] **Step 2: Start the local app and inspect it with Aside**
+- [x] **Step 2: Start the local app and inspect it with Aside**
 
 Run `pnpm dev`, attach Aside to `http://127.0.0.1:5173/`, and import `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta` through the visible file input.
 
 Expected: 1,589 GPS fixes, 158,289 sensor rows, Inje Speedium match, and synchronized measured acceleration in Lap Analysis.
 
-- [ ] **Step 3: Exercise the complete cursor-vector flow**
+- [x] **Step 3: Exercise the complete cursor-vector flow**
 
 On whole lap and one corner scope:
 
@@ -394,7 +394,7 @@ On whole lap and one corner scope:
 
 Expected: no stale points, overflow, blank WebGL canvas, page errors, or console errors.
 
-- [ ] **Step 4: Record evidence and commit hardening changes**
+- [x] **Step 4: Record evidence and commit hardening changes**
 
 Write exact test counts, build chunk evidence, VTA counts, tested laps/scope, responsive result, and browser error result under an execution evidence section in this plan.
 
@@ -403,12 +403,22 @@ git add -A
 git commit -m "test: verify cursor acceleration vector"
 ```
 
+## Local execution evidence
+
+- Quality gate on 2026-07-16: TypeScript and ESLint exited cleanly; Vitest passed 58 files / 325 tests; Vite production build succeeded; Playwright passed 16/16 desktop and mobile tests; `git diff --check` exited cleanly.
+- Lazy-load boundary: the production build emitted a separate 601.44 kB ECharts-GL chunk (`dist/assets/index-CGr-8g0-.js`, 164.72 kB gzip), so the 3D runtime is not part of the initial application chunk.
+- Supplied recording: `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta` parsed as 1,589 GPS fixes and 158,289 sensor rows, matched the Inje Speedium preset, and produced seven complete laps plus opening/closing fragments.
+- Whole-lap check: Lap 7 focused versus Lap 4 reference; Speed hover moved the shared cursor from 0 m to 2,790 m and changed the numeric G-G point and focused map marker together.
+- Narrow-scope check: Inje Corner 1 (0–93 m); Delta-T hover moved the shared cursor from 0 m to 64 m and changed the G-G values. The 3D sphere rendered at the same corner cursor, then returned to the persisted 2D default.
+- Browser coverage: real-file checks ran through Aside at 1440 × 900; the full Playwright suite repeated the workflow at desktop and mobile viewport sizes. No blank ECharts-GL canvas appeared in either path.
+- Review: inspected the complete `41d8224..9b2cee7` range for dependency scope, lazy registration, preference migration, ECharts disposal, ARIA labels, layout migration, cursor/zoom ownership, and regression coverage; no unresolved Critical or Major issue remained.
+
 ### Task 6: Review, deploy, and prove production behavior
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-16-cursor-acceleration-vector.md`
 
-- [ ] **Step 1: Review the complete change range**
+- [x] **Step 1: Review the complete change range**
 
 Inspect `git diff 41d8224..HEAD`, dependency changes, lazy-load boundaries, preference migration, cleanup/disposal, accessibility labels, and tests. Resolve every Critical/Major issue, rerun its focused regression, then rerun the complete quality gate.
 
