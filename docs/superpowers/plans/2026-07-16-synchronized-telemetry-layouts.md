@@ -34,7 +34,7 @@
 - Modify: `src/domain/segmentWorkbenchPreferences.ts`
 - Test: `src/domain/__tests__/segmentWorkbenchPreferences.test.ts`
 
-- [ ] **Step 1: Write failing default, round-trip, and invalid-value tests**
+- [x] **Step 1: Write failing default, round-trip, and invalid-value tests**
 
 Add the following assertions:
 
@@ -53,7 +53,7 @@ const invalidLayoutStorage = memoryStorage(new Map([[SEGMENT_WORKBENCH_STORAGE_K
 expect(loadSegmentWorkbenchPreferences(invalidLayoutStorage).telemetryLayout).toBe("three-column");
 ```
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 Run:
 
@@ -63,7 +63,7 @@ pnpm vitest run src/domain/__tests__/segmentWorkbenchPreferences.test.ts
 
 Expected: FAIL because `telemetryLayout` is not part of the preference type or defaults.
 
-- [ ] **Step 3: Add the layout type, default, and validation**
+- [x] **Step 3: Add the layout type, default, and validation**
 
 In `src/domain/types.ts` add:
 
@@ -98,11 +98,11 @@ telemetryLayout: telemetryLayouts.includes(value.telemetryLayout as SegmentTelem
 Do not require the field in the outer validity condition so existing v2
 preferences migrate without losing saved widget layouts.
 
-- [ ] **Step 4: Run the preference tests**
+- [x] **Step 4: Run the preference tests**
 
 Run the command from Step 2. Expected: PASS.
 
-- [ ] **Step 5: Commit the preference slice**
+- [x] **Step 5: Commit the preference slice**
 
 ```bash
 git add src/domain/types.ts src/domain/segmentWorkbenchPreferences.ts src/domain/__tests__/segmentWorkbenchPreferences.test.ts
@@ -115,7 +115,7 @@ git commit -m "feat: persist telemetry chart layout"
 - Modify: `src/components/segmentTelemetryOptions.ts`
 - Test: `src/components/__tests__/SegmentTelemetryChart.test.tsx`
 
-- [ ] **Step 1: Replace the combined-grid test with metric-option tests**
+- [x] **Step 1: Replace the combined-grid test with metric-option tests**
 
 Test the new public contract:
 
@@ -147,7 +147,7 @@ expect(accelerationOption.dataZoom).toEqual(expect.arrayContaining([
 
 Retain the existing seven-lap speed and 10,000-sample acceleration-extrema tests.
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 ```bash
 pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
@@ -155,7 +155,7 @@ pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
 
 Expected: FAIL because `buildSegmentTelemetryMetricOption` does not exist.
 
-- [ ] **Step 3: Implement the single-metric option builder**
+- [x] **Step 3: Implement the single-metric option builder**
 
 Export these types and function:
 
@@ -187,7 +187,7 @@ Keep the existing exported `buildSegmentTelemetryOption` unchanged in this
 task so the current React component continues to compile. Task 4 removes that
 combined builder after switching the component to the metric builder.
 
-- [ ] **Step 4: Run the focused test and typecheck**
+- [x] **Step 4: Run the focused test and typecheck**
 
 ```bash
 pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
@@ -197,7 +197,7 @@ pnpm typecheck
 Expected: metric option tests PASS and typecheck remains green because the
 existing combined builder is retained until Task 4.
 
-- [ ] **Step 5: Commit the option-builder slice**
+- [x] **Step 5: Commit the option-builder slice**
 
 ```bash
 git add src/components/segmentTelemetryOptions.ts src/components/__tests__/SegmentTelemetryChart.test.tsx
@@ -210,7 +210,7 @@ git commit -m "refactor: build telemetry options per metric"
 - Modify: `src/components/ChartPanel.tsx`
 - Test: `src/components/__tests__/ChartPanelComponent.test.tsx`
 
-- [ ] **Step 1: Write failing data-zoom event tests**
+- [x] **Step 1: Write failing data-zoom event tests**
 
 Capture the registered `datazoom` callback and assert normalized output:
 
@@ -230,7 +230,7 @@ expect(onZoomWindow.mock.calls).toEqual([
 
 Also assert malformed or reversed values do not emit.
 
-- [ ] **Step 2: Run the ChartPanel test and verify failure**
+- [x] **Step 2: Run the ChartPanel test and verify failure**
 
 ```bash
 pnpm vitest run src/components/__tests__/ChartPanelComponent.test.tsx
@@ -238,7 +238,7 @@ pnpm vitest run src/components/__tests__/ChartPanelComponent.test.tsx
 
 Expected: FAIL because `onZoomWindow` is not a `ChartPanel` prop.
 
-- [ ] **Step 3: Implement and clean up the zoom callback**
+- [x] **Step 3: Implement and clean up the zoom callback**
 
 Add the prop:
 
@@ -264,7 +264,7 @@ function dataZoomWindow(value: unknown): { start: number; end: number } | undefi
 The existing `datazoom` handler must always redraw the cursor and optionally
 emit the parsed window. Remove the same handler in effect cleanup.
 
-- [ ] **Step 4: Run focused tests**
+- [x] **Step 4: Run focused tests**
 
 ```bash
 pnpm vitest run src/components/__tests__/ChartPanelComponent.test.tsx
@@ -272,7 +272,7 @@ pnpm vitest run src/components/__tests__/ChartPanelComponent.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the chart interaction slice**
+- [x] **Step 5: Commit the chart interaction slice**
 
 ```bash
 git add src/components/ChartPanel.tsx src/components/__tests__/ChartPanelComponent.test.tsx
@@ -287,7 +287,7 @@ git commit -m "feat: expose synchronized chart zoom"
 - Modify: `src/styles.css`
 - Test: `src/components/__tests__/SegmentTelemetryChart.test.tsx`
 
-- [ ] **Step 1: Write failing three-chart and shared-hover tests**
+- [x] **Step 1: Write failing three-chart and shared-hover tests**
 
 Update the `ChartPanel` test double to record callbacks by title. Assert:
 
@@ -345,7 +345,7 @@ fireEvent.click(screen.getAllByRole("button", { name: /Hover/ })[0]);
 expect(onCursor).not.toHaveBeenCalled();
 ```
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 ```bash
 pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
@@ -353,7 +353,7 @@ pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx
 
 Expected: FAIL because only one combined `ChartPanel` exists.
 
-- [ ] **Step 3: Implement the controller and three metric cards**
+- [x] **Step 3: Implement the controller and three metric cards**
 
 Extend props:
 
@@ -397,7 +397,7 @@ After the component imports the new metric builder, delete the obsolete
 combined `buildSegmentTelemetryOption` implementation and its multi-grid-only
 types.
 
-- [ ] **Step 4: Add localized layout labels and responsive CSS**
+- [x] **Step 4: Add localized layout labels and responsive CSS**
 
 Add English and Korean keys for:
 
@@ -432,7 +432,7 @@ Use CSS Grid classes:
 Give each independent chart a readable minimum height while allowing the
 dashboard widget body to scroll for the stacked layout.
 
-- [ ] **Step 5: Run focused tests and commit**
+- [x] **Step 5: Run focused tests and commit**
 
 ```bash
 pnpm vitest run src/components/__tests__/SegmentTelemetryChart.test.tsx src/components/__tests__/ChartPanelComponent.test.tsx src/i18n/__tests__/i18n.test.ts
@@ -448,7 +448,7 @@ git commit -m "feat: split synchronized lap telemetry charts"
 - Modify: `src/components/SegmentAnalysisWorkbench.tsx`
 - Modify: `src/components/__tests__/SegmentAnalysisWorkbench.test.tsx`
 
-- [ ] **Step 1: Write a failing workbench persistence test**
+- [x] **Step 1: Write a failing workbench persistence test**
 
 Update the mocked telemetry chart to expose `layout` and `onLayout`, then assert:
 
@@ -461,7 +461,7 @@ expect(JSON.parse(localStorage.getItem(SEGMENT_WORKBENCH_STORAGE_KEY) ?? "{}"))
 
 Rerender with a different `recordingId` and assert the same preference remains.
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 ```bash
 pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.tsx
@@ -469,7 +469,7 @@ pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.tsx
 
 Expected: FAIL because the workbench does not pass the preference to telemetry.
 
-- [ ] **Step 3: Pass and update the layout preference**
+- [x] **Step 3: Pass and update the layout preference**
 
 Use:
 
@@ -491,7 +491,7 @@ Use:
 Do not reset `telemetryLayout` in the recording identity effect or dashboard
 layout reset action.
 
-- [ ] **Step 4: Run focused tests and commit**
+- [x] **Step 4: Run focused tests and commit**
 
 ```bash
 pnpm vitest run src/components/__tests__/SegmentAnalysisWorkbench.test.tsx src/domain/__tests__/segmentWorkbenchPreferences.test.ts
@@ -506,7 +506,7 @@ git commit -m "feat: save telemetry layout selection"
 - Modify: `tests/analyzer.spec.ts`
 - Modify: `docs/superpowers/plans/2026-07-16-synchronized-telemetry-layouts.md`
 
-- [ ] **Step 1: Update failing E2E assertions for three charts**
+- [x] **Step 1: Update failing E2E assertions for three charts**
 
 Replace the single telemetry canvas expectation with:
 
@@ -522,7 +522,7 @@ Click 2+1 and stacked selectors, verify `data-layout` and local storage, reload,
 return to Lap Analysis, and confirm the selection persists. Restore
 three-column before the remainder of the workflow.
 
-- [ ] **Step 2: Add cross-chart hover and map/readout checks**
+- [x] **Step 2: Add cross-chart hover and map/readout checks**
 
 For each of the three chart canvases, move to 25% then 70% width and assert the
 cursor-distance readout changes. After the final move, assert the compact track
@@ -530,7 +530,7 @@ inset's focused cursor circle position changed. Switch to the time axis and
 repeat on the Delta-T canvas. Keyboard-focus the acceleration chart and assert
 ArrowRight changes the same shared readout.
 
-- [ ] **Step 3: Run focused browser tests**
+- [x] **Step 3: Run focused browser tests**
 
 ```bash
 pnpm test:e2e --grep "imports a track"
@@ -539,7 +539,7 @@ pnpm test:e2e --grep "imports a track"
 Expected: desktop and mobile variants PASS. On mobile, the saved three-column
 choice remains in local storage while computed chart cards are stacked.
 
-- [ ] **Step 4: Run the complete local verification gate**
+- [x] **Step 4: Run the complete local verification gate**
 
 ```bash
 pnpm typecheck
@@ -552,7 +552,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 5: Run Aside QA with the supplied VTA and commit evidence-ready code**
+- [x] **Step 5: Run Aside QA with the supplied VTA and commit evidence-ready code**
 
 Load `/Users/hajin-u/Downloads/VTA24082025_101142_CC00.Vta`. Verify whole lap
 and Corner 6 in all three layouts, hover each metric chart, time/distance mode,
@@ -563,6 +563,16 @@ stacking. Then commit:
 git add tests/analyzer.spec.ts docs/superpowers/plans/2026-07-16-synchronized-telemetry-layouts.md
 git commit -m "test: verify synchronized telemetry layouts"
 ```
+
+### Local verification evidence — 2026-07-16 KST
+
+- Final local gate: TypeScript and ESLint passed; Vitest passed 57 files / 313 tests; production build completed; Playwright passed 16/16 desktop and mobile tests; `git diff --check` passed.
+- Focused stability check: the mobile import/Lap Analysis scenario passed three consecutive repetitions after making plot-coordinate hover movement deterministic.
+- Supplied recording: `VTA24082025_101142_CC00.Vta` parsed 1,589 GPS rows and 158,289 sensor rows and matched the Inje Speedium preset.
+- Actual-data layouts: three-column cards measured 435 px each, 2+1 measured 650/650/1,310 px, and stacked measured 1,310 px per card. The chosen layout survived a page reload and re-import of the supplied VTA.
+- Actual-data synchronization: on Inje Corner 6 with Lap 7 focused and Lap 4 referenced, hover in each of Speed, Delta-T, and measured acceleration moved the shared readout from 23 m to 326 m and moved the inset marker from `(12.76, 97.72)` to `(201.22, 61.75)`.
+- Shared zoom: wheel zoom initiated over measured acceleration changed the rendered Speed, Delta-T, and measured-acceleration canvases together (`[true, true, true]`). Time-axis Delta-T hover moved the shared distance from 15 m to 340 m; keyboard Home then ArrowRight moved it from 340 m to 0 m to 5 m.
+- Narrow actual-data container: at the `xs` dashboard breakpoint all three cards stacked at the same x/width (x 44 px, width 358 px). The 32-row compact telemetry widget left 263 px clearance below the context content.
 
 ## Task 7: Merge, deploy, and prove production behavior
 

@@ -37,7 +37,7 @@ describe("segment workbench preferences", () => {
     expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ x: 0, w: 12 });
     expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 11, minH: 11 });
     expect(preferences.layouts.md.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 8 });
-    expect(preferences.layouts.sm.find((item) => item.i === "telemetry")).toMatchObject({ y: 9, h: 15, minH: 15 });
+    expect(preferences.layouts.sm.find((item) => item.i === "telemetry")).toMatchObject({ y: 9, h: 32, minH: 32 });
     expect(SEGMENT_WORKBENCH_STORAGE_KEY).toBe("openvta.segmentWorkbench.v2");
   });
 

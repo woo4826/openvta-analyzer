@@ -154,10 +154,10 @@ function cloneLayouts(layouts: Record<string, SegmentWidgetLayout[]>): Record<st
 function compactLayout(): SegmentWidgetLayout[] {
   return [
     { i: "map", x: 0, y: 0, w: 1, h: 9, minW: 1, minH: 8 },
-    { i: "telemetry", x: 0, y: 9, w: 1, h: 15, minW: 1, minH: 15 },
-    { i: "evidence", x: 0, y: 24, w: 1, h: 7, minW: 1, minH: 5 },
-    { i: "variation", x: 0, y: 31, w: 1, h: 7, minW: 1, minH: 5 },
-    { i: "laps", x: 0, y: 38, w: 1, h: 7, minW: 1, minH: 5 },
+    { i: "telemetry", x: 0, y: 9, w: 1, h: 32, minW: 1, minH: 32 },
+    { i: "evidence", x: 0, y: 41, w: 1, h: 7, minW: 1, minH: 5 },
+    { i: "variation", x: 0, y: 48, w: 1, h: 7, minW: 1, minH: 5 },
+    { i: "laps", x: 0, y: 55, w: 1, h: 7, minW: 1, minH: 5 },
   ];
 }
 

@@ -129,14 +129,40 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   }
 
   await expect.poll(async () => analysisMain.locator(".dashboard-widget-variation canvas, .dashboard-widget-telemetry canvas").evaluateAll((canvases) =>
-    canvases.length === 2 && canvases.every((canvas) => {
+    canvases.length === 4 && canvases.every((canvas) => {
       const surface = canvas as HTMLCanvasElement;
       return surface.width > 0 && surface.height > 0;
     })
   )).toBe(true);
   await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
-  await expect(analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Speed comparison by distance" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Delta-T by distance" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Measured acceleration by distance" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
+  const telemetryGrid = analysisMain.locator(".segment-telemetry-grid");
+  const threeColumnLayout = analysisMain.getByRole("button", { name: "3-column dashboard" });
+  const twoPlusOneLayout = analysisMain.getByRole("button", { name: "2+1", exact: true });
+  const stackedLayout = analysisMain.getByRole("button", { name: "3 stacked" });
+  await expect(telemetryGrid).toHaveAttribute("data-layout", "three-column");
+  await expect(threeColumnLayout).toHaveAttribute("aria-pressed", "true");
+  await twoPlusOneLayout.click();
+  await expect(telemetryGrid).toHaveAttribute("data-layout", "two-plus-one");
+  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.telemetryLayout)).toBe("two-plus-one");
+  await stackedLayout.click();
+  await expect(telemetryGrid).toHaveAttribute("data-layout", "three-stacked");
+  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.telemetryLayout)).toBe("three-stacked");
+  await threeColumnLayout.click();
+  await expect(telemetryGrid).toHaveAttribute("data-layout", "three-column");
+  if ((page.viewportSize()?.width ?? 0) <= 680) {
+    const metricCardBoxes = await analysisMain.locator(".segment-telemetry-metric-card").evaluateAll((cards) => cards.map((card) => {
+      const box = card.getBoundingClientRect();
+      return { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width) };
+    }));
+    expect(new Set(metricCardBoxes.map((box) => box.y)).size).toBe(3);
+    expect(Math.max(...metricCardBoxes.map((box) => box.x)) - Math.min(...metricCardBoxes.map((box) => box.x))).toBeLessThanOrEqual(1);
+    expect(Math.max(...metricCardBoxes.map((box) => box.width)) - Math.min(...metricCardBoxes.map((box) => box.width))).toBeLessThanOrEqual(1);
+    await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.telemetryLayout)).toBe("three-column");
+  }
   await expect(analysisMain.getByText(/Focused − Reference; a negative value/)).toBeVisible();
   await expect(analysisMain.getByText(/raw focused-lap device axes/)).toBeVisible();
   await expect(analysisMain.locator(".segment-comparison-bar .sr-only")).toHaveCSS("clip-path", "inset(50%)");
@@ -160,19 +186,29 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(analysisMain.getByRole("button", { name: "Select range", exact: true })).toHaveCount(0);
   await expect(analysisMain.getByRole("button", { name: "Zoom", exact: true })).toHaveCount(0);
   await expect(analysisMain.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
-  const telemetryCanvas = analysisMain.locator(".segment-telemetry-panel canvas");
-  const telemetryBox = await telemetryCanvas.boundingBox();
-  expect(telemetryBox).not.toBeNull();
   const cursorDistance = analysisMain.locator(".segment-telemetry-readout > div").first().locator("dd");
-  const telemetryChart = analysisMain.getByRole("img", { name: "Synchronized segment telemetry by distance" });
-  await telemetryChart.focus();
+  const focusedTrackMarker = analysisMain.getByTestId("focused-track-marker");
+  const markerBeforeHover = await focusedTrackMarker.evaluate((marker) => `${marker.getAttribute("cx")},${marker.getAttribute("cy")}`);
+  for (const metric of ["speed", "delta", "imu-acceleration"]) {
+    const telemetryCanvas = analysisMain.locator(`.segment-telemetry-metric-card.is-${metric} canvas`);
+    await telemetryCanvas.scrollIntoViewIfNeeded();
+    const telemetryBox = await telemetryCanvas.boundingBox();
+    expect(telemetryBox).not.toBeNull();
+    await page.mouse.move(2, 2);
+    await page.mouse.move(telemetryBox!.x + 112, telemetryBox!.y + telemetryBox!.height * 0.58);
+    const earlyCursor = await cursorDistance.textContent();
+    await page.mouse.move(telemetryBox!.x + telemetryBox!.width - 36, telemetryBox!.y + telemetryBox!.height * 0.58);
+    await expect.poll(
+      () => cursorDistance.textContent(),
+      { message: `${metric} chart hover should move the shared cursor` },
+    ).not.toBe(earlyCursor);
+  }
+  await expect.poll(() => focusedTrackMarker.evaluate((marker) => `${marker.getAttribute("cx")},${marker.getAttribute("cy")}`)).not.toBe(markerBeforeHover);
+  const accelerationChart = analysisMain.getByRole("img", { name: "Measured acceleration by distance" });
+  await accelerationChart.focus();
   const keyboardCursorBefore = await cursorDistance.textContent();
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => cursorDistance.textContent()).not.toBe(keyboardCursorBefore);
-  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.22, telemetryBox!.y + telemetryBox!.height * 0.72);
-  const earlyCursor = await cursorDistance.textContent();
-  await page.mouse.move(telemetryBox!.x + telemetryBox!.width * 0.76, telemetryBox!.y + telemetryBox!.height * 0.72);
-  await expect.poll(() => cursorDistance.textContent()).not.toBe(earlyCursor);
 
   await analysisMain.getByRole("button", { name: "Analysis controls" }).click();
   controls = page.getByRole("dialog", { name: "Analysis controls" });
@@ -184,11 +220,22 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.lapVisibility)).toBe("focus-only");
   await controls.getByRole("button", { name: "Close analysis controls" }).click();
 
+  const timeDeltaChart = analysisMain.getByRole("img", { name: "Delta-T by time" });
+  await timeDeltaChart.scrollIntoViewIfNeeded();
+  const timeDeltaBox = await timeDeltaChart.boundingBox();
+  expect(timeDeltaBox).not.toBeNull();
+  const timeCursorBefore = await cursorDistance.textContent();
+  await page.mouse.move(timeDeltaBox!.x + timeDeltaBox!.width * 0.34, timeDeltaBox!.y + timeDeltaBox!.height * 0.58);
+  await expect.poll(() => cursorDistance.textContent()).not.toBe(timeCursorBefore);
+
   const focusedLapBeforeRoundTrip = await focusedLapSelect.inputValue();
+  await twoPlusOneLayout.click();
   await analysisMain.getByRole("tab", { name: "Overview" }).click();
   await analysisMain.getByRole("tab", { name: "Lap Analysis" }).click();
   await expect(analysisMain.locator(".segment-scope-ribbon").getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
   await expect(focusedLapSelect).toHaveValue(focusedLapBeforeRoundTrip);
+  await expect(telemetryGrid).toHaveAttribute("data-layout", "two-plus-one");
+  await threeColumnLayout.click();
 
   await expect(analysisMain.getByRole("region", { name: "Time-loss ranking" })).toHaveCount(0);
   const lapRecords = analysisMain.getByRole("region", { name: "Lap evidence table" });
