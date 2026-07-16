@@ -12,8 +12,8 @@ vi.mock("../../domain/export", async (importOriginal) => ({
 }));
 
 vi.mock("../SegmentTrajectoryMap", () => ({
-  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, cursorDistanceMeters, segment, onSelectedIndex, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; cursorDistanceMeters?: number; segment?: { startIndex: number; endIndex: number; source: "map" }; onSelectedIndex: (index: number) => void; onSegmentChange: (segment?: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
-    <div data-testid="map-state">roles={focusedLapId},{referenceLapId}:cursor={cursorDistanceMeters}:segment={segment ? `${segment.startIndex}-${segment.endIndex}` : "none"}<button type="button" onClick={() => onSelectedIndex(4)}>Select map point</button><button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
+  SegmentTrajectoryMap: ({ focusedLapId, referenceLapId, cursorDistanceMeters, segment, centerline, onSelectedIndex, onSectionSelect, onSegmentChange }: { focusedLapId?: string; referenceLapId?: string; cursorDistanceMeters?: number; segment?: { startIndex: number; endIndex: number; source: "map" }; centerline: { coordinates: number[][] }; onSelectedIndex: (index: number) => void; onSectionSelect: (sectionId: string) => void; onSegmentChange: (segment?: { startIndex: number; endIndex: number; source: "map" }) => void }) => (
+    <div data-testid="map-state" data-centerline={JSON.stringify(centerline.coordinates)}>roles={focusedLapId},{referenceLapId}:cursor={cursorDistanceMeters}:segment={segment ? `${segment.startIndex}-${segment.endIndex}` : "none"}<button type="button" onClick={() => onSelectedIndex(4)}>Select map point</button><button type="button" onClick={() => onSectionSelect("c1")}>Select map section</button><button type="button" onClick={() => onSegmentChange({ startIndex: 0, endIndex: 1, source: "map" })}>Select map range</button></div>
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
@@ -216,6 +216,50 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(screen.queryByText("Where am I losing time?")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Select map range" }));
     expect(screen.getByText(/Custom range · 0–56 m/)).toBeVisible();
+  });
+
+  it("uses the analysis coordinate frame and synchronizes only explicit external section changes", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    const analysisLine = fixture.profile.centerline;
+    fixture.profile = {
+      ...fixture.profile,
+      centerline: { type: "LineString", coordinates: [[9, 9], [9.001, 9]] },
+    };
+    const onSelectedSectionId = vi.fn();
+    const props = {
+      recordingId: "recording-1",
+      sourceName: "session.Vta",
+      points: fixture.points,
+      sensors: fixture.sensors,
+      laps: fixture.laps,
+      profile: fixture.profile,
+      analysisLine,
+      includePartialLapSections: false,
+      onIncludePartialLapSections: vi.fn(),
+      mapSettings: { pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] as [number, number, number, number] },
+      selectedPointIndex: 0,
+      onSelectedPointIndex: vi.fn(),
+      onMapSettingsChange: vi.fn(),
+      onActiveSegment: vi.fn(),
+      onSaveRange: vi.fn(),
+      onOpenSetup: vi.fn(),
+      onSelectedSectionId,
+    };
+    const view = render(<I18nProvider><SegmentAnalysisWorkbench {...props} /></I18nProvider>);
+
+    expect(screen.getByTestId("map-state")).toHaveAttribute("data-centerline", JSON.stringify(analysisLine.coordinates));
+    expect(screen.getByRole("button", { name: /Whole lap/i })).toHaveAttribute("aria-pressed", "true");
+
+    view.rerender(<I18nProvider><SegmentAnalysisWorkbench {...props} selectedSectionId="s1" /></I18nProvider>);
+    expect(screen.getByRole("button", { name: /^Straight 1/ })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "Select map section" }));
+    expect(screen.getByRole("button", { name: /^Corner 1/ })).toHaveAttribute("aria-pressed", "true");
+    expect(onSelectedSectionId).toHaveBeenCalledWith("c1");
+
+    await user.click(screen.getByRole("button", { name: /Whole lap/i }));
+    expect(screen.getByRole("button", { name: /Whole lap/i })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows only the focused lap and persists optional widget visibility", async () => {

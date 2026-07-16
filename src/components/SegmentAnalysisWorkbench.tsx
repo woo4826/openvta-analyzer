@@ -60,6 +60,8 @@ interface SegmentAnalysisWorkbenchProps {
   onActiveSegment: (segment?: ActiveSegment) => void;
   onSaveRange: (startDistanceMeters: number, endDistanceMeters: number, name: string, kind: TrackSectionKind) => void;
   onOpenSetup: () => void;
+  selectedSectionId?: string;
+  onSelectedSectionId?: (sectionId: string) => void;
 }
 
 export function SegmentAnalysisWorkbench({
@@ -83,6 +85,8 @@ export function SegmentAnalysisWorkbench({
   onActiveSegment,
   onSaveRange,
   onOpenSetup,
+  selectedSectionId,
+  onSelectedSectionId,
 }: SegmentAnalysisWorkbenchProps) {
   const { t } = useI18n();
   const [preferences, setPreferences] = useState<SegmentWorkbenchPreferences>(() => loadSegmentWorkbenchPreferences());
@@ -94,6 +98,7 @@ export function SegmentAnalysisWorkbench({
     includePartialLapSections,
     lapVisibility: preferences.lapVisibility,
   });
+  const selectWorkbenchSection = workbench.selectSection;
   const [cursorDistanceMeters, setCursorDistanceMeters] = useState<number>();
   const [lapLayerOverrides, setLapLayerOverrides] = useState<LapMapLayerOverrides>({});
   const telemetrySelectionRef = useRef<{ distanceMeters: number; sourceIndex: number }>();
@@ -101,6 +106,7 @@ export function SegmentAnalysisWorkbench({
   const [rangeName, setRangeName] = useState("");
   const [rangeKind, setRangeKind] = useState<TrackSectionKind>("corner-right");
   const [exportStatus, setExportStatus] = useState("");
+  const lastExternalSectionIdRef = useRef(selectedSectionId);
   const focused = workbench.analysis.records.find((record) => record.lapId === workbench.focusedLapId);
   const reference = workbench.analysis.records.find((record) => record.lapId === workbench.referenceLapId);
   const pairwiseEvidence = useMemo(() => buildSegmentPairwiseEvidence(focused, reference), [focused, reference]);
@@ -142,6 +148,10 @@ export function SegmentAnalysisWorkbench({
     ).distanceMeters;
     workbench.selectRange(startDistanceMeters, endDistanceMeters, "map");
   }, [analysisLine, points, workbench]);
+  const selectSection = useCallback((sectionId: string) => {
+    selectWorkbenchSection(sectionId);
+    onSelectedSectionId?.(sectionId);
+  }, [onSelectedSectionId, selectWorkbenchSection]);
   const scopeName = useMemo(() => {
     if (workbench.scope.kind === "whole-lap") return t("lap.workbench.wholeLap");
     if (workbench.scope.kind === "section") {
@@ -213,6 +223,14 @@ export function SegmentAnalysisWorkbench({
     setLapLayerOverrides({});
     setExportStatus("");
   }, [recordingId]);
+
+  useEffect(() => {
+    if (selectedSectionId === lastExternalSectionIdRef.current) return;
+    lastExternalSectionIdRef.current = selectedSectionId;
+    if (!selectedSectionId || !profile.sections.some((section) => section.id === selectedSectionId)) return;
+    if (workbench.scope.kind === "section" && workbench.scope.sectionId === selectedSectionId) return;
+    selectWorkbenchSection(selectedSectionId);
+  }, [profile.sections, selectedSectionId, selectWorkbenchSection, workbench.scope]);
 
   useEffect(() => {
     if (!active) return;
@@ -370,7 +388,7 @@ export function SegmentAnalysisWorkbench({
         snapToSections={preferences.snapToSections}
         onWholeLap={workbench.resetScope}
         onFilter={workbench.setFilter}
-        onSection={workbench.selectSection}
+        onSection={selectSection}
         onRange={(start, end) => workbench.selectRange(start, end, "manual")}
       />
       </div>
@@ -387,7 +405,7 @@ export function SegmentAnalysisWorkbench({
               <SegmentTrajectoryMap
                 analysis={workbench.analysis}
                 points={points}
-                centerline={profile.centerline}
+                centerline={analysisLine}
                 sections={profile.sections}
                 settings={mapSettings}
                 selectedIndex={selectedPointIndex}
@@ -398,7 +416,7 @@ export function SegmentAnalysisWorkbench({
                 onLapLayerOverrides={setLapLayerOverrides}
                 segment={workbench.scope.kind === "whole-lap" ? undefined : workbench.activeSegment}
                 onSelectedIndex={selectMapPoint}
-                onSectionSelect={workbench.selectSection}
+                onSectionSelect={selectSection}
                 onSegmentChange={selectMapSegment}
                 onSettingsChange={onMapSettingsChange}
               />

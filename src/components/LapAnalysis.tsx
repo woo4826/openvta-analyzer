@@ -135,7 +135,7 @@ export function LapAnalysis({
       setSelectedSectionId(undefined);
       return;
     }
-    if (!workspace.profile.sections.some((section) => section.id === selectedSectionId)) {
+    if (selectedSectionId && !workspace.profile.sections.some((section) => section.id === selectedSectionId)) {
       setSelectedSectionId(workspace.profile.sections[0].id);
     }
   }, [selectedSectionId, workspace.profile]);
@@ -238,6 +238,8 @@ export function LapAnalysis({
               workspace.saveRangeAsSection(start, end, name, kind);
             }}
             onOpenSetup={() => setActiveView("setup")}
+            selectedSectionId={selectedSectionId}
+            onSelectedSectionId={setSelectedSectionId}
           />
         ) : (
           <>

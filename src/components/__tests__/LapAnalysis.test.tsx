@@ -244,8 +244,11 @@ describe("LapAnalysis", () => {
     await waitFor(() => expect(selectedSectionButton()).toHaveAttribute("aria-pressed", "true"));
 
     await user.click(screen.getByRole("tab", { name: "Setup" }));
+    const sectionEditorSelect = screen.getByRole("combobox", { name: "Section to edit" });
+    expect(sectionEditorSelect).toHaveValue("straight-neutral");
+    await user.selectOptions(sectionEditorSelect, "corner-2");
     await user.click(screen.getByRole("tab", { name: "Segment Analysis Workbench" }));
-    expect(selectedSectionButton()).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(screen.getByRole("button", { name: /corner-2.*m/i })).toHaveAttribute("aria-pressed", "true"));
   });
 
   it("uses automatic section results for the partial-lap policy summary", async () => {
