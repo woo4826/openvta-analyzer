@@ -77,12 +77,13 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const scopeNavigator = analysisMain.locator(".segment-scope-navigator");
   const corner = scopeNavigator.getByRole("button", { name: /^Corner 1/ });
   await expect(corner).toBeVisible();
+  const cornerId = await corner.getAttribute("data-section-id") ?? "";
   expect((await corner.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await corner.click();
   await expect(corner).toHaveAttribute("aria-pressed", "true");
   await expect(analysisMain.getByText(/Corner 1 · \d+–\d+ m/)).toBeVisible();
   await expect(scopeNavigator.getByRole("combobox", { name: "Go to section" }))
-    .toHaveValue(await corner.getAttribute("data-section-id") ?? "");
+    .toHaveValue(cornerId);
   await expect(analysisMain.locator('.coordinate-layer[aria-label="Lap trajectory comparison"]')).toBeVisible();
 
   if ((page.viewportSize()?.width ?? 0) <= 680) {
@@ -237,7 +238,6 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     const canvasesAfterDrag = await Promise.all([0, 1].map((index) => metricCanvases.nth(index).screenshot()));
     expect(canvasesAfterDrag.every((image, index) => !image.equals(canvasesBeforeDrag[index]))).toBe(true);
     const sectionChooser = scopeNavigator.getByRole("combobox", { name: "Go to section" });
-    const cornerId = await corner.getAttribute("data-section-id") ?? "";
     await sectionChooser.selectOption("");
     await expect(scopeNavigator.getByText("Whole lap", { exact: true }).first()).toBeVisible();
     await expect(showAllTelemetry).toHaveCount(0);
@@ -305,6 +305,17 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   expect((await exportDownload).suggestedFilename()).toBe("loop-session.segment-analysis.csv");
   await expect(analysisMain.locator(".segment-export-status")).toHaveText("Exported loop-session.segment-analysis.csv");
 
+  await analysisMain.getByRole("tab", { name: "Setup" }).click();
+  const setupSection = analysisMain.getByRole("combobox", { name: "Section to edit" });
+  await expect(setupSection).toHaveValue(cornerId);
+  const nextSectionId = await setupSection.locator("option").evaluateAll((options, currentId) => (
+    options.map((option) => (option as HTMLOptionElement).value).find((value) => value !== currentId) ?? ""
+  ), cornerId);
+  expect(nextSectionId).not.toBe("");
+  await setupSection.selectOption(nextSectionId);
+  await analysisMain.getByRole("tab", { name: "Segment Analysis Workbench" }).click();
+  await expect(scopeNavigator.getByRole("combobox", { name: "Go to section" })).toHaveValue(nextSectionId);
+  await expect(scopeNavigator.locator(`button[data-section-id="${nextSectionId}"]`)).toHaveAttribute("aria-pressed", "true");
   await analysisMain.getByRole("tab", { name: "Setup" }).click();
   await expect(analysisMain.getByRole("button", { name: "Export analysis sectors CSV" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
