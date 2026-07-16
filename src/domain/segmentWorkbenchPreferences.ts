@@ -1,4 +1,5 @@
 import type {
+  AccelerationVectorMode,
   SegmentLapVisibility,
   SegmentTelemetryLayout,
   SegmentWidgetId,
@@ -20,6 +21,7 @@ export const SEGMENT_WIDGET_IDS: SegmentWidgetId[] = [
 
 const lapVisibilities: SegmentLapVisibility[] = ["all", "focus-reference", "focus-only"];
 const telemetryLayouts: SegmentTelemetryLayout[] = ["three-column", "two-plus-one", "three-stacked"];
+const accelerationVectorModes: AccelerationVectorMode[] = ["gg-2d", "vector-3d"];
 
 const defaultLayouts: Record<string, SegmentWidgetLayout[]> = {
   lg: [
@@ -46,6 +48,7 @@ export function defaultSegmentWorkbenchPreferences(): SegmentWorkbenchPreference
     drawerOpen: false,
     lapVisibility: "focus-reference",
     telemetryLayout: "three-column",
+    accelerationVectorMode: "gg-2d",
     snapToSections: true,
     visibleWidgets: Object.fromEntries(SEGMENT_WIDGET_IDS.map((id) => [id, true])) as Record<SegmentWidgetId, boolean>,
     layouts: cloneLayouts(defaultLayouts),
@@ -76,6 +79,9 @@ export function loadSegmentWorkbenchPreferences(
       telemetryLayout: telemetryLayouts.includes(value.telemetryLayout as SegmentTelemetryLayout)
         ? value.telemetryLayout as SegmentTelemetryLayout
         : defaults.telemetryLayout,
+      accelerationVectorMode: accelerationVectorModes.includes(value.accelerationVectorMode as AccelerationVectorMode)
+        ? value.accelerationVectorMode as AccelerationVectorMode
+        : defaults.accelerationVectorMode,
       snapToSections: value.snapToSections,
       visibleWidgets: normalizeVisibleWidgets(value.visibleWidgets),
       layouts: mergeSegmentLayouts(value.layouts, defaults.layouts),

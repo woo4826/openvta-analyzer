@@ -17,6 +17,7 @@ describe("segment workbench preferences", () => {
       drawerOpen: false,
       lapVisibility: "focus-reference",
       telemetryLayout: "three-column",
+      accelerationVectorMode: "gg-2d",
       snapToSections: true,
       visibleWidgets: {
         map: true,
@@ -48,6 +49,7 @@ describe("segment workbench preferences", () => {
     preferences.drawerOpen = true;
     preferences.lapVisibility = "focus-only";
     preferences.telemetryLayout = "two-plus-one";
+    preferences.accelerationVectorMode = "vector-3d";
     preferences.snapToSections = false;
     preferences.visibleWidgets.evidence = false;
     preferences.layouts.lg[0] = { ...preferences.layouts.lg[0], x: 4, y: 3 };
@@ -67,6 +69,22 @@ describe("segment workbench preferences", () => {
     }));
 
     expect(loadSegmentWorkbenchPreferences(storage).telemetryLayout).toBe("three-column");
+  });
+
+  it("migrates missing and invalid acceleration-vector modes to the 2D G-G default", () => {
+    const store = new Map<string, string>();
+    const storage = memoryStorage(store);
+    const { accelerationVectorMode: _mode, ...legacy } = defaultSegmentWorkbenchPreferences();
+    store.set(SEGMENT_WORKBENCH_STORAGE_KEY, JSON.stringify(legacy));
+
+    expect(loadSegmentWorkbenchPreferences(storage).accelerationVectorMode).toBe("gg-2d");
+
+    store.set(SEGMENT_WORKBENCH_STORAGE_KEY, JSON.stringify({
+      ...defaultSegmentWorkbenchPreferences(),
+      accelerationVectorMode: "hologram",
+    }));
+
+    expect(loadSegmentWorkbenchPreferences(storage).accelerationVectorMode).toBe("gg-2d");
   });
 
   it("falls back safely for malformed JSON and invalid preference values", () => {

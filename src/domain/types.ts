@@ -454,6 +454,8 @@ export type SegmentLapVisibility = "all" | "focus-reference" | "focus-only";
 
 export type SegmentTelemetryLayout = "three-column" | "two-plus-one" | "three-stacked";
 
+export type AccelerationVectorMode = "gg-2d" | "vector-3d";
+
 export type SegmentWidgetId =
   | "map"
   | "evidence"
@@ -476,6 +478,7 @@ export interface SegmentWorkbenchPreferences {
   drawerOpen: boolean;
   lapVisibility: SegmentLapVisibility;
   telemetryLayout: SegmentTelemetryLayout;
+  accelerationVectorMode: AccelerationVectorMode;
   snapToSections: boolean;
   visibleWidgets: Record<SegmentWidgetId, boolean>;
   layouts: Record<string, SegmentWidgetLayout[]>;
