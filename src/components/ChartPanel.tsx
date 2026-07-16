@@ -18,13 +18,14 @@ export interface ChartPanelProps {
   onCursorKey?: (action: CursorKeyAction) => void;
   onPoint?: (index: number, domainValue?: number) => void;
   onHoverDomain?: (domainValue: number) => void;
+  onZoomWindow?: (window: { start: number; end: number }) => void;
   onBrushSegment?: (startIndex: number, endIndex: number) => void;
   onBrushRange?: (start: number, end: number) => void;
 }
 
 export type CursorKeyAction = "previous" | "next" | "page-previous" | "page-next" | "start" | "end";
 
-export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, describedBy, onCursorKey, onPoint, onHoverDomain, onBrushSegment, onBrushRange }: ChartPanelProps) {
+export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actions, caption, interactionMode, cursorX, resetToken, describedBy, onCursorKey, onPoint, onHoverDomain, onZoomWindow, onBrushSegment, onBrushRange }: ChartPanelProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const cursorLineRef = useRef<echarts.graphic.Line | null>(null);
@@ -119,7 +120,11 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
     if (onBrushSegment || onBrushRange) {
       chart.on("brushSelected", handleBrush);
     }
-    const handleDataZoom = () => renderCursor(chart, cursorLineRef, cursorXRef.current);
+    const handleDataZoom = (...args: unknown[]) => {
+      renderCursor(chart, cursorLineRef, cursorXRef.current);
+      const window = dataZoomWindow(args[0]);
+      if (window) onZoomWindow?.(window);
+    };
     chart.on("datazoom", handleDataZoom);
 
     return () => {
@@ -131,7 +136,7 @@ export function ChartPanel({ title, ariaLabel, option, className, eyebrow, actio
       chart.off("brushSelected", handleBrush);
       chart.off("datazoom", handleDataZoom);
     };
-  }, [interactionMode, option, onPoint, onHoverDomain, onBrushSegment, onBrushRange]);
+  }, [interactionMode, option, onPoint, onHoverDomain, onZoomWindow, onBrushSegment, onBrushRange]);
 
   useEffect(() => {
     if (chartRef.current) {
@@ -208,6 +213,21 @@ function cursorAction(key: string): CursorKeyAction | undefined {
     End: "end",
   };
   return actions[key];
+}
+
+function dataZoomWindow(value: unknown): { start: number; end: number } | undefined {
+  if (!isRecord(value)) return undefined;
+  const candidate = Array.isArray(value.batch) ? value.batch[0] : value;
+  if (!isRecord(candidate)) return undefined;
+  const start = Number(candidate.start);
+  const end = Number(candidate.end);
+  return Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end <= 100 && start < end
+    ? { start, end }
+    : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function renderCursor(

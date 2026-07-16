@@ -105,6 +105,26 @@ describe("ChartPanel controlled reset", () => {
     expect(onHoverDomain).not.toHaveBeenCalled();
   });
 
+  it("emits normalized direct and batched data zoom windows", () => {
+    const onZoomWindow = vi.fn();
+    render(<ChartPanel
+      title="Speed"
+      option={{ dataZoom: [{ type: "inside" }] }}
+      onZoomWindow={onZoomWindow}
+    />);
+    const zoomHandler = chartDouble.on.mock.calls.find(([event]) => event === "datazoom")?.[1] as ((payload: unknown) => void) | undefined;
+
+    zoomHandler?.({ start: 12, end: 78 });
+    zoomHandler?.({ batch: [{ start: 20, end: 60 }] });
+    zoomHandler?.({ start: 90, end: 40 });
+    zoomHandler?.({ start: -1, end: 50 });
+
+    expect(onZoomWindow.mock.calls).toEqual([
+      [{ start: 12, end: 78 }],
+      [{ start: 20, end: 60 }],
+    ]);
+  });
+
   it("supports keyboard cursor traversal without hiding the chart semantics", async () => {
     const user = userEvent.setup();
     const onCursorKey = vi.fn();
