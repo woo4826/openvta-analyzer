@@ -1,12 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EChartsOption } from "echarts";
 import type { ReactNode } from "react";
 import type { SegmentAnalysisResult, SynchronizedAccelerationSeries } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import {
   buildSegmentTelemetryMetricOption,
-  buildSegmentTelemetryOption,
   downsampleAcceleration,
   MAX_RENDERED_IMU_SAMPLES,
   type SegmentTelemetryLabels,
@@ -16,25 +15,35 @@ const chartPanelSpy = vi.hoisted(() => ({
   onPointReferences: [] as Array<((index: number, domainValue?: number) => void) | undefined>,
   onHoverReferences: [] as Array<((domainValue: number) => void) | undefined>,
   onCursorKeyReferences: [] as Array<((action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void) | undefined>,
+  onZoomReferences: [] as Array<((window: { start: number; end: number }) => void) | undefined>,
 }));
 vi.mock("../ChartPanel", () => ({
-  ChartPanel: ({ title, option, cursorX, onPoint, onHoverDomain, onCursorKey, describedBy, actions, caption }: { title: string; option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; onCursorKey?: (action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void; describedBy?: string; actions?: unknown; caption?: unknown }) => {
+  ChartPanel: ({ title, ariaLabel, option, cursorX, onPoint, onHoverDomain, onCursorKey, onZoomWindow, describedBy, actions, caption }: { title: string; ariaLabel?: string; option: EChartsOption; cursorX?: number; onPoint?: (index: number, domainValue?: number) => void; onHoverDomain?: (domainValue: number) => void; onCursorKey?: (action: "previous" | "next" | "page-previous" | "page-next" | "start" | "end") => void; onZoomWindow?: (window: { start: number; end: number }) => void; describedBy?: string; actions?: unknown; caption?: unknown }) => {
     chartPanelSpy.onPointReferences.push(onPoint);
     chartPanelSpy.onHoverReferences.push(onHoverDomain);
     chartPanelSpy.onCursorKeyReferences.push(onCursorKey);
-    return <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX} aria-describedby={describedBy}>
-        {actions as ReactNode}
-        {caption as ReactNode}
-        <button type="button" onClick={() => onPoint?.(21, 2)}>Emit point</button>
-        <button type="button" onClick={() => onHoverDomain?.(2)}>Emit hover</button>
-        <button type="button" onClick={() => onCursorKey?.("next")}>Next keyboard sample</button>
-      </div>;
+    chartPanelSpy.onZoomReferences.push(onZoomWindow);
+    return <section>
+      <div data-testid="segment-chart" data-title={title} data-option={JSON.stringify(option)} data-cursor-x={cursorX} aria-describedby={describedBy} role="img" aria-label={ariaLabel ?? title} />
+      {actions as ReactNode}
+      {caption as ReactNode}
+        <button type="button" onClick={() => onPoint?.(21, 2)}>Point {title}</button>
+        <button type="button" onClick={() => onHoverDomain?.(2)}>Hover {title}</button>
+        <button type="button" onClick={() => onCursorKey?.("next")}>Next {title}</button>
+        <button type="button" onClick={() => onZoomWindow?.({ start: 25, end: 70 })}>Zoom {title}</button>
+    </section>;
   },
 }));
 
 import { SegmentTelemetryChart } from "../SegmentTelemetryChart";
 
 describe("segment telemetry chart", () => {
+  beforeEach(() => {
+    chartPanelSpy.onPointReferences.length = 0;
+    chartPanelSpy.onHoverReferences.length = 0;
+    chartPanelSpy.onCursorKeyReferences.length = 0;
+    chartPanelSpy.onZoomReferences.length = 0;
+  });
   it("builds isolated speed, Delta-T, and measured-acceleration chart options", () => {
     const zoom = { start: 10, end: 80 };
     const speed = buildSegmentTelemetryMetricOption(
@@ -72,37 +81,7 @@ describe("segment telemetry chart", () => {
     ]);
   });
 
-  it("builds three linked core grids including synchronized measured device acceleration", () => {
-    const option = buildSegmentTelemetryOption(
-      analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1", undefined, undefined, acceleration(),
-    ) as {
-      grid: unknown[];
-      series: Array<{ id: string; name: string; data: number[][]; markLine?: { data: Array<{ xAxis?: number }> } }>;
-      legend: { data: string[] };
-      dataZoom: Array<Record<string, unknown>>;
-      axisPointer: { link: Array<Record<string, unknown>> };
-    };
-
-    expect(option.grid).toHaveLength(3);
-    expect(option.series.filter((series) => series.name === "Focused · Lap 2")).toHaveLength(2);
-    expect(option.series.map((series) => series.id)).toEqual(expect.arrayContaining([
-      "lap-2-speed", "lap-2-delta",
-      "imu-acceleration-x", "imu-acceleration-y", "imu-acceleration-z",
-    ]));
-    expect(option.legend.data).toEqual(["Focused · Lap 2", "Reference · Lap 1", "Device X", "Device Y", "Device Z"]);
-    expect(option.series.every((series) => series.data.every((point) => point.length === 3))).toBe(true);
-    expect(option.dataZoom).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: "inside", xAxisIndex: [0, 1, 2] }),
-    ]));
-    expect(option.axisPointer).toEqual(expect.objectContaining({ link: [{ xAxisIndex: "all" }] }));
-    const grids = option.grid as Array<{ top: string; height: string }>;
-    for (let index = 0; index < grids.length - 1; index += 1) {
-      expect(Number.parseFloat(grids[index].top) + Number.parseFloat(grids[index].height))
-        .toBeLessThanOrEqual(Number.parseFloat(grids[index + 1].top));
-    }
-  });
-
-  it("switches to elapsed time and resolves continuous hover domain to the focused source sample", () => {
+  it("shares elapsed-time hover, click, keyboard, zoom, and cursor state across three charts", () => {
     const onCursor = vi.fn();
     render(
       <I18nProvider>
@@ -114,65 +93,136 @@ describe("segment telemetry chart", () => {
           axis="time"
           synchronizedAcceleration={acceleration("sensor-clock")}
           cursorDistanceMeters={50}
+          layout="three-column"
+          onLayout={vi.fn()}
           onCursor={onCursor}
         />
       </I18nProvider>,
     );
 
-    const option = JSON.parse(screen.getByTestId("segment-chart").getAttribute("data-option")!);
-    expect(option.grid).toHaveLength(3);
-    expect(option.xAxis.every((xAxis: { min: number; max: number }) => xAxis.min === 0 && xAxis.max === 4)).toBe(true);
-    expect(option.series.map((series: { id: string }) => series.id)).toEqual([
-      "lap-2-speed", "lap-2-delta", "lap-1-speed", "lap-1-delta",
+    const charts = screen.getAllByTestId("segment-chart");
+    expect(charts).toHaveLength(3);
+    expect(screen.getByRole("img", { name: "Speed comparison by time" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Delta-T by time" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Measured acceleration by time" })).toBeVisible();
+    expect(charts.map((chart) => chart.getAttribute("data-cursor-x"))).toEqual(["2", "2", "2"]);
+
+    const speedOption = chartOption("Speed");
+    const deltaOption = chartOption("Delta-T");
+    const accelerationOption = chartOption("Measured acceleration");
+    expect(speedOption.xAxis).toMatchObject({ min: 0, max: 4 });
+    expect(speedOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-speed", "lap-1-speed"]);
+    expect(deltaOption.series.map((series: { id: string }) => series.id)).toEqual(["lap-2-delta"]);
+    expect(accelerationOption.series.map((series: { id: string }) => series.id)).toEqual([
       "imu-acceleration-x", "imu-acceleration-y", "imu-acceleration-z",
     ]);
-    const speed = option.series.find((series: { id: string }) => series.id === "lap-2-speed");
+    const speed = speedOption.series.find((series: { id: string }) => series.id === "lap-2-speed")!;
     expect(speed.data[1][0]).toBe(2);
-    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-cursor-x", "2");
-    expect(screen.getByTestId("segment-chart")).toHaveAttribute("data-title", "Lap telemetry");
     expect(screen.getByText("Sensor clock · 3 samples")).toBeInTheDocument();
     expect(screen.getByText(/Focused − Reference/)).toBeVisible();
     expect(screen.getByText(/raw focused-lap device axes/)).toBeVisible();
+    expect(screen.getByText(/Device X \+0\.10 g.*Device Y -0\.20 g.*Device Z \+1\.05 g/)).toBeVisible();
     expect(screen.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Select range" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Zoom" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Detailed channels" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
     expect(screen.getByText("Focused lap", { selector: "dt" })).toBeInTheDocument();
 
-    const beforeHover = chartPanelSpy.onHoverReferences.at(-1);
-    fireEvent.click(screen.getByRole("button", { name: "Emit hover" }));
-    expect(chartPanelSpy.onHoverReferences.at(-1)).toBe(beforeHover);
-    expect(onCursor).toHaveBeenCalledWith(50, 21);
-    fireEvent.click(screen.getByRole("button", { name: "Emit point" }));
-    expect(onCursor).toHaveBeenCalledWith(50, 21);
-    fireEvent.click(screen.getByRole("button", { name: "Next keyboard sample" }));
-    expect(onCursor).toHaveBeenCalledWith(100, 22);
+    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+      fireEvent.click(screen.getByRole("button", { name: `Hover ${title}` }));
+      expect(onCursor).toHaveBeenLastCalledWith(50, 21);
+      fireEvent.click(screen.getByRole("button", { name: `Point ${title}` }));
+      expect(onCursor).toHaveBeenLastCalledWith(50, 21);
+      fireEvent.click(screen.getByRole("button", { name: `Next ${title}` }));
+      expect(onCursor).toHaveBeenLastCalledWith(100, 22);
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom Measured acceleration" }));
+    for (const title of ["Speed", "Delta-T", "Measured acceleration"]) {
+      expect(chartOption(title).dataZoom).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "inside", start: 25, end: 70 }),
+      ]));
+    }
+  });
+
+  it("offers every controlled telemetry layout", () => {
+    const onLayout = vi.fn();
+    render(<I18nProvider><SegmentTelemetryChart
+      analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
+      synchronizedAcceleration={acceleration()} layout="three-column"
+      onLayout={onLayout} onCursor={vi.fn()}
+    /></I18nProvider>);
+
+    expect(screen.getByRole("button", { name: "3-column dashboard" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "2+1" }));
+    fireEvent.click(screen.getByRole("button", { name: "3 stacked" }));
+    expect(onLayout.mock.calls.map(([layout]) => layout)).toEqual(["two-plus-one", "three-stacked"]);
+    expect(document.querySelector(".segment-telemetry-grid")).toHaveAttribute("data-layout", "three-column");
+  });
+
+  it("keeps metric cards stable when acceleration or reference evidence is unavailable", () => {
+    const first = render(<I18nProvider><SegmentTelemetryChart
+      analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
+      layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
+    /></I18nProvider>);
+    expect(screen.getByText("Measured acceleration unavailable")).toBeVisible();
+    expect(screen.getAllByTestId("segment-chart")).toHaveLength(3);
+    first.unmount();
+
+    render(<I18nProvider><SegmentTelemetryChart
+      analysis={analysis()} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" axis="distance" synchronizedAcceleration={acceleration()}
+      layout="three-column" onLayout={vi.fn()} onCursor={vi.fn()}
+    /></I18nProvider>);
+    expect(screen.getByText("Select a reference lap to calculate Delta-T")).toBeVisible();
+    expect(screen.getAllByTestId("segment-chart")).toHaveLength(3);
+  });
+
+  it("does not emit a cursor when the focused trajectory is empty", () => {
+    const empty = analysis();
+    empty.records.find((record) => record.lapId === "lap-2")!.trajectory = [];
+    const onCursor = vi.fn();
+
+    render(<I18nProvider><SegmentTelemetryChart
+      analysis={empty} visibleLapIds={["lap-1", "lap-2"]}
+      focusedLapId="lap-2" referenceLapId="lap-1" axis="distance"
+      synchronizedAcceleration={acceleration()} layout="three-column"
+      onLayout={vi.fn()} onCursor={onCursor}
+    /></I18nProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Hover Speed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Point Speed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next Speed" }));
+    expect(onCursor).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Telemetry unavailable for this scope")).toHaveLength(3);
   });
 
   it("keeps the reference calculation but removes its plotted series in focused-only mode", () => {
-    const option = buildSegmentTelemetryOption(analysis(), ["lap-2"], "distance", "lap-2", "lap-1") as {
+    const option = buildSegmentTelemetryMetricOption(
+      analysis(), ["lap-2"], "distance", "lap-2", "lap-1",
+      labels(), "speed", undefined, { start: 0, end: 100 }, false,
+    ) as {
       series: Array<{ id: string }>;
       legend: { data: string[] };
     };
 
-    expect(option.series.map((series) => series.id)).toEqual([
-      "lap-2-speed", "lap-2-delta",
-    ]);
+    expect(option.series.map((series) => series.id)).toEqual(["lap-2-speed"]);
     expect(option.legend.data).toEqual(["Focused · Lap 2"]);
   });
 
   it("plots every requested presentation lap without the former five-lap ceiling", () => {
     const manyLaps = analysisWithLapCount(7);
     const visibleLapIds = manyLaps.records.map((record) => record.lapId);
-    const option = buildSegmentTelemetryOption(
+    const option = buildSegmentTelemetryMetricOption(
       manyLaps,
       visibleLapIds,
       "distance",
       "lap-7",
       "lap-1",
+      labels(),
+      "speed",
       undefined,
-      ["speed"],
+      { start: 0, end: 100 },
+      false,
     ) as {
       series: Array<{ id: string }>;
       legend: { data: string[] };
@@ -215,6 +265,8 @@ describe("segment telemetry chart", () => {
       focusedLapId="lap-2"
       referenceLapId="lap-1"
       axis="distance"
+      layout="three-column"
+      onLayout={vi.fn()}
       onCursor={vi.fn()}
     /></I18nProvider>);
 
@@ -256,6 +308,16 @@ function labels(): SegmentTelemetryLabels {
     referenceLap: "Reference",
     maximumDelta: "Maximum delta",
   };
+}
+
+function chartOption(title: string): {
+  xAxis: { min: number; max: number };
+  series: Array<{ id: string; data: number[][] }>;
+  dataZoom: Array<Record<string, unknown>>;
+} {
+  const chart = screen.getAllByTestId("segment-chart").find((candidate) => candidate.getAttribute("data-title") === title);
+  if (!chart) throw new Error(`Missing ${title} chart`);
+  return JSON.parse(chart.getAttribute("data-option")!);
 }
 
 function analysis(): SegmentAnalysisResult {

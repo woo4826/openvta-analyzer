@@ -1630,8 +1630,152 @@ footer.privacy-note {
   font-variant-numeric: tabular-nums;
 }
 
-.segment-telemetry-panel .chart {
-  height: 500px;
+.segment-telemetry-panel {
+  min-width: 0;
+  padding: var(--space-4);
+  container: telemetry / inline-size;
+}
+
+.segment-telemetry-toolbar {
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.segment-telemetry-toolbar h3 {
+  margin: 2px 0 0;
+}
+
+.segment-telemetry-layout-control {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.segment-telemetry-layout-control button {
+  min-height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  padding: 0 var(--space-3);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.segment-telemetry-layout-control button[aria-pressed="true"] {
+  border-color: var(--color-teal-dark);
+  color: var(--color-teal-dark);
+  background: var(--color-teal-soft);
+}
+
+.segment-layout-glyph {
+  width: 24px;
+  height: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.segment-layout-glyph i {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.segment-layout-glyph.is-three-column {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.segment-layout-glyph.is-two-plus-one {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.segment-layout-glyph.is-two-plus-one i:last-child {
+  grid-column: 1 / -1;
+}
+
+.segment-layout-glyph.is-three-stacked {
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.segment-telemetry-grid {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.segment-telemetry-grid.is-three-column {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.segment-telemetry-grid.is-two-plus-one {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.segment-telemetry-grid.is-two-plus-one > :nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.segment-telemetry-grid.is-three-stacked {
+  grid-template-columns: 1fr;
+}
+
+.segment-telemetry-metric-card {
+  min-width: 0;
+  position: relative;
+}
+
+.segment-telemetry-metric {
+  height: 100%;
+}
+
+.segment-telemetry-metric .panel-body {
+  padding: var(--space-3);
+}
+
+.segment-telemetry-metric .chart {
+  height: 300px;
+}
+
+.segment-telemetry-grid.is-three-column .segment-telemetry-metric .chart {
+  height: 330px;
+}
+
+.segment-telemetry-unavailable {
+  position: absolute;
+  inset: 52px var(--space-3) var(--space-3);
+  z-index: 2;
+  margin: 0;
+  border-radius: var(--radius-2);
+  color: var(--color-text-muted);
+  background: rgb(248 250 252 / 92%);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-weight: 800;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
+
+@container telemetry (max-width: 860px) {
+  .segment-telemetry-grid,
+  .segment-telemetry-grid.is-three-column,
+  .segment-telemetry-grid.is-two-plus-one {
+    grid-template-columns: 1fr;
+  }
+
+  .segment-telemetry-grid.is-two-plus-one > :nth-child(3) {
+    grid-column: auto;
+  }
 }
 
 .segment-telemetry-context {
@@ -1717,7 +1861,7 @@ footer.privacy-note {
 .segment-telemetry-readout {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-3);
 }
 
@@ -3036,8 +3180,9 @@ tbody tr:hover {
     height: 500px;
   }
 
-  .segment-telemetry-panel .chart {
-    height: 430px;
+  .segment-telemetry-metric .chart,
+  .segment-telemetry-grid.is-three-column .segment-telemetry-metric .chart {
+    height: 300px;
   }
 
   .segment-telemetry-readout {
