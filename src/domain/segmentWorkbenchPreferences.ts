@@ -26,17 +26,17 @@ const accelerationVectorModes: AccelerationVectorMode[] = ["gg-2d", "vector-3d"]
 const defaultLayouts: Record<string, SegmentWidgetLayout[]> = {
   lg: [
     { i: "map", x: 0, y: 0, w: 12, h: 11, minW: 6, minH: 8 },
-    { i: "telemetry", x: 0, y: 11, w: 12, h: 11, minW: 6, minH: 11 },
-    { i: "evidence", x: 0, y: 22, w: 4, h: 7, minW: 3, minH: 5 },
-    { i: "variation", x: 4, y: 22, w: 8, h: 7, minW: 4, minH: 5 },
-    { i: "laps", x: 0, y: 29, w: 12, h: 7, minW: 5, minH: 5 },
+    { i: "telemetry", x: 0, y: 11, w: 12, h: 12, minW: 6, minH: 12 },
+    { i: "evidence", x: 0, y: 23, w: 4, h: 7, minW: 3, minH: 5 },
+    { i: "variation", x: 4, y: 23, w: 8, h: 7, minW: 4, minH: 5 },
+    { i: "laps", x: 0, y: 30, w: 12, h: 7, minW: 5, minH: 5 },
   ],
   md: [
     { i: "map", x: 0, y: 0, w: 8, h: 10, minW: 4, minH: 8 },
-    { i: "telemetry", x: 0, y: 10, w: 8, h: 11, minW: 4, minH: 11 },
-    { i: "evidence", x: 0, y: 21, w: 3, h: 7, minW: 3, minH: 5 },
-    { i: "variation", x: 3, y: 21, w: 5, h: 7, minW: 3, minH: 5 },
-    { i: "laps", x: 0, y: 28, w: 8, h: 8, minW: 4, minH: 5 },
+    { i: "telemetry", x: 0, y: 10, w: 8, h: 12, minW: 4, minH: 12 },
+    { i: "evidence", x: 0, y: 22, w: 3, h: 7, minW: 3, minH: 5 },
+    { i: "variation", x: 3, y: 22, w: 5, h: 7, minW: 3, minH: 5 },
+    { i: "laps", x: 0, y: 29, w: 8, h: 8, minW: 4, minH: 5 },
   ],
   sm: compactLayout(),
   xs: compactLayout(),
@@ -119,8 +119,33 @@ export function mergeSegmentLayouts(
         h: Math.max(merged.h, item.minH ?? 1),
       };
     });
-    return [breakpoint, breakpoint === "sm" || breakpoint === "xs" ? reflowCompactLayout(merged) : merged];
+    return [breakpoint, breakpoint === "sm" || breakpoint === "xs"
+      ? reflowCompactLayout(merged)
+      : reflowCollidingLayout(merged)];
   }));
+}
+
+function reflowCollidingLayout(layout: SegmentWidgetLayout[]): SegmentWidgetLayout[] {
+  const placed: SegmentWidgetLayout[] = [];
+  const byId = new Map<SegmentWidgetId, SegmentWidgetLayout>();
+  [...layout].sort((left, right) => left.y - right.y || left.x - right.x).forEach((item) => {
+    const next = { ...item };
+    while (true) {
+      const collisions = placed.filter((candidate) => overlaps(next, candidate));
+      if (!collisions.length) break;
+      next.y = Math.max(...collisions.map((candidate) => candidate.y + candidate.h));
+    }
+    placed.push(next);
+    byId.set(next.i, next);
+  });
+  return layout.map((item) => byId.get(item.i) ?? item);
+}
+
+function overlaps(left: SegmentWidgetLayout, right: SegmentWidgetLayout): boolean {
+  return left.x < right.x + right.w
+    && left.x + left.w > right.x
+    && left.y < right.y + right.h
+    && left.y + left.h > right.y;
 }
 
 function reflowCompactLayout(layout: SegmentWidgetLayout[]): SegmentWidgetLayout[] {

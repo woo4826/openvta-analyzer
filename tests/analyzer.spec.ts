@@ -142,7 +142,15 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect(analysisMain.getByRole("img", { name: "Segment time by lap and segment time versus driven path charts" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Speed comparison by distance" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Delta-T by distance" })).toBeVisible();
-  await expect(analysisMain.getByRole("img", { name: "Measured acceleration by distance" })).toBeVisible();
+  await expect(analysisMain.getByRole("img", { name: "Device X and Y acceleration at the synchronized cursor" })).toBeVisible();
+  const acceleration2d = analysisMain.getByRole("button", { name: "2D G-G" });
+  const acceleration3d = analysisMain.getByRole("button", { name: "3D vector" });
+  await expect(acceleration2d).toHaveAttribute("aria-pressed", "true");
+  await acceleration3d.click();
+  await expect(analysisMain.getByRole("img", { name: "Device X, Y, and Z acceleration sphere at the synchronized cursor" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => JSON.parse(window.localStorage.getItem("openvta.segmentWorkbench.v2") ?? "{}")?.accelerationVectorMode)).toBe("vector-3d");
+  await acceleration2d.click();
+  await expect(analysisMain.getByRole("img", { name: "Device X and Y acceleration at the synchronized cursor" })).toBeVisible();
   await expect(analysisMain.getByRole("img", { name: "Focused and reference trajectories with synchronized cursor markers" })).toBeVisible();
   const telemetryGrid = analysisMain.locator(".segment-telemetry-grid");
   const threeColumnLayout = analysisMain.getByRole("button", { name: "3-column dashboard" });
@@ -194,7 +202,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   const cursorDistance = analysisMain.locator(".segment-telemetry-readout > div").first().locator("dd");
   const focusedTrackMarker = analysisMain.getByTestId("focused-track-marker");
   const markerBeforeHover = await focusedTrackMarker.evaluate((marker) => `${marker.getAttribute("cx")},${marker.getAttribute("cy")}`);
-  for (const metric of ["speed", "delta", "imu-acceleration"]) {
+  for (const metric of ["speed", "delta"]) {
     const telemetryCanvas = analysisMain.locator(`.segment-telemetry-metric-card.is-${metric} canvas`);
     await telemetryCanvas.scrollIntoViewIfNeeded();
     const telemetryBox = await telemetryCanvas.boundingBox();
@@ -216,7 +224,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
   await expect.poll(() => focusedTrackMarker.evaluate((marker) => `${marker.getAttribute("cx")},${marker.getAttribute("cy")}`)).not.toBe(markerBeforeHover);
   if ((page.viewportSize()?.width ?? 0) > 680) {
     const metricCanvases = analysisMain.locator(".segment-telemetry-metric-card canvas");
-    const canvasesBeforeDrag = await Promise.all([0, 1, 2].map((index) => metricCanvases.nth(index).screenshot()));
+    const canvasesBeforeDrag = await Promise.all([0, 1].map((index) => metricCanvases.nth(index).screenshot()));
     const speedCanvas = analysisMain.locator(".segment-telemetry-metric-card.is-speed canvas");
     const speedBox = await speedCanvas.boundingBox();
     expect(speedBox).not.toBeNull();
@@ -226,7 +234,7 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     await page.mouse.up();
     const showAllTelemetry = analysisMain.getByRole("button", { name: "Show all", exact: true });
     await expect(showAllTelemetry).toBeVisible();
-    const canvasesAfterDrag = await Promise.all([0, 1, 2].map((index) => metricCanvases.nth(index).screenshot()));
+    const canvasesAfterDrag = await Promise.all([0, 1].map((index) => metricCanvases.nth(index).screenshot()));
     expect(canvasesAfterDrag.every((image, index) => !image.equals(canvasesBeforeDrag[index]))).toBe(true);
     const sectionChooser = scopeNavigator.getByRole("combobox", { name: "Go to section" });
     const cornerId = await corner.getAttribute("data-section-id") ?? "";
@@ -236,8 +244,8 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
     await sectionChooser.selectOption(cornerId);
     await expect(corner).toHaveAttribute("aria-pressed", "true");
   }
-  const accelerationChart = analysisMain.getByRole("img", { name: "Measured acceleration by distance" });
-  await accelerationChart.focus();
+  const keyboardChart = analysisMain.getByRole("img", { name: "Speed comparison by distance" });
+  await keyboardChart.focus();
   const keyboardCursorBefore = await cursorDistance.textContent();
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => cursorDistance.textContent()).not.toBe(keyboardCursorBefore);

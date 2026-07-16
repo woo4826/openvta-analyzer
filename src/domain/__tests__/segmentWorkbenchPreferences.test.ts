@@ -36,8 +36,13 @@ describe("segment workbench preferences", () => {
     ]);
     expect(preferences.layouts.lg.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 12 });
     expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ x: 0, w: 12 });
-    expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 11, minH: 11 });
+    expect(preferences.layouts.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 12, minH: 12 });
+    expect(preferences.layouts.lg.find((item) => item.i === "evidence")).toMatchObject({ y: 23 });
+    expect(preferences.layouts.lg.find((item) => item.i === "laps")).toMatchObject({ y: 30 });
     expect(preferences.layouts.md.find((item) => item.i === "map")).toMatchObject({ x: 0, y: 0, w: 8 });
+    expect(preferences.layouts.md.find((item) => item.i === "telemetry")).toMatchObject({ y: 10, h: 12, minH: 12 });
+    expect(preferences.layouts.md.find((item) => item.i === "evidence")).toMatchObject({ y: 22 });
+    expect(preferences.layouts.md.find((item) => item.i === "laps")).toMatchObject({ y: 29 });
     expect(preferences.layouts.sm.find((item) => item.i === "telemetry")).toMatchObject({ y: 9, h: 32, minH: 32 });
     expect(SEGMENT_WORKBENCH_STORAGE_KEY).toBe("openvta.segmentWorkbench.v2");
   });
@@ -52,7 +57,7 @@ describe("segment workbench preferences", () => {
     preferences.accelerationVectorMode = "vector-3d";
     preferences.snapToSections = false;
     preferences.visibleWidgets.evidence = false;
-    preferences.layouts.lg[0] = { ...preferences.layouts.lg[0], x: 4, y: 3 };
+    preferences.layouts.lg[0] = { ...preferences.layouts.lg[0], x: 4 };
 
     saveSegmentWorkbenchPreferences(preferences, storage);
 
@@ -74,7 +79,8 @@ describe("segment workbench preferences", () => {
   it("migrates missing and invalid acceleration-vector modes to the 2D G-G default", () => {
     const store = new Map<string, string>();
     const storage = memoryStorage(store);
-    const { accelerationVectorMode: _mode, ...legacy } = defaultSegmentWorkbenchPreferences();
+    const legacy = { ...defaultSegmentWorkbenchPreferences() } as Partial<ReturnType<typeof defaultSegmentWorkbenchPreferences>>;
+    delete legacy.accelerationVectorMode;
     store.set(SEGMENT_WORKBENCH_STORAGE_KEY, JSON.stringify(legacy));
 
     expect(loadSegmentWorkbenchPreferences(storage).accelerationVectorMode).toBe("gg-2d");
@@ -127,7 +133,10 @@ describe("segment workbench preferences", () => {
       lg: [{ i: "telemetry", x: 0, y: 11, w: 12, h: 7, minW: 2, minH: 4 }],
     }, defaults);
 
-    expect(merged.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 11, minH: 11 });
+    expect(merged.lg.find((item) => item.i === "telemetry")).toMatchObject({ h: 12, minH: 12 });
+    expect(merged.lg.find((item) => item.i === "evidence")).toMatchObject({ y: 23 });
+    expect(merged.lg.find((item) => item.i === "variation")).toMatchObject({ y: 23 });
+    expect(merged.lg.find((item) => item.i === "laps")).toMatchObject({ y: 30 });
   });
 
   it("reflows legacy compact positions after increasing telemetry height", () => {
