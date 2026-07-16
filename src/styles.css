@@ -1746,6 +1746,104 @@ footer.privacy-note {
   height: 330px;
 }
 
+.segment-acceleration-vector,
+.segment-acceleration-vector-panel {
+  min-width: 0;
+  height: 100%;
+}
+
+.segment-acceleration-mode-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.segment-acceleration-mode-control button {
+  min-height: 44px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-2);
+  padding: 0 var(--space-3);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.segment-acceleration-mode-control button[aria-pressed="true"] {
+  border-color: var(--color-teal-dark);
+  color: var(--color-teal-dark);
+  background: var(--color-teal-soft);
+}
+
+.segment-telemetry-metric.segment-acceleration-vector-panel .chart {
+  width: min(100%, 360px);
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1;
+  margin-inline: auto;
+}
+
+.segment-acceleration-caption {
+  margin-top: var(--space-2);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.segment-acceleration-values {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.segment-acceleration-values > div {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  padding: var(--space-2);
+  background: var(--color-surface-muted);
+  text-align: center;
+}
+
+.segment-acceleration-values dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.segment-acceleration-values dd {
+  margin: var(--space-1) 0 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-acceleration-reference {
+  margin: 0;
+  color: var(--color-blue);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.segment-acceleration-reference.is-unavailable {
+  color: var(--color-text-muted);
+}
+
+.segment-acceleration-state {
+  min-height: 330px;
+  margin: 0;
+  color: var(--color-text-muted);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  font-weight: 800;
+}
+
+.segment-acceleration-state p {
+  margin: 0;
+}
+
 .segment-telemetry-unavailable {
   position: absolute;
   inset: 52px var(--space-3) var(--space-3);
@@ -1771,6 +1869,10 @@ footer.privacy-note {
 
   .segment-telemetry-grid.is-two-plus-one > :nth-child(3) {
     grid-column: auto;
+  }
+
+  .segment-acceleration-values {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
