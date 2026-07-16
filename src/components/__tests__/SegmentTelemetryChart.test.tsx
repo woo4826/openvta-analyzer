@@ -4,7 +4,13 @@ import type { EChartsOption } from "echarts";
 import type { ReactNode } from "react";
 import type { SegmentAnalysisResult, SynchronizedAccelerationSeries } from "../../domain/types";
 import { I18nProvider } from "../../i18n/I18nProvider";
-import { buildSegmentTelemetryOption, downsampleAcceleration, MAX_RENDERED_IMU_SAMPLES } from "../segmentTelemetryOptions";
+import {
+  buildSegmentTelemetryMetricOption,
+  buildSegmentTelemetryOption,
+  downsampleAcceleration,
+  MAX_RENDERED_IMU_SAMPLES,
+  type SegmentTelemetryLabels,
+} from "../segmentTelemetryOptions";
 
 const chartPanelSpy = vi.hoisted(() => ({
   onPointReferences: [] as Array<((index: number, domainValue?: number) => void) | undefined>,
@@ -29,6 +35,43 @@ vi.mock("../ChartPanel", () => ({
 import { SegmentTelemetryChart } from "../SegmentTelemetryChart";
 
 describe("segment telemetry chart", () => {
+  it("builds isolated speed, Delta-T, and measured-acceleration chart options", () => {
+    const zoom = { start: 10, end: 80 };
+    const speed = buildSegmentTelemetryMetricOption(
+      analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
+      labels(), "speed", undefined, zoom, false,
+    ) as {
+      grid: unknown;
+      series: Array<{ id: string }>;
+      dataZoom: Array<Record<string, unknown>>;
+    };
+    const delta = buildSegmentTelemetryMetricOption(
+      analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
+      labels(), "delta", undefined, zoom, false,
+    ) as { series: Array<{ id: string }> };
+    const measuredAcceleration = buildSegmentTelemetryMetricOption(
+      analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1",
+      labels(), "imu-acceleration", acceleration(), zoom, true,
+    ) as {
+      series: Array<{ id: string }>;
+      dataZoom: Array<Record<string, unknown>>;
+    };
+
+    expect(speed.grid).not.toBeInstanceOf(Array);
+    expect(speed.series.map((series) => series.id)).toEqual(["lap-2-speed", "lap-1-speed"]);
+    expect(delta.series.map((series) => series.id)).toEqual(["lap-2-delta"]);
+    expect(measuredAcceleration.series.map((series) => series.id)).toEqual([
+      "imu-acceleration-x", "imu-acceleration-y", "imu-acceleration-z",
+    ]);
+    expect(speed.dataZoom).toEqual([
+      expect.objectContaining({ type: "inside", start: 10, end: 80 }),
+    ]);
+    expect(measuredAcceleration.dataZoom).toEqual([
+      expect.objectContaining({ type: "inside", start: 10, end: 80 }),
+      expect.objectContaining({ type: "slider", start: 10, end: 80 }),
+    ]);
+  });
+
   it("builds three linked core grids including synchronized measured device acceleration", () => {
     const option = buildSegmentTelemetryOption(
       analysis(), ["lap-1", "lap-2"], "distance", "lap-2", "lap-1", undefined, undefined, acceleration(),
@@ -192,6 +235,26 @@ function acceleration(method: SynchronizedAccelerationSeries["method"] = "line-o
       accelYG: index * -0.2,
       accelZG: 1 + index * 0.05,
     })),
+  };
+}
+
+function labels(): SegmentTelemetryLabels {
+  return {
+    speed: "Speed",
+    imuAcceleration: "Measured acceleration",
+    imuAxisX: "Device X",
+    imuAxisY: "Device Y",
+    imuAxisZ: "Device Z",
+    acceleration: "GPS speed derivative",
+    elapsed: "Elapsed time",
+    delta: "Delta-T",
+    loss: "Loss rate",
+    distanceAxis: "Distance (m)",
+    timeAxis: "Elapsed time (s)",
+    lap: "Lap",
+    focusedLap: "Focused",
+    referenceLap: "Reference",
+    maximumDelta: "Maximum delta",
   };
 }
 
