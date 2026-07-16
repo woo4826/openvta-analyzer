@@ -566,7 +566,7 @@ git commit -m "test: verify synchronized telemetry layouts"
 
 ### Local verification evidence — 2026-07-16 KST
 
-- Final local gate: TypeScript and ESLint passed; Vitest passed 57 files / 313 tests; production build completed; Playwright passed 16/16 desktop and mobile tests; `git diff --check` passed.
+- Final local gate: TypeScript and ESLint passed; Vitest passed 57 files / 314 tests; production build completed; Playwright passed 16/16 desktop and mobile tests; `git diff --check` passed.
 - Focused stability check: the mobile import/Lap Analysis scenario passed three consecutive repetitions after making plot-coordinate hover movement deterministic.
 - Supplied recording: `VTA24082025_101142_CC00.Vta` parsed 1,589 GPS rows and 158,289 sensor rows and matched the Inje Speedium preset.
 - Actual-data layouts: three-column cards measured 435 px each, 2+1 measured 650/650/1,310 px, and stacked measured 1,310 px per card. The chosen layout survived a page reload and re-import of the supplied VTA.
@@ -579,11 +579,13 @@ git commit -m "test: verify synchronized telemetry layouts"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-16-synchronized-telemetry-layouts.md`
 
-- [ ] **Step 1: Record pre-deployment evidence**
+- [x] **Step 1: Record pre-deployment evidence**
 
 Record commit SHA, local test counts, Aside measurements, actual detected track,
 selected laps/section, layout persistence, and synchronized cursor observations
 in this plan. Commit the evidence.
+
+Pre-deployment candidate: `9800ce94e7106b7ff85d8544f8bbbd4b03c7cdc4` on `codex/synchronized-telemetry-layouts`, based on main `176769dc346a9783a3b7c99844c1fcd21452be8f`. The worktree and complete range passed whitespace checks. The final review also added a legacy-v2 compact-layout migration test so older saved y positions cannot overlap the expanded telemetry widget.
 
 - [ ] **Step 2: Fast-forward main and verify the merged tree**
 
