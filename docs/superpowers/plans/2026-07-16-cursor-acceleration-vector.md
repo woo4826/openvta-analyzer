@@ -422,7 +422,7 @@ git commit -m "test: verify cursor acceleration vector"
 
 Inspect `git diff 41d8224..HEAD`, dependency changes, lazy-load boundaries, preference migration, cleanup/disposal, accessibility labels, and tests. Resolve every Critical/Major issue, rerun its focused regression, then rerun the complete quality gate.
 
-- [ ] **Step 2: Push main**
+- [x] **Step 2: Push main**
 
 Run:
 
@@ -433,18 +433,29 @@ git push origin main
 
 Expected: clean `main` advances on `origin/main`.
 
-- [ ] **Step 3: Monitor CI and Pages**
+- [x] **Step 3: Monitor CI and Pages**
 
 Use `gh run list --commit <sha>` and `gh run watch <run-id> --exit-status` for both CI and Pages workflows.
 
 Expected: every job and the GitHub Pages deploy finish successfully for the pushed SHA.
 
-- [ ] **Step 4: Smoke-test production with Aside**
+- [x] **Step 4: Smoke-test production with Aside**
 
 Open `https://woo4826.github.io/openvta-analyzer/?v=<sha>`, import the supplied VTA locally, and repeat Speed/Delta hover, map/vector synchronization, 2D/3D switching, section scope, persistence, and console-error checks.
 
 Expected: production serves the pushed build and reproduces the local result.
 
-- [ ] **Step 5: Record deployment evidence and commit documentation**
+- [x] **Step 5: Record deployment evidence and commit documentation**
 
 Add commit SHA, CI/Pages run IDs, deployed URL, selected laps/scope, VTA counts, vector-mode result, and console result to this plan. Commit and push the documentation update, then verify its Pages run if it changes deployable content.
+
+## Deployment evidence
+
+- Deployed code/documentation SHA: `44f4584133dc56633e71530f1f39fae469c99968`.
+- CI: run `29477131716` completed successfully, including typecheck, lint, unit tests, production build, and browser tests.
+- GitHub Pages: run `29477131831` completed successfully; build job `87552431930` and deploy job `87552535683` both passed.
+- Production URL: `https://woo4826.github.io/openvta-analyzer/?v=44f4584`.
+- Production VTA result: 1,589 GPS fixes and 158,289 sensor rows; Inje Speedium matched; Lap 7 focused versus Lap 4 reference; 2D G-G was the initial selection.
+- Whole-lap production synchronization: Speed hover moved 0 m → 2,588 m while the vector readout and focused map marker changed together.
+- Corner production synchronization: Corner 1 (0–93 m) Delta-T hover moved 0 m → 64 m and changed the vector readout; 3D rendered at that cursor and persisted `vector-3d`; the handoff returned to `gg-2d` and whole lap.
+- Aside captured zero console errors and zero page errors during the production real-file flow.
