@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GpsPoint, LapResult, SensorPoint, TrackProfileV1 } from "../../domain/types";
+import type { GpsPoint, LapResult, SegmentTelemetryLayout, SensorPoint, TrackProfileV1 } from "../../domain/types";
 import { SEGMENT_WORKBENCH_STORAGE_KEY } from "../../domain/segmentWorkbenchPreferences";
 import { I18nProvider } from "../../i18n/I18nProvider";
 
@@ -17,8 +17,13 @@ vi.mock("../SegmentTrajectoryMap", () => ({
   ),
 }));
 vi.mock("../SegmentTelemetryChart", () => ({
-  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAcceleration, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; onCursor: (distance: number, sourceIndex: number) => void }) => (
-    <div data-testid="chart-state">roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}<button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button></div>
+  SegmentTelemetryChart: ({ focusedLapId, referenceLapId, visibleLapIds, cursorDistanceMeters, synchronizedAcceleration, layout, onLayout, onCursor }: { focusedLapId?: string; referenceLapId?: string; visibleLapIds: string[]; cursorDistanceMeters?: number; synchronizedAcceleration?: { method: string; samples: unknown[] }; layout: SegmentTelemetryLayout; onLayout: (layout: SegmentTelemetryLayout) => void; onCursor: (distance: number, sourceIndex: number) => void }) => (
+    <div data-testid="chart-state">
+      roles={focusedLapId},{referenceLapId}:visible={visibleLapIds.join(",")}:cursor={cursorDistanceMeters}:sync={synchronizedAcceleration?.method}:{synchronizedAcceleration?.samples.length}
+      <span data-testid="telemetry-layout">{layout}</span>
+      <button type="button" onClick={() => onCursor(56, 4)}>Select graph point</button>
+      <button type="button" onClick={() => onLayout("two-plus-one")}>Choose 2+1 telemetry layout</button>
+    </div>
   ),
 }));
 vi.mock("../SegmentVariationChart", () => ({
@@ -247,6 +252,39 @@ describe("SegmentAnalysisWorkbench", () => {
     expect(JSON.parse(localStorage.getItem(SEGMENT_WORKBENCH_STORAGE_KEY) ?? "{}")).toMatchObject({
       lapVisibility: "focus-only",
     });
+  });
+
+  it("persists the telemetry layout across recording changes", async () => {
+    const user = userEvent.setup();
+    const fixture = data();
+    const props = {
+      sourceName: "session.Vta",
+      points: fixture.points,
+      sensors: fixture.sensors,
+      laps: fixture.laps,
+      profile: fixture.profile,
+      analysisLine: fixture.profile.centerline,
+      includePartialLapSections: false,
+      onIncludePartialLapSections: vi.fn(),
+      mapSettings: { pointSize: 5, tileUrl: "tiles", speedThresholds: [20, 50, 80, 120] as [number, number, number, number] },
+      selectedPointIndex: 0,
+      onSelectedPointIndex: vi.fn(),
+      onMapSettingsChange: vi.fn(),
+      onActiveSegment: vi.fn(),
+      onSaveRange: vi.fn(),
+      onOpenSetup: vi.fn(),
+    };
+    const view = render(<I18nProvider><SegmentAnalysisWorkbench recordingId="recording-1" {...props} /></I18nProvider>);
+
+    expect(screen.getByTestId("telemetry-layout")).toHaveTextContent("three-column");
+    await user.click(screen.getByRole("button", { name: "Choose 2+1 telemetry layout" }));
+    expect(screen.getByTestId("telemetry-layout")).toHaveTextContent("two-plus-one");
+    expect(JSON.parse(localStorage.getItem(SEGMENT_WORKBENCH_STORAGE_KEY) ?? "{}")).toMatchObject({
+      telemetryLayout: "two-plus-one",
+    });
+
+    view.rerender(<I18nProvider><SegmentAnalysisWorkbench recordingId="recording-2" {...props} /></I18nProvider>);
+    expect(screen.getByTestId("telemetry-layout")).toHaveTextContent("two-plus-one");
   });
 
   it("saves a map-selected range as a named track section", async () => {
