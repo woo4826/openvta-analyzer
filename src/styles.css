@@ -3028,7 +3028,7 @@ tbody tr:hover {
   }
 
   .workspace-grid {
-    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .analysis-inspector {
@@ -3053,7 +3053,7 @@ tbody tr:hover {
   .form-grid,
   .lap-analysis-grid,
   .section-editor-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sector-gate-editor-row {
