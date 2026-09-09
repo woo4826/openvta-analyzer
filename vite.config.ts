@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? "/openvta-analyzer/" : "/",
   plugins: [react()],
+  // This standalone app must not inherit a parent checkout's PostCSS plugins.
+  css: { postcss: { plugins: [] } },
   build: {
     chunkSizeWarningLimit: 2500,
     rollupOptions: {
