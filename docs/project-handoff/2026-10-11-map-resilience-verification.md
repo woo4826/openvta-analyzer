@@ -43,7 +43,13 @@ failure path, not proof that every browser/GPU freeze has this cause.
   pan, focused-lap change, section change, chart cursor movement, overview
   remount, controlled 503, offline selection, retry, network recovery.
   Live canvas remains mounted, rendering responds, and no page exceptions
-  were recorded. No standalone Playwright browser automation was used.
+  were recorded. No standalone Playwright browser automation was used locally.
+- Existing GitHub browser CI initially failed only its desktop/mobile legacy
+  sample checks, which expected raster outages to force SVG fallback. Those
+  checks now explicitly simulate renderer construction failure so fallback
+  coverage is retained. A separate desktop/mobile raster-outage regression
+  verifies canvas identity, selection, navigation, same-viewport retry and
+  successful tile recovery using a deterministic PNG fixture.
 - Dedicated code review identified the retry limitation; after its correction,
   reviewer reported no remaining critical/important findings.
 
