@@ -577,11 +577,22 @@ test("keeps map navigation usable during tile outages and retries at the same vi
   await page.getByRole("button", { name: "Load built-in sample" }).click();
   const canvas = page.locator(".map-container canvas");
   const notice = page.locator(".map-tile-notice");
+  const waitForSettledMap = async () => {
+    let previousFrame = await canvas.screenshot();
+    let stableFrames = 0;
+    await expect.poll(async () => {
+      const frame = await canvas.screenshot();
+      stableFrames = frame.equals(previousFrame) && tileRequestsInFlight === 0 ? stableFrames + 1 : 0;
+      previousFrame = frame;
+      return stableFrames;
+    }, { intervals: [200], timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+  };
   await expect(canvas).toBeVisible();
   await expect(notice).toContainText("Map tiles are temporarily unavailable");
   await expect(page.locator("svg.coordinate-layer")).toHaveCount(0);
   await canvas.evaluate((element) => element.setAttribute("data-original-canvas", "true"));
   await canvas.hover();
+  await waitForSettledMap();
   const beforeZoom = await canvas.screenshot();
   await page.mouse.wheel(0, -450);
   await expect.poll(async () => (await canvas.screenshot()).equals(beforeZoom)).toBe(false);
@@ -593,16 +604,6 @@ test("keeps map navigation usable during tile outages and retries at the same vi
   await expect(metricValue(panelByHeading(page.locator(".analysis-main"), "Selected Point"), "Index")).toHaveText("10");
   await expect(canvas).toHaveAttribute("data-original-canvas", "true");
 
-  const waitForSettledMap = async () => {
-    let previousFrame = await canvas.screenshot();
-    let stableFrames = 0;
-    await expect.poll(async () => {
-      const frame = await canvas.screenshot();
-      stableFrames = frame.equals(previousFrame) && tileRequestsInFlight === 0 ? stableFrames + 1 : 0;
-      previousFrame = frame;
-      return stableFrames;
-    }, { intervals: [200], timeout: 10_000 }).toBeGreaterThanOrEqual(3);
-  };
   await waitForSettledMap();
   // Isolate failures at the final viewport, after camera animations, cursor
   // recentering and initial fit settle. No navigation occurs after this.
