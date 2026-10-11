@@ -323,6 +323,15 @@ test("imports a track before loading a VTA and explores automatic sectors", asyn
 
 test("loads the sample and renders core analysis views", async ({ page }) => {
   await markTourCompleted(page);
+  // Coordinate fallback is now reserved for renderer failure, not a
+  // recoverable raster outage. Preserve this fallback workflow's coverage.
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: Parameters<typeof original>) {
+      if (this.classList.contains("maplibregl-canvas")) return null;
+      return Reflect.apply(original, this, args);
+    } as typeof original;
+  });
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open a VTA or ZIP file" })).toBeVisible();
@@ -540,6 +549,75 @@ test("loads the sample and renders core analysis views", async ({ page }) => {
   expect(exportedRows.every((row) => row.includes(filterQuery))).toBe(true);
   expect(firstExportedRow[0]).toBe(firstVisibleCells[0].trim());
   expect(Number(firstExportedRow[4])).toBeCloseTo(Number(firstVisibleCells[4]), 3);
+});
+
+test("keeps map navigation usable during tile outages and retries at the same viewport", async ({ page }) => {
+  await markTourCompleted(page);
+  let offline = true;
+  let retriedFailedTiles = 0;
+  let tileRequestsInFlight = 0;
+  const failedUrls = new Set<string>();
+  const tile = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=", "base64");
+  await page.route("https://tile.openstreetmap.org/**", async (route) => {
+    tileRequestsInFlight += 1;
+    try {
+      const url = route.request().url();
+      if (offline) {
+        failedUrls.add(url);
+        await route.fulfill({ status: 503, body: "Controlled tile outage" });
+      } else {
+        if (failedUrls.has(url)) retriedFailedTiles += 1;
+        await route.fulfill({ status: 200, contentType: "image/png", body: tile });
+      }
+    } finally {
+      tileRequestsInFlight -= 1;
+    }
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Load built-in sample" }).click();
+  const canvas = page.locator(".map-container canvas");
+  const notice = page.locator(".map-tile-notice");
+  const waitForSettledMap = async () => {
+    let previousFrame = await canvas.screenshot();
+    let stableFrames = 0;
+    await expect.poll(async () => {
+      const frame = await canvas.screenshot();
+      stableFrames = frame.equals(previousFrame) && tileRequestsInFlight === 0 ? stableFrames + 1 : 0;
+      previousFrame = frame;
+      return stableFrames;
+    }, { intervals: [200], timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+  };
+  await expect(canvas).toBeVisible();
+  await expect(notice).toContainText("Map tiles are temporarily unavailable");
+  await expect(page.locator("svg.coordinate-layer")).toHaveCount(0);
+  await canvas.evaluate((element) => element.setAttribute("data-original-canvas", "true"));
+  await canvas.hover();
+  await waitForSettledMap();
+  const beforeZoom = await canvas.screenshot();
+  await page.mouse.wheel(0, -450);
+  await expect.poll(async () => (await canvas.screenshot()).equals(beforeZoom)).toBe(false);
+  for (let index = 0; index < 6; index += 1) {
+    await page.mouse.wheel(0, index % 2 ? 450 : -450);
+  }
+  const timeline = page.getByRole("slider", { name: "Point timeline" });
+  await timeline.fill("10");
+  await expect(metricValue(panelByHeading(page.locator(".analysis-main"), "Selected Point"), "Index")).toHaveText("10");
+  await expect(canvas).toHaveAttribute("data-original-canvas", "true");
+
+  await waitForSettledMap();
+  // Isolate failures at the final viewport, after camera animations, cursor
+  // recentering and initial fit settle. No navigation occurs after this.
+  failedUrls.clear();
+  await page.getByRole("button", { name: "Retry map tiles" }).click();
+  await waitForSettledMap();
+  expect(failedUrls.size).toBeGreaterThan(0);
+
+  offline = false;
+  await page.getByRole("button", { name: "Retry map tiles" }).click();
+  await expect.poll(() => retriedFailedTiles).toBeGreaterThan(0);
+  await expect(notice).toHaveCount(0);
+  await expect(canvas).toHaveAttribute("data-original-canvas", "true");
+  await expect(timeline).toHaveValue("10");
 });
 
 test("persists Korean language and keeps the sample workflow usable", async ({ page }) => {

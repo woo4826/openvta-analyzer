@@ -115,7 +115,9 @@ export function RouteMap({
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const readyMapRef = useRef<maplibregl.Map | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
+  const [tilesUnavailable, setTilesUnavailable] = useState(false);
   const [styleLoaded, setStyleLoaded] = useState(false);
   const focusFrameRef = useRef<number>();
   const onSectionSelectRef = useRef(onSectionSelect);
@@ -213,7 +215,9 @@ export function RouteMap({
       return;
     }
     setMapFailed(false);
+    setTilesUnavailable(false);
     setStyleLoaded(false);
+    readyMapRef.current = null;
     try {
       const centerPoint = routeFitPoints[0] ?? points[0];
       const center: [number, number] = [centerPoint.longitude, centerPoint.latitude];
@@ -225,12 +229,7 @@ export function RouteMap({
         style: {
           version: 8,
           sources: {
-            osm: {
-              type: "raster",
-              tiles: [settings.tileUrl],
-              tileSize: 256,
-              attribution: "© OpenStreetMap contributors",
-            },
+            osm: rasterSource(settings.tileUrl),
           },
           layers: [{ id: "osm", type: "raster", source: "osm" }],
         },
@@ -245,18 +244,30 @@ export function RouteMap({
         if (mapRef.current === map) {
           mapRef.current = null;
         }
+        if (readyMapRef.current === map) readyMapRef.current = null;
       };
-      map.on("error", () => {
+      map.on("error", (event) => {
+        if (removed) return;
+        // Raster failures do not invalidate our renderer or local GeoJSON.
+        // Removing the map here permanently disables zoom and pan.
+        if ("sourceId" in event && event.sourceId === "osm") {
+          setTilesUnavailable(true);
+          return;
+        }
         setStyleLoaded(false);
         setMapFailed(true);
         removeMap();
       });
-      map.on("styledata", () => {
-        if (map.isStyleLoaded()) {
-          setStyleLoaded(true);
+      map.on("sourcedata", (event) => {
+        if (!removed && event.sourceId === "osm" && event.tile?.state === "loaded") {
+          setTilesUnavailable(false);
         }
       });
-      map.on("load", () => {
+      // isStyleLoaded also waits for raster tiles. Local geometry must be
+      // usable before those requests complete, including during an outage.
+      map.on("style.load", () => {
+        if (removed) return;
+        readyMapRef.current = map;
         setStyleLoaded(true);
         map.on("click", "route-points", (event) => {
           const rawIndex = event.features?.[0]?.properties?.index;
@@ -303,21 +314,33 @@ export function RouteMap({
   }, [points.length, settings.tileUrl]);
 
   useEffect(() => {
-    if (!mapRef.current || !styleLoaded) {
+    if (!mapRef.current || mapRef.current !== readyMapRef.current || !styleLoaded) {
       return;
     }
-    updateMapRoute(mapRef.current, points, routePointEntries, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRouteLine, showRoutePoints, interactiveRoutePoints);
-  }, [points, routePointEntries, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, ghostMarkers, sectionGeometry, sectionVisuals, showRouteLine, showRoutePoints, interactiveRoutePoints]);
+    updateMapRoute(mapRef.current, points, routePointEntries, segment, region, settings, trackCenterline, gates, lapOverlays, heatSegments, sectionGeometry, sectionVisuals, showRouteLine, showRoutePoints, interactiveRoutePoints);
+  }, [points, routePointEntries, segment, region, settings, styleLoaded, trackCenterline, gates, lapOverlays, heatSegments, sectionGeometry, sectionVisuals, showRouteLine, showRoutePoints, interactiveRoutePoints]);
 
   useEffect(() => {
-    if (!mapRef.current || !styleLoaded) {
+    if (!mapRef.current || mapRef.current !== readyMapRef.current || !styleLoaded) return;
+    setGeoJsonSource(mapRef.current, "ghost-marker-source", {
+      type: "FeatureCollection",
+      features: ghostMarkers.map((marker) => ({
+        type: "Feature",
+        properties: { id: marker.id, label: marker.label, color: marker.color },
+        geometry: { type: "Point", coordinates: marker.coordinate },
+      })),
+    });
+  }, [ghostMarkers, styleLoaded]);
+
+  useEffect(() => {
+    if (!mapRef.current || mapRef.current !== readyMapRef.current || !styleLoaded) {
       return;
     }
     if (focusFrameRef.current !== undefined) {
       window.cancelAnimationFrame(focusFrameRef.current);
     }
     focusFrameRef.current = window.requestAnimationFrame(() => {
-      if (!mapRef.current) return;
+      if (!mapRef.current || mapRef.current !== readyMapRef.current) return;
       updateSelectedPoint(mapRef.current, selectedPoint);
       if (selectedPoint && followSelectedPoint) {
         mapRef.current.jumpTo({
@@ -358,6 +381,18 @@ export function RouteMap({
 
   function setSegmentStart() {
     setSegmentBoundary("startIndex");
+  }
+
+  function retryTiles() {
+    const map = mapRef.current;
+    if (!map || map !== readyMapRef.current) return;
+    // MapLibre 4 reloads skip errored tiles. Recreate only the background
+    // source to retry at the same viewport, preserving local layers and input.
+    if (map.getLayer("osm")) map.removeLayer("osm");
+    if (map.getSource("osm")) map.removeSource("osm");
+    const firstOverlay = map.getStyle()?.layers?.[0]?.id;
+    map.addSource("osm", rasterSource(settings.tileUrl));
+    map.addLayer({ id: "osm", type: "raster", source: "osm" }, firstOverlay);
   }
 
   function setSegmentEnd() {
@@ -562,6 +597,12 @@ export function RouteMap({
         onCreateRegion={onRegionChange ? createRegion : undefined}
         onSettingsChange={onSettingsChange}
       />
+      {!mapFailed && tilesUnavailable ? (
+        <div className="map-tile-notice" role="status">
+          <span>{t("map.tilesTemporarilyUnavailable")}</span>
+          <button type="button" className="button" onClick={retryTiles}>{t("map.retryTiles")}</button>
+        </div>
+      ) : null}
       <div className="map-attribution">© OpenStreetMap contributors</div>
     </div>
   );
@@ -572,6 +613,15 @@ interface Bounds {
   maxLat: number;
   minLon: number;
   maxLon: number;
+}
+
+function rasterSource(tileUrl: string) {
+  return {
+    type: "raster" as const,
+    tiles: [tileUrl],
+    tileSize: 256,
+    attribution: "© OpenStreetMap contributors",
+  };
 }
 
 interface Coordinate {
@@ -682,14 +732,13 @@ function updateMapRoute(
   gates: TrackGate[],
   lapOverlays: LapMapOverlay[],
   heatSegments: MapHeatSegment[],
-  ghostMarkers: MapGhostMarker[],
   sectionGeometry: TrackSectionGeometry[],
   sectionVisuals: Record<string, TrackSectionVisual>,
   showRouteLine: boolean,
   showRoutePoints: boolean,
   interactiveRoutePoints: boolean,
 ) {
-  if (!map.isStyleLoaded() || !points.length) {
+  if (!points.length) {
     return;
   }
   const routeData: FeatureCollection<LineString> = {
@@ -767,14 +816,6 @@ function updateMapRoute(
       geometry: { type: "LineString", coordinates: heat.coordinates },
     })),
   };
-  const ghostData: FeatureCollection<Point> = {
-    type: "FeatureCollection",
-    features: ghostMarkers.map((marker) => ({
-      type: "Feature",
-      properties: { id: marker.id, label: marker.label, color: marker.color },
-      geometry: { type: "Point", coordinates: marker.coordinate },
-    })),
-  };
   const sectionData: FeatureCollection<LineString> = {
     type: "FeatureCollection",
     features: sectionGeometry.map((section) => ({
@@ -807,7 +848,9 @@ function updateMapRoute(
   setGeoJsonSource(map, "track-section-source", sectionData);
   setGeoJsonSource(map, "lap-overlay-source", lapData);
   setGeoJsonSource(map, "loss-rate-segment-source", heatData);
-  setGeoJsonSource(map, "ghost-marker-source", ghostData);
+  if (!map.getSource("ghost-marker-source")) {
+    setGeoJsonSource(map, "ghost-marker-source", { type: "FeatureCollection", features: [] });
+  }
   setGeoJsonSource(map, "gate-source", gateData);
   if (!map.getSource("selected-point-source")) {
     setGeoJsonSource(map, "selected-point-source", selectedData);
@@ -1117,14 +1160,27 @@ function trackSectionColor(kind: TrackSection["kind"]): string {
   return "#0891b2";
 }
 
+const sourcePayloads = new WeakMap<maplibregl.Map, Map<string, { source: maplibregl.GeoJSONSource; json: string }>>();
+
 function setGeoJsonSource(map: maplibregl.Map, sourceId: string, data: MapGeoJsonData) {
+  let payloads = sourcePayloads.get(map);
+  if (!payloads) {
+    payloads = new Map();
+    sourcePayloads.set(map, payloads);
+  }
+  const json = JSON.stringify(data);
   const existing = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
   if (existing) {
+    const previous = payloads.get(sourceId);
+    if (previous?.source === existing && previous.json === json) return;
     existing.setData(data);
+    payloads.set(sourceId, { source: existing, json });
     return;
   }
   map.addSource(sourceId, {
     type: "geojson",
     data,
   });
+  const source = map.getSource(sourceId) as maplibregl.GeoJSONSource;
+  payloads.set(sourceId, { source, json });
 }

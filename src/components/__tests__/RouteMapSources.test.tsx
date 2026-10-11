@@ -9,30 +9,45 @@ import { RouteMap } from "../RouteMap";
 const mapMock = vi.hoisted(() => {
   class SourceDouble {
     setData = vi.fn();
+    setTiles = vi.fn();
   }
 
   class MapDouble {
     static instances: MapDouble[] = [];
     static shouldThrow = false;
+    static tilesLoaded = true;
     sources = new Map<string, SourceDouble>();
     layers = new Set<string>();
     layerHandlers = new Map<string, (event: unknown) => void>();
     globalHandlers = new Map<string, (event: unknown) => void>();
     layerDefinitions = new Map<string, { id: string; filter?: unknown; paint?: Record<string, unknown> }>();
+    layerBeforeIds = new Map<string, string | undefined>();
+    styleReady = false;
     jumpTo = vi.fn();
     easeTo = vi.fn();
     fitBounds = vi.fn();
     setPaintProperty = vi.fn();
+    removeLayer = vi.fn((id: string) => {
+      this.layers.delete(id);
+      this.layerDefinitions.delete(id);
+    });
+    removeSource = vi.fn((id: string) => this.sources.delete(id));
     remove = vi.fn();
 
     constructor() {
       if (MapDouble.shouldThrow) throw new Error("map unavailable");
+      this.sources.set("osm", new SourceDouble());
+      this.layers.add("osm");
+      this.layerDefinitions.set("osm", { id: "osm" });
       MapDouble.instances.push(this);
     }
 
     on(event: string, layerOrHandler: string | (() => void), handler?: (event: unknown) => void) {
-      if (event === "load" && typeof layerOrHandler === "function") {
-        queueMicrotask(layerOrHandler);
+      if ((event === "load" || event === "style.load") && typeof layerOrHandler === "function") {
+        queueMicrotask(() => {
+          if (event === "style.load") this.styleReady = true;
+          layerOrHandler();
+        });
       }
       if (event !== "load" && typeof layerOrHandler === "function") {
         this.globalHandlers.set(event, layerOrHandler);
@@ -44,7 +59,7 @@ const mapMock = vi.hoisted(() => {
     }
 
     isStyleLoaded() {
-      return true;
+      return MapDouble.tilesLoaded;
     }
 
     getSource(id: string) {
@@ -52,6 +67,7 @@ const mapMock = vi.hoisted(() => {
     }
 
     addSource(id: string, source: { data?: unknown }) {
+      if (!this.styleReady) throw new Error("Style is not done loading");
       const next = new SourceDouble();
       this.sources.set(id, next);
       if (source.data) next.setData(source.data);
@@ -61,9 +77,14 @@ const mapMock = vi.hoisted(() => {
       return this.layers.has(id) ? { id } : undefined;
     }
 
-    addLayer(layer: { id: string; filter?: unknown; paint?: Record<string, unknown> }) {
+    getStyle() {
+      return { layers: [...this.layerDefinitions.values()] };
+    }
+
+    addLayer(layer: { id: string; filter?: unknown; paint?: Record<string, unknown> }, beforeId?: string) {
       this.layers.add(layer.id);
       this.layerDefinitions.set(layer.id, layer);
+      this.layerBeforeIds.set(layer.id, beforeId);
     }
 
     getCanvas() {
@@ -105,11 +126,120 @@ describe("RouteMap source updates", () => {
   beforeEach(() => {
     mapMock.MapDouble.instances.length = 0;
     mapMock.MapDouble.shouldThrow = false;
+    mapMock.MapDouble.tilesLoaded = true;
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
     });
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  });
+
+  it("keeps navigation and selection alive through raster errors, retry, and recovery", async () => {
+    const view = renderRoute(0);
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.sources.has("route-line-source")).toBe(true));
+    map.sources.forEach((source) => source.setData.mockClear());
+
+    act(() => {
+      map.globalHandlers.get("error")?.({ sourceId: "osm", error: new Error("503") });
+      map.globalHandlers.get("error")?.({ sourceId: "osm", error: new Error("offline") });
+    });
+
+    expect(map.remove).not.toHaveBeenCalled();
+    expect(view.container.querySelector(".map-container")).toBeInTheDocument();
+    expect(view.getByRole("status")).toHaveTextContent("Map tiles are temporarily unavailable");
+    view.rerender(wrappedRoute(1));
+    await waitFor(() => expect(map.sources.get("selected-point-source")?.setData).toHaveBeenCalledOnce());
+    expect(map.sources.get("route-line-source")?.setData).not.toHaveBeenCalled();
+
+    const failedRasterSource = map.sources.get("osm");
+    await userEvent.setup().click(view.getByRole("button", { name: "Retry map tiles" }));
+    expect(map.removeLayer).toHaveBeenCalledWith("osm");
+    expect(map.removeSource).toHaveBeenCalledWith("osm");
+    expect(map.sources.get("osm")).not.toBe(failedRasterSource);
+    expect(map.layers.has("osm")).toBe(true);
+    expect(map.layerBeforeIds.get("osm")).toBe("region-fill");
+    expect(map.sources.get("route-line-source")?.setData).not.toHaveBeenCalled();
+    act(() => map.globalHandlers.get("sourcedata")?.({ sourceId: "osm", tile: { state: "loaded" } }));
+    expect(view.queryByRole("status")).not.toBeInTheDocument();
+    expect(mapMock.MapDouble.instances).toHaveLength(1);
+    view.unmount();
+    expect(map.remove).toHaveBeenCalledOnce();
+  });
+
+  it("publishes route and cursor updates while raster tiles are still loading", async () => {
+    mapMock.MapDouble.tilesLoaded = false;
+    const view = renderRoute(0);
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.sources.has("route-line-source")).toBe(true));
+    map.sources.forEach((source) => source.setData.mockClear());
+    view.rerender(wrappedRoute(2));
+    await waitFor(() => expect(map.sources.get("selected-point-source")?.setData).toHaveBeenCalledOnce());
+    expect(map.jumpTo).toHaveBeenLastCalledWith({ center: [128.002, 38.002] });
+  });
+
+  it("does not retransmit static route and lap sources when only ghosts move", async () => {
+    const lapOverlays = [{ id: "lap-1", color: "#ef4444", points }];
+    const view = render(wrappedRoute(0, false, {
+      lapOverlays,
+      ghostMarkers: [{ id: "focus", label: "Ghost", coordinate: [128, 38], color: "#ef4444" }],
+    }));
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.sources.has("ghost-marker-source")).toBe(true));
+    map.sources.forEach((source) => source.setData.mockClear());
+    view.rerender(wrappedRoute(0, false, {
+      lapOverlays,
+      ghostMarkers: [{ id: "focus", label: "Ghost", coordinate: [128.001, 38.001], color: "#ef4444" }],
+    }));
+    await waitFor(() => expect(map.sources.get("ghost-marker-source")?.setData).toHaveBeenCalledOnce());
+    for (const id of ["route-line-source", "route-points-source", "lap-overlay-source", "track-section-source"]) {
+      expect(map.sources.get(id)?.setData).not.toHaveBeenCalled();
+    }
+  });
+
+  it("retains coordinate fallback for non-raster errors", async () => {
+    const view = renderRoute(0);
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.sources.has("route-line-source")).toBe(true));
+    act(() => map.globalHandlers.get("error")?.({ error: new Error("invalid style") }));
+    expect(map.remove).toHaveBeenCalledOnce();
+    expect(view.container.querySelector("svg.coordinate-layer")).toBeInTheDocument();
+  });
+
+  it("skips equivalent payloads but updates changed and recreated sources", async () => {
+    const view = renderRoute(0);
+    const map = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(map.sources.has("route-points-source")).toBe(true));
+    map.sources.forEach((source) => source.setData.mockClear());
+
+    view.rerender(wrappedRoute(0, false, { interactionPoints: [...points] }));
+    expect(map.sources.get("route-line-source")?.setData).not.toHaveBeenCalled();
+    expect(map.sources.get("route-points-source")?.setData).not.toHaveBeenCalled();
+
+    const changedPoints = points.map((point, index) => index === 1 ? { ...point, speedKmh: 99 } : point);
+    view.rerender(wrappedRoute(0, false, { interactionPoints: changedPoints }));
+    expect(map.sources.get("route-points-source")?.setData).toHaveBeenCalledOnce();
+    expect(map.sources.get("route-line-source")?.setData).not.toHaveBeenCalled();
+
+    const previousSource = map.sources.get("route-points-source");
+    map.sources.delete("route-points-source");
+    view.rerender(wrappedRoute(0, false, { interactionPoints: [...changedPoints] }));
+    expect(map.sources.get("route-points-source")).not.toBe(previousSource);
+    expect(map.sources.get("route-points-source")?.setData).toHaveBeenCalledOnce();
+  });
+
+  it("waits for the new stylesheet when the tile URL rebuilds the map", async () => {
+    const view = renderRoute(0);
+    const initialMap = mapMock.MapDouble.instances[0];
+    await waitFor(() => expect(initialMap.sources.has("route-line-source")).toBe(true));
+    view.rerender(wrappedRoute(0, false, {
+      settings: { ...settings, tileUrl: "https://other.invalid/{z}/{x}/{y}.png" },
+    }));
+    expect(initialMap.remove).toHaveBeenCalledOnce();
+    const nextMap = mapMock.MapDouble.instances[1];
+    await waitFor(() => expect(nextMap.sources.has("route-line-source")).toBe(true));
+    expect(nextMap.sources.get("route-line-source")?.setData).toHaveBeenCalledOnce();
+    expect(view.container.querySelector("svg.coordinate-layer")).not.toBeInTheDocument();
   });
 
   it("updates only the selected marker when the focused point changes", async () => {
@@ -419,6 +549,7 @@ function wrappedRoute(
   selectedIndex: number,
   includeSections = false,
   options: {
+    settings?: MapSettings;
     onSectionSelect?: ComponentProps<typeof RouteMap>["onSectionSelect"];
     sectionVisuals?: Record<string, { color: string; width?: number; opacity?: number }>;
     showRoutePoints?: boolean;
@@ -444,7 +575,7 @@ function wrappedRoute(
         points={points}
         selectedIndex={selectedIndex}
         sourceVisibility={{ rawGps: true, enhancedGps: true }}
-        settings={settings}
+        settings={options.settings ?? settings}
         segment={options.segment}
         trackCenterline={includeSections ? { type: "LineString", coordinates: [[128, 38], [128.001, 38.001]] } : undefined}
         sectionCenterline={options.sectionCenterline}
